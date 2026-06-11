@@ -224,7 +224,13 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 .node-label:active{cursor:grabbing;}
 .node:hover .node-label{opacity:1;}
 .leader-line{stroke:var(--text-3);stroke-width:1;stroke-dasharray:3,3;pointer-events:none;opacity:0;transition:opacity .18s ease;}
+
 .node:hover .leader-line{opacity:1;}
+#svg-layer.always-show-labels .node-label,
+#svg-layer.always-show-labels .leader-line {
+  opacity: 1 !important;
+}
+
 .state-0{stroke:var(--color-0);} .state-1{stroke:var(--color-1);} .state-2{stroke:var(--color-2);} .state-3{stroke:var(--color-3);}
 .anomaly-ring{animation:anomalyPulse 1.6s ease-in-out infinite;pointer-events:none;}
 .anomaly-icon{animation:anomalyBlink 1.6s ease-in-out infinite;pointer-events:none;}
@@ -426,6 +432,20 @@ g.node[data-active="1"] {
   transform-origin: center;
 }
 
+/* ── Overheat Vignette ── */
+#vignette-overlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: 100;
+  box-shadow: inset 0 0 30px rgba(255, 59, 48, 0);
+  transition: box-shadow 0.3s;
+}
+#vignette-overlay.active {
+  animation: overheatPulse 1.5s ease-in-out infinite;
+}
+@keyframes overheatPulse {
+  0%, 100% { box-shadow: inset 0 0 15px rgba(255, 59, 48, 0.2); }
+  50% { box-shadow: inset 0 0 45px rgba(255, 59, 48, 0.55); }
+}
+
 </style>
 </head>
 <body>
@@ -547,6 +567,8 @@ g.node[data-active="1"] {
   </div>
 </main>
 
+<div id="vignette-overlay"></div>
+
 <header id="toolbar" class="glass">
   <button class="tool-btn active" data-tool="pointer" title="操作・選択 (V)">
     <svg viewBox="0 0 18 18" fill="none"><path d="M4 2v13l3.5-3.5H14z" fill="currentColor"/></svg>
@@ -626,8 +648,10 @@ g.node[data-active="1"] {
 </header>
 
 <aside id="settings-panel" class="glass">
-  <div class="sp-header">
-    <span class="sp-title">設定</span>
+
+  <div class="sp-header" id="settings-header" style="cursor:grab; touch-action:none; display:flex; align-items:center; gap:4px;">
+    <div class="matrix-drag-dots" style="margin-right:2px;"><span></span><span></span></div>
+    <span class="sp-title" style="flex:1;">設定</span>
     <button class="sp-close" id="btn-close-settings">✕</button>
   </div>
 
@@ -648,7 +672,10 @@ g.node[data-active="1"] {
       <input type="range" id="sizeSlider" min="3" max="25" value="8">
       <span id="sizeVal" style="font-size:12px;font-weight:600;min-width:18px;text-align:right;">8</span><span class="sp-unit">px</span>
     </div>
+
     <label class="sp-toggle"><input type="checkbox" id="toggleValveLabels" checked><span>バルブ名ラベル</span></label>
+    <label class="sp-toggle"><input type="checkbox" id="toggleValveLabelsAlways"><span>ラベルを常に表示</span></label>
+
     <label class="sp-toggle"><input type="checkbox" id="toggleReducerLabels"><span>減圧弁の数値表示</span></label>
     <label class="sp-toggle"><input type="checkbox" id="toggleSnap" checked><span>スナップ（グリッド+軸合わせ）</span></label>
     <div id="grid-settings" class="open">
@@ -756,7 +783,7 @@ const COLOR_MAP={0:'#8E8E93',1:'#007AFF',2:'#AF52DE',3:'#FF3B30'};
 /* ━━━━━━━━ STORE ━━━━━━━━ */
 const Store={
   nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],
-  config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false},  
+  config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false},  
   dragState:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
   multiDrag:{active:false,nodes:[],gEl:null,startSvgX:0,startSvgY:0,startClientX:0,startClientY:0,hasDragged:false,pointerId:null,preSnapshot:null},
   labelDrag:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,startX:0,startY:0,startOffsetX:0,startOffsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
@@ -1009,23 +1036,28 @@ const Anomaly={
     Store.nodes.forEach(n=>{const inE=Store.edges.filter(e=>e.to===n.id),outE=Store.edges.filter(e=>e.from===n.id),all=[...inE,...outE];
       if(all.length===0&&n.type!==NODE_TYPE.SOURCE)Store.anomalies.push({type:'isolated',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 孤立（配管未接続）`});
       if(![NODE_TYPE.DRAIN,NODE_TYPE.SOURCE,NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(n.type))if(n._sim.fIn>0&&outE.length===0)Store.anomalies.push({type:'deadend',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 流体の行き止まり`});
+
       // 熱交換器に高圧蒸気直撃の危険検出
       if(n.type===NODE_TYPE.HEATEX&&n._sim.fIn===FLUID.STEAM&&n._sim.rateIn>0.45){
-        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 熱交換器に高圧蒸気！破損の恐れあり（要減圧または微開）'});
+        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 熱交換器（高圧蒸気流入）'});
       }
       // ドレン管（ピット）に高圧蒸気放出の危険検出
       if(n.type===NODE_TYPE.DRAIN&&n._sim.fIn===FLUID.STEAM&&n._sim.rateIn>0.1){
-        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: ドレン管に高圧蒸気！ピット周辺に危険（要トラップ経由または微開）'});
+        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: ドレン管（高圧蒸気流入）'});
       }
     });
-    // 逆流（Backflow）自体はシミュレーションとして正しいため、異常（Anomaly）としての警告は削除（Epic 9-1）
   },
   renderPanel:()=>{
     const list=document.getElementById('anomaly-list'),badge=document.getElementById('anomaly-badge');
+    const vignette=document.getElementById('vignette-overlay');
+    if(vignette) vignette.classList.toggle('active', Store.anomalies.some(a=>a.type==='danger'));
+    
     if(!Store.anomalies.length){list.innerHTML='<span style="color:var(--green);font-weight:500;">✓ 異常なし</span>';badge.style.display='none';return;}
     badge.textContent=Store.anomalies.length;badge.style.display='inline';
     list.innerHTML=Store.anomalies.map(a=>`<div class="anomaly-item">⚠ ${a.msg}</div>`).join('');
   }
+
+
 };
 
 /* ━━━━━━━━ SEALED DETECTOR (Epic 10で全面改修: 無向BFS + 重力ロジック) ━━━━━━━━ */
@@ -1177,9 +1209,9 @@ const Minimap={
     if(!Minimap.canvas)return;
     const c=Minimap.canvas,ctx=c.getContext('2d'),W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;
     ctx.clearRect(0,0,W,H);ctx.fillStyle='#F0F0F5';ctx.fillRect(0,0,W,H);ctx.fillStyle='rgba(255,255,255,0.6)';ctx.fillRect(ox,oy,Store.config.baseWidth*ms,Store.config.baseHeight*ms);
-    Store.edges.forEach(edge=>{const nF=Store.nodes.find(n=>n.id===edge.from),nT=Store.nodes.find(n=>n.id===edge.to);if(!nF||!nT)return;const ds=Math.max(edge._sim.f,edge._sim.b);ctx.strokeStyle=COLOR_MAP[ds]||'#8E8E93';ctx.lineWidth=ds>0?1.5:.7;ctx.globalAlpha=ds>0?.8:.35;ctx.beginPath();const pts=[nF,...(edge.ext.waypoints||[]),nT];ctx.moveTo(ox+pts[0].x*ms,oy+pts[0].y*ms);pts.slice(1).forEach(p=>ctx.lineTo(ox+p.x*ms,oy+p.y*ms));ctx.stroke();});
+    Store.edges.forEach(edge=>{const nF=Store.nodes.find(n=>n.id===edge.from),nT=Store.nodes.find(n=>n.id===edge.to);if(!nF||!nT)return;const ds=Math.max(edge._sim.f,edge._sim.b);ctx.strokeStyle=COLOR_MAP[ds]||'#8E8E93';ctx.lineWidth=ds>0?0.8:.4;ctx.globalAlpha=ds>0?.8:.35;ctx.beginPath();const pts=[nF,...(edge.ext.waypoints||[]),nT];ctx.moveTo(ox+pts[0].x*ms,oy+pts[0].y*ms);pts.slice(1).forEach(p=>ctx.lineTo(ox+p.x*ms,oy+p.y*ms));ctx.stroke();});
     ctx.globalAlpha=1;
-    Store.nodes.forEach(n=>{ctx.fillStyle=COLOR_MAP[n._sim.fOut]||'#8E8E93';ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,3,0,Math.PI*2);ctx.fill();if(Store.anomalies.some(a=>a.nodeId===n.id)){ctx.strokeStyle='#FF3B30';ctx.lineWidth=1;ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,5,0,Math.PI*2);ctx.stroke();}});
+    Store.nodes.forEach(n=>{ctx.fillStyle=COLOR_MAP[n._sim.fOut]||'#8E8E93';ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,1.5,0,Math.PI*2);ctx.fill();if(Store.anomalies.some(a=>a.nodeId===n.id)){ctx.strokeStyle='#FF3B30';ctx.lineWidth=1;ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,2.5,0,Math.PI*2);ctx.stroke();}});
     // Feature 8: Radar ripple for anomaly nodes
     const anomalyNodes=Store.nodes.filter(n=>Store.anomalies.some(a=>a.nodeId===n.id));
     if(anomalyNodes.length){
@@ -1277,7 +1309,7 @@ const Renderer={
   
   getMouseSvgCoords:(ev)=>{const r=Renderer.svgLayer.getBoundingClientRect();return{x:(ev.clientX-r.left)/Store.config.currentZoom,y:(ev.clientY-r.top)/Store.config.currentZoom};},
   buildTrimmedPath:(nFrom,edge,nTo)=>{
-    const ELBOW=15;
+    const ELBOW=2;
     const wps=edge.ext.waypoints||[],allPts=[nFrom,...wps,nTo],trim=Store.config.nodeRadius;
     const s0=allPts[0],s1=allPts[1],sl=Math.hypot(s1.x-s0.x,s1.y-s0.y),st=sl>0?Math.min(trim,sl*0.4)/sl:0;
     const p0={x:s0.x+(s1.x-s0.x)*st,y:s0.y+(s1.y-s0.y)*st};
@@ -1311,7 +1343,7 @@ const Renderer={
     if(eg){ eg.querySelectorAll('path.flow-base, path.edge-path').forEach(p=>p.setAttribute('d',d)); }
   },
   
-  updateZoom:()=>{Renderer.zoomDisplay.innerText=Math.round(Store.config.currentZoom*100)+'%';Renderer.container.style.transform=`scale(${Store.config.currentZoom})`;Renderer.wrapper.style.width=(Store.config.baseWidth*Store.config.currentZoom)+'px';Renderer.wrapper.style.height=(Store.config.baseHeight*Store.config.currentZoom)+'px';},
+  updateZoom:()=>{Renderer.zoomDisplay.innerText=Math.round(Store.config.currentZoom*100)+'%';Renderer.container.style.width=Store.config.baseWidth+'px';Renderer.container.style.height=Store.config.baseHeight+'px';Renderer.container.style.transform=`scale(${Store.config.currentZoom})`;Renderer.wrapper.style.width=(Store.config.baseWidth*Store.config.currentZoom)+'px';Renderer.wrapper.style.height=(Store.config.baseHeight*Store.config.currentZoom)+'px';},
   showSnapGuides:(gX,gY)=>{const bH=Store.config.baseHeight,bW=Store.config.baseWidth;if(gX!=null){Renderer.snapGuideX.setAttribute('x1',gX);Renderer.snapGuideX.setAttribute('y1',0);Renderer.snapGuideX.setAttribute('x2',gX);Renderer.snapGuideX.setAttribute('y2',bH);Renderer.snapGuideX.removeAttribute('display');}else Renderer.snapGuideX.setAttribute('display','none');if(gY!=null){Renderer.snapGuideY.setAttribute('x1',0);Renderer.snapGuideY.setAttribute('y1',gY);Renderer.snapGuideY.setAttribute('x2',bW);Renderer.snapGuideY.setAttribute('y2',gY);Renderer.snapGuideY.removeAttribute('display');}else Renderer.snapGuideY.setAttribute('display','none');},
   hideSnapGuides:()=>{Renderer.snapGuideX.setAttribute('display','none');Renderer.snapGuideY.setAttribute('display','none');},
 
@@ -1454,7 +1486,7 @@ const Renderer={
       wps.forEach((wp,idx)=>{
         let wpEl=existingWps[idx];
         if(!wpEl){
-          wpEl=createNS('circle',{r:'5',fill:'#fff','stroke-width':'1.5',cursor:'move'});
+          wpEl=createNS('circle',{r:'2',fill:'#fff','stroke-width':'1.5',cursor:'move'});
           wpEl.classList.add('waypoint-handle');wpEl.style.touchAction='none';
           wpEl.setAttribute('data-idx', idx);
           
@@ -1901,7 +1933,10 @@ const Controller={
     document.getElementById('btn-close-settings').addEventListener('click',closeSettings);
 
     document.getElementById('sizeSlider').addEventListener('input',ev=>{Store.config.nodeRadius=parseInt(ev.target.value);document.getElementById('sizeVal').textContent=Store.config.nodeRadius;Renderer.renderAll();});
+
     document.getElementById('toggleValveLabels').addEventListener('change',ev=>{Store.config.showValveLabels=ev.target.checked;Renderer.renderAll();});
+    document.getElementById('toggleValveLabelsAlways').addEventListener('change',ev=>{Store.config.alwaysShowLabels=ev.target.checked;document.getElementById('svg-layer').classList.toggle('always-show-labels', ev.target.checked);});
+
     document.getElementById('toggleReducerLabels').addEventListener('change',ev=>{Store.config.showReducerLabels=ev.target.checked;Renderer.renderAll();});
     const _updateGridBg=()=>{const gs=Store.config.gridSize,ox=Store.config.gridOffsetX,oy=Store.config.gridOffsetY;document.getElementById('workspace').style.backgroundSize=`${gs}px ${gs}px`;document.getElementById('workspace').style.backgroundPosition=`${ox}px ${oy}px`;};
     document.getElementById('gridSizeSlider').addEventListener('input',ev=>{const v=parseInt(ev.target.value);Store.config.gridSize=v;document.getElementById('gridSizeVal').textContent=v;document.getElementById('gridOffsetX').max=v-1;document.getElementById('gridOffsetY').max=v-1;_updateGridBg();});
@@ -1916,8 +1951,9 @@ const Controller={
     document.getElementById('workspace').addEventListener('wheel',ev=>{if(ev.ctrlKey||ev.metaKey){ev.preventDefault();Controller.setZoom(Store.config.currentZoom+(ev.deltaY>0?-.1:.1));}},{passive:false});
     document.getElementById('workspace').addEventListener('scroll',()=>{Minimap.draw();Culling.scheduleApply();/*Epic7*/});
 
-    document.getElementById('matrix-header').addEventListener('pointerdown',ev=>{if(ev.target.tagName==='INPUT')return;const m=document.getElementById('floating-matrix');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
-    document.getElementById('minimap-header').addEventListener('pointerdown',ev=>{const m=document.getElementById('minimap-container');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,isMap:true};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
+    document.getElementById('matrix-header').addEventListener('pointerdown',ev=>{if(ev.target.tagName==='INPUT')return;const m=document.getElementById('floating-matrix');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,targetId:'floating-matrix'};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
+    document.getElementById('minimap-header').addEventListener('pointerdown',ev=>{const m=document.getElementById('minimap-container');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,targetId:'minimap-container'};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
+    document.getElementById('settings-header').addEventListener('pointerdown',ev=>{if(ev.target.closest('#btn-close-settings'))return;const m=document.getElementById('settings-panel');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,targetId:'settings-panel'};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
 
     // Epic 5: rAFラッパーで 1フレーム 1回に限定。1000Hzマウスでも 60fpsと完全同期したドラッグ体験を実現。
     let _pendingPointerEv=null,_rafPending=false;
@@ -2052,7 +2088,13 @@ const Controller={
   },
 
   handleGlobalPointerMove:(ev)=>{
-    if(Store.matrixDrag.isDragging){const m=document.getElementById(Store.matrixDrag.isMap?'minimap-container':'floating-matrix');m.style.left=(ev.clientX-Store.matrixDrag.offsetX)+'px';m.style.top=(ev.clientY-Store.matrixDrag.offsetY)+'px';m.style.right='auto';m.style.bottom='auto';}
+ 
+    if(Store.matrixDrag.isDragging){
+      const tid = Store.matrixDrag.targetId || (Store.matrixDrag.isMap ? 'minimap-container' : 'floating-matrix');
+      const m=document.getElementById(tid);
+      if(m){m.style.left=(ev.clientX-Store.matrixDrag.offsetX)+'px';m.style.top=(ev.clientY-Store.matrixDrag.offsetY)+'px';m.style.right='auto';m.style.bottom='auto';}
+    }
+
     if(Store.multiDrag.active&&ev.pointerId===Store.multiDrag.pointerId){const moved=Math.hypot(ev.clientX-Store.multiDrag.startClientX,ev.clientY-Store.multiDrag.startClientY);if(!Store.multiDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD)Store.multiDrag.hasDragged=true;if(Store.multiDrag.hasDragged){const coords=Renderer.getMouseSvgCoords(ev),dx=coords.x-Store.multiDrag.startSvgX,dy=coords.y-Store.multiDrag.startSvgY;Store.multiDrag.nodes.forEach(item=>{item.node.x=item.startX+dx;item.node.y=item.startY+dy;const gEl=Renderer.nodesGroup.querySelector(`[data-id="${item.node.id}"]`);if(gEl)Renderer.updateNodeLive(item.node,gEl);});}}
     if(Store.dragState.isDragging&&Store.dragState.targetNode&&ev.pointerId===Store.dragState.pointerId){const moved=Math.hypot(ev.clientX-Store.dragState.startClientX,ev.clientY-Store.dragState.startClientY);if(!Store.dragState.hasDragged&&moved>Controller.DRAG_THRESHOLD)Store.dragState.hasDragged=true;if(Store.dragState.hasDragged&&!Store.config.isConnectMode){const raw=Renderer.getMouseSvgCoords(ev),sn=Controller.applySnap(raw.x-Store.dragState.offsetX,raw.y-Store.dragState.offsetY,Store.dragState.targetNode.id);Store.dragState.targetNode.x=sn.x;Store.dragState.targetNode.y=sn.y;Renderer.updateNodeLive(Store.dragState.targetNode,Store.dragState.gEl);Renderer.showSnapGuides(sn.gX,sn.gY);}}
     if(Store.labelDrag.isDragging&&Store.labelDrag.targetNode&&ev.pointerId===Store.labelDrag.pointerId){const moved=Math.hypot(ev.clientX-Store.labelDrag.startClientX,ev.clientY-Store.labelDrag.startClientY);if(!Store.labelDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD)Store.labelDrag.hasDragged=true;if(Store.labelDrag.hasDragged){const c=Renderer.getMouseSvgCoords(ev),nx=Store.labelDrag.startOffsetX+(c.x-Store.labelDrag.startX),ny=Store.labelDrag.startOffsetY+(c.y-Store.labelDrag.startY);Store.labelDrag.targetNode.labelOffset={x:nx,y:ny};const lEl=Store.labelDrag.gEl;if(lEl){lEl.setAttribute('x',nx);lEl.setAttribute('y',ny);}const g=lEl?.closest('g.node');if(g){const ll=g.querySelector('.leader-line');if(ll){ll.setAttribute('x2',nx);ll.setAttribute('y2',ny);}}}}
@@ -2220,8 +2262,11 @@ const Controller={
         baseHeight: Store.config.baseHeight,
         gridSize: Store.config.gridSize,
         gridOffsetX: Store.config.gridOffsetX,
+
         gridOffsetY: Store.config.gridOffsetY,
+        alwaysShowLabels: Store.config.alwaysShowLabels,
         nodes: Store.nodes.map(n => ({ id: n.id, type: n.type, x: n.x, y: n.y, rotation: n.rotation, state: n.state, ext: n.ext, labelOffset: n.labelOffset })),
+
         edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext }))
       };
       
@@ -2283,10 +2328,17 @@ const Controller={
                   Store.config.gridOffsetX = d.gridOffsetX;
                   document.getElementById('gridOffsetX').value = d.gridOffsetX;
                 }
+
                 if (d.gridOffsetY != null) {
                   Store.config.gridOffsetY = d.gridOffsetY;
                   document.getElementById('gridOffsetY').value = d.gridOffsetY;
                 }
+                if (d.alwaysShowLabels !== undefined) {
+                  Store.config.alwaysShowLabels = d.alwaysShowLabels;
+                  document.getElementById('toggleValveLabelsAlways').checked = d.alwaysShowLabels;
+                  document.getElementById('svg-layer').classList.toggle('always-show-labels', d.alwaysShowLabels);
+                }
+
                 // 背景グリッドをロード値に同期
                 const gs2=Store.config.gridSize,ox2=Store.config.gridOffsetX,oy2=Store.config.gridOffsetY;
                 document.getElementById('workspace').style.backgroundSize=`${gs2}px ${gs2}px`;

@@ -84,7 +84,7 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 .tool-btn .shortcut-hint{position:absolute;bottom:-1px;right:2px;font-size:8px;font-weight:600;color:inherit;opacity:.5;line-height:1;pointer-events:none;}
 
 /* ── Settings Panel ── */
-#settings-panel{position:fixed;top:60px;left:16px;width:256px;max-height:calc(100vh - 80px);overflow-y:auto;z-index:190;border-radius:14px;opacity:0;transform:translateY(-6px) scale(.98);pointer-events:none;}
+#settings-panel{position:fixed;top:60px;left:16px;width:256px;max-height:calc(100vh - 250px);overflow-y:auto;z-index:190;border-radius:14px;opacity:0;transform:translateY(-6px) scale(.98);pointer-events:none;}
 #settings-panel::-webkit-scrollbar{width:3px;}
 #settings-panel::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:2px;}
 .sp-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 6px;}
@@ -224,13 +224,11 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 .node-label:active{cursor:grabbing;}
 .node:hover .node-label{opacity:1;}
 .leader-line{stroke:var(--text-3);stroke-width:1;stroke-dasharray:3,3;pointer-events:none;opacity:0;transition:opacity .18s ease;}
-
 .node:hover .leader-line{opacity:1;}
 #svg-layer.always-show-labels .node-label,
 #svg-layer.always-show-labels .leader-line {
   opacity: 1 !important;
 }
-
 .state-0{stroke:var(--color-0);} .state-1{stroke:var(--color-1);} .state-2{stroke:var(--color-2);} .state-3{stroke:var(--color-3);}
 .anomaly-ring{animation:anomalyPulse 1.6s ease-in-out infinite;pointer-events:none;}
 .anomaly-icon{animation:anomalyBlink 1.6s ease-in-out infinite;pointer-events:none;}
@@ -446,6 +444,21 @@ g.node[data-active="1"] {
   50% { box-shadow: inset 0 0 45px rgba(255, 59, 48, 0.55); }
 }
 
+/* ── Panel Minimize ── */
+.panel-minimize-btn {
+  width: 22px; height: 22px; border: none; background: transparent; border-radius: 4px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: var(--text-2); transition: background 0.15s; margin-left: auto;
+}
+.panel-minimize-btn:hover { background: rgba(0,0,0,0.08); color: var(--text-1); }
+
+/* 最小化時の各パネルの挙動 */
+#settings-panel.minimized > *:not(.sp-header) { display: none !important; }
+#floating-matrix.minimized .matrix-tabs,
+#floating-matrix.minimized #valveMatrixContent { display: none !important; }
+#floating-matrix.minimized { min-height: 0 !important; resize: none !important; }
+#minimap-container.minimized #minimap { display: none !important; }
+
 </style>
 </head>
 <body>
@@ -648,10 +661,10 @@ g.node[data-active="1"] {
 </header>
 
 <aside id="settings-panel" class="glass">
-
   <div class="sp-header" id="settings-header" style="cursor:grab; touch-action:none; display:flex; align-items:center; gap:4px;">
     <div class="matrix-drag-dots" style="margin-right:2px;"><span></span><span></span></div>
     <span class="sp-title" style="flex:1;">設定</span>
+    <button class="panel-minimize-btn" title="最小化/展開"><svg viewBox="0 0 12 12" width="10" height="10"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     <button class="sp-close" id="btn-close-settings">✕</button>
   </div>
 
@@ -672,10 +685,8 @@ g.node[data-active="1"] {
       <input type="range" id="sizeSlider" min="3" max="25" value="8">
       <span id="sizeVal" style="font-size:12px;font-weight:600;min-width:18px;text-align:right;">8</span><span class="sp-unit">px</span>
     </div>
-
     <label class="sp-toggle"><input type="checkbox" id="toggleValveLabels" checked><span>バルブ名ラベル</span></label>
     <label class="sp-toggle"><input type="checkbox" id="toggleValveLabelsAlways"><span>ラベルを常に表示</span></label>
-
     <label class="sp-toggle"><input type="checkbox" id="toggleReducerLabels"><span>減圧弁の数値表示</span></label>
     <label class="sp-toggle"><input type="checkbox" id="toggleSnap" checked><span>スナップ（グリッド+軸合わせ）</span></label>
     <div id="grid-settings" class="open">
@@ -738,6 +749,7 @@ g.node[data-active="1"] {
   <div class="matrix-header" id="matrix-header">
     <div class="matrix-drag-dots"><span></span><span></span></div>
     <input type="text" id="matrix-title-input" class="matrix-title-input" value="バルブステータス">
+    <button class="panel-minimize-btn" title="最小化/展開"><svg viewBox="0 0 12 12" width="10" height="10"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   </div>
   <div class="matrix-tabs" id="matrix-tabs">
     <div class="matrix-tab active" data-tab="all">すべて</div>
@@ -747,9 +759,10 @@ g.node[data-active="1"] {
 </div>
 
 <div id="minimap-container" class="glass">
-  <div id="minimap-header" id="minimap-drag-handle">
+  <div id="minimap-header" style="cursor:grab; touch-action:none; display:flex; align-items:center; gap:6px;">
     <div class="matrix-drag-dots"><span></span><span></span></div>
-    <span>MAP</span>
+    <span style="flex:1;">MAP</span>
+    <button class="panel-minimize-btn" title="最小化/展開"><svg viewBox="0 0 12 12" width="10" height="10"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   </div>
   <canvas id="minimap" width="170" height="120"></canvas>
 </div>
@@ -1933,10 +1946,8 @@ const Controller={
     document.getElementById('btn-close-settings').addEventListener('click',closeSettings);
 
     document.getElementById('sizeSlider').addEventListener('input',ev=>{Store.config.nodeRadius=parseInt(ev.target.value);document.getElementById('sizeVal').textContent=Store.config.nodeRadius;Renderer.renderAll();});
-
     document.getElementById('toggleValveLabels').addEventListener('change',ev=>{Store.config.showValveLabels=ev.target.checked;Renderer.renderAll();});
     document.getElementById('toggleValveLabelsAlways').addEventListener('change',ev=>{Store.config.alwaysShowLabels=ev.target.checked;document.getElementById('svg-layer').classList.toggle('always-show-labels', ev.target.checked);});
-
     document.getElementById('toggleReducerLabels').addEventListener('change',ev=>{Store.config.showReducerLabels=ev.target.checked;Renderer.renderAll();});
     const _updateGridBg=()=>{const gs=Store.config.gridSize,ox=Store.config.gridOffsetX,oy=Store.config.gridOffsetY;document.getElementById('workspace').style.backgroundSize=`${gs}px ${gs}px`;document.getElementById('workspace').style.backgroundPosition=`${ox}px ${oy}px`;};
     document.getElementById('gridSizeSlider').addEventListener('input',ev=>{const v=parseInt(ev.target.value);Store.config.gridSize=v;document.getElementById('gridSizeVal').textContent=v;document.getElementById('gridOffsetX').max=v-1;document.getElementById('gridOffsetY').max=v-1;_updateGridBg();});
@@ -1951,9 +1962,17 @@ const Controller={
     document.getElementById('workspace').addEventListener('wheel',ev=>{if(ev.ctrlKey||ev.metaKey){ev.preventDefault();Controller.setZoom(Store.config.currentZoom+(ev.deltaY>0?-.1:.1));}},{passive:false});
     document.getElementById('workspace').addEventListener('scroll',()=>{Minimap.draw();Culling.scheduleApply();/*Epic7*/});
 
-    document.getElementById('matrix-header').addEventListener('pointerdown',ev=>{if(ev.target.tagName==='INPUT')return;const m=document.getElementById('floating-matrix');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,targetId:'floating-matrix'};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
-    document.getElementById('minimap-header').addEventListener('pointerdown',ev=>{const m=document.getElementById('minimap-container');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,targetId:'minimap-container'};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
-    document.getElementById('settings-header').addEventListener('pointerdown',ev=>{if(ev.target.closest('#btn-close-settings'))return;const m=document.getElementById('settings-panel');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,targetId:'settings-panel'};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
+    document.getElementById('matrix-header').addEventListener('pointerdown',ev=>{if(ev.target.tagName==='INPUT'||ev.target.closest('button'))return;const m=document.getElementById('floating-matrix');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,targetId:'floating-matrix'};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
+    document.getElementById('minimap-header').addEventListener('pointerdown',ev=>{if(ev.target.closest('button'))return;const m=document.getElementById('minimap-container');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,targetId:'minimap-container'};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
+    document.getElementById('settings-header').addEventListener('pointerdown',ev=>{if(ev.target.closest('button'))return;const m=document.getElementById('settings-panel');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,targetId:'settings-panel'};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
+
+    // ▼最小化ボタンのクリック処理
+    document.querySelectorAll('.panel-minimize-btn').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        const panel = ev.target.closest('.glass');
+        if(panel) panel.classList.toggle('minimized');
+      });
+    });
 
     // Epic 5: rAFラッパーで 1フレーム 1回に限定。1000Hzマウスでも 60fpsと完全同期したドラッグ体験を実現。
     let _pendingPointerEv=null,_rafPending=false;
@@ -2088,13 +2107,11 @@ const Controller={
   },
 
   handleGlobalPointerMove:(ev)=>{
- 
     if(Store.matrixDrag.isDragging){
       const tid = Store.matrixDrag.targetId || (Store.matrixDrag.isMap ? 'minimap-container' : 'floating-matrix');
       const m=document.getElementById(tid);
       if(m){m.style.left=(ev.clientX-Store.matrixDrag.offsetX)+'px';m.style.top=(ev.clientY-Store.matrixDrag.offsetY)+'px';m.style.right='auto';m.style.bottom='auto';}
     }
-
     if(Store.multiDrag.active&&ev.pointerId===Store.multiDrag.pointerId){const moved=Math.hypot(ev.clientX-Store.multiDrag.startClientX,ev.clientY-Store.multiDrag.startClientY);if(!Store.multiDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD)Store.multiDrag.hasDragged=true;if(Store.multiDrag.hasDragged){const coords=Renderer.getMouseSvgCoords(ev),dx=coords.x-Store.multiDrag.startSvgX,dy=coords.y-Store.multiDrag.startSvgY;Store.multiDrag.nodes.forEach(item=>{item.node.x=item.startX+dx;item.node.y=item.startY+dy;const gEl=Renderer.nodesGroup.querySelector(`[data-id="${item.node.id}"]`);if(gEl)Renderer.updateNodeLive(item.node,gEl);});}}
     if(Store.dragState.isDragging&&Store.dragState.targetNode&&ev.pointerId===Store.dragState.pointerId){const moved=Math.hypot(ev.clientX-Store.dragState.startClientX,ev.clientY-Store.dragState.startClientY);if(!Store.dragState.hasDragged&&moved>Controller.DRAG_THRESHOLD)Store.dragState.hasDragged=true;if(Store.dragState.hasDragged&&!Store.config.isConnectMode){const raw=Renderer.getMouseSvgCoords(ev),sn=Controller.applySnap(raw.x-Store.dragState.offsetX,raw.y-Store.dragState.offsetY,Store.dragState.targetNode.id);Store.dragState.targetNode.x=sn.x;Store.dragState.targetNode.y=sn.y;Renderer.updateNodeLive(Store.dragState.targetNode,Store.dragState.gEl);Renderer.showSnapGuides(sn.gX,sn.gY);}}
     if(Store.labelDrag.isDragging&&Store.labelDrag.targetNode&&ev.pointerId===Store.labelDrag.pointerId){const moved=Math.hypot(ev.clientX-Store.labelDrag.startClientX,ev.clientY-Store.labelDrag.startClientY);if(!Store.labelDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD)Store.labelDrag.hasDragged=true;if(Store.labelDrag.hasDragged){const c=Renderer.getMouseSvgCoords(ev),nx=Store.labelDrag.startOffsetX+(c.x-Store.labelDrag.startX),ny=Store.labelDrag.startOffsetY+(c.y-Store.labelDrag.startY);Store.labelDrag.targetNode.labelOffset={x:nx,y:ny};const lEl=Store.labelDrag.gEl;if(lEl){lEl.setAttribute('x',nx);lEl.setAttribute('y',ny);}const g=lEl?.closest('g.node');if(g){const ll=g.querySelector('.leader-line');if(ll){ll.setAttribute('x2',nx);ll.setAttribute('y2',ny);}}}}
@@ -2262,11 +2279,9 @@ const Controller={
         baseHeight: Store.config.baseHeight,
         gridSize: Store.config.gridSize,
         gridOffsetX: Store.config.gridOffsetX,
-
         gridOffsetY: Store.config.gridOffsetY,
         alwaysShowLabels: Store.config.alwaysShowLabels,
         nodes: Store.nodes.map(n => ({ id: n.id, type: n.type, x: n.x, y: n.y, rotation: n.rotation, state: n.state, ext: n.ext, labelOffset: n.labelOffset })),
-
         edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext }))
       };
       
@@ -2328,7 +2343,6 @@ const Controller={
                   Store.config.gridOffsetX = d.gridOffsetX;
                   document.getElementById('gridOffsetX').value = d.gridOffsetX;
                 }
-
                 if (d.gridOffsetY != null) {
                   Store.config.gridOffsetY = d.gridOffsetY;
                   document.getElementById('gridOffsetY').value = d.gridOffsetY;
@@ -2338,7 +2352,6 @@ const Controller={
                   document.getElementById('toggleValveLabelsAlways').checked = d.alwaysShowLabels;
                   document.getElementById('svg-layer').classList.toggle('always-show-labels', d.alwaysShowLabels);
                 }
-
                 // 背景グリッドをロード値に同期
                 const gs2=Store.config.gridSize,ox2=Store.config.gridOffsetX,oy2=Store.config.gridOffsetY;
                 document.getElementById('workspace').style.backgroundSize=`${gs2}px ${gs2}px`;

@@ -1,0 +1,2175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STEAM-BOY</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   STEAM-BOY v5 — Apple-Inspired Light Theme
+   ═══════════════════════════════════════════════ */
+:root {
+  --color-0:#8E8E93; --color-1:#007AFF; --color-2:#AF52DE; --color-3:#FF3B30;
+  --text-1:#1D1D1F; --text-2:#6E6E73; --text-3:#AEAEB2;
+  --accent:#007AFF; --green:#34C759; --orange:#FF9500; --red:#FF3B30;
+  --font:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','Inter',system-ui,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);height:100vh;overflow:hidden;background:#E5E5EA;color:var(--text-1);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
+input, textarea{user-select:auto;-webkit-user-select:auto;}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* ── Glass Mixin ── */
+.glass {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 1);
+}
+
+/* ── Workspace ── */
+#workspace{position:absolute;inset:0;overflow:auto;background:#E8E8ED;background-image:radial-gradient(circle,rgba(0,0,0,0.05) 1px,transparent 1px);background-size:20px 20px;}
+#canvas-wrapper{position:relative;width:2000px;height:2000px;}
+#canvas-container{position:absolute;inset:0;transform-origin:top left;transition:transform .1s ease-out;}
+#pdf-canvas{position:absolute;top:0;left:0;box-shadow:0 1px 12px rgba(0,0,0,0.06);background:#fff;display:none;border-radius:2px;}
+#svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:auto;}
+#overlay-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+
+/* ── Toolbar ── */
+#toolbar{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:2px;padding:5px;border-radius:100px;}
+.tool-btn {
+  width:36px; height:36px; border:none; border-radius:9px; background:transparent; 
+  color:var(--text-2); cursor:pointer; display:flex; align-items:center; justify-content:center; 
+  transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1); position:relative; flex-shrink:0;
+}
+.tool-btn:hover {
+  background: rgba(0, 0, 0, 0.05); color: var(--text-1);
+  transform: scale(1.08);
+}
+.tool-btn:active {
+  transform: scale(0.92);
+}
+.tool-btn.active {
+  background: var(--accent); color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+  transform: scale(1.05);
+}
+.tool-btn.connect-on {
+  background: var(--orange); color: #fff;
+  box-shadow: 0 4px 12px rgba(255, 149, 0, 0.3);
+  transform: scale(1.05);
+}
+.tool-btn svg{width:18px;height:18px;pointer-events:none;}
+.toolbar-sep{width:1px;height:20px;background:rgba(0,0,0,0.1);margin:0 3px;flex-shrink:0;}
+.tool-btn .shortcut-hint{position:absolute;bottom:-1px;right:2px;font-size:8px;font-weight:600;color:inherit;opacity:.5;line-height:1;pointer-events:none;}
+
+/* ── Settings Panel ── */
+#settings-panel{position:fixed;top:60px;left:16px;width:256px;max-height:calc(100vh - 80px);overflow-y:auto;z-index:190;border-radius:14px;opacity:0;transform:translateY(-6px) scale(.98);pointer-events:none;}
+#settings-panel::-webkit-scrollbar{width:3px;}
+#settings-panel::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:2px;}
+.sp-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 6px;}
+.sp-title{font-size:15px;font-weight:700;}
+.sp-close{width:22px;height:22px;border:none;background:rgba(0,0,0,0.06);border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-2);transition:background .15s;}
+.sp-close:hover{background:rgba(0,0,0,0.1);}
+.sp-section{padding:10px 14px;border-top:1px solid rgba(0,0,0,0.06);}
+.sp-section-title{font-size:11px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.sp-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.sp-label{font-size:12px;color:var(--text-1);white-space:nowrap;min-width:48px;}
+#settings-panel input[type="number"]{width:54px;padding:4px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:7px;font-size:12px;font-family:var(--font);text-align:center;background:rgba(0,0,0,0.03);outline:none;transition:border-color .15s;}
+#settings-panel input[type="number"]:focus{border-color:var(--accent);}
+#settings-panel input[type="range"]{flex:1;height:4px;-webkit-appearance:none;appearance:none;background:rgba(0,0,0,0.1);border-radius:2px;outline:none;}
+#settings-panel input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 .5px 2px rgba(0,0,0,0.18),0 0 0 .5px rgba(0,0,0,0.06);cursor:pointer;transition:box-shadow .15s;}
+#settings-panel input[type="range"]::-webkit-slider-thumb:hover{box-shadow:0 1px 4px rgba(0,0,0,0.25),0 0 0 .5px rgba(0,0,0,0.08);}
+.sp-hint{font-size:10px;color:var(--text-3);margin-bottom:6px;}
+.sp-file-label{display:block;padding:7px 10px;background:rgba(0,122,255,0.08);color:var(--accent);border-radius:8px;font-size:12px;font-weight:500;text-align:center;cursor:pointer;transition:background .15s;}
+.sp-file-label:hover{background:rgba(0,122,255,0.14);}
+.sp-file-label input{display:none;}
+.sp-toggle{display:flex;align-items:center;gap:10px;margin-bottom:7px;font-size:12px;cursor:pointer;}
+.sp-toggle input[type="checkbox"]{-webkit-appearance:none;appearance:none;width:34px;height:20px;background:rgba(0,0,0,0.14);border-radius:11px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0;}
+.sp-toggle input[type="checkbox"]::after{content:'';position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;top:2px;left:2px;box-shadow:0 1px 2px rgba(0,0,0,0.15);transition:transform .2s cubic-bezier(.16,1,.3,1);}
+.sp-toggle input[type="checkbox"]:checked{background:var(--accent);}
+.sp-toggle input[type="checkbox"]:checked::after{transform:translateX(14px);}
+.sp-buttons{display:flex;gap:6px;}
+.sp-btn{flex:1;padding:7px 6px;border:1px solid rgba(0,0,0,0.1);background:#fff;border-radius:8px;font-size:12px;font-weight:500;font-family:var(--font);cursor:pointer;transition:all .15s;color:var(--text-1);}
+.sp-btn:hover{background:rgba(0,0,0,0.03);}
+.sp-btn.danger{color:var(--red);border-color:rgba(255,59,48,0.15);}
+.sp-btn.danger:hover{background:rgba(255,59,48,0.06);}
+.sp-hints{padding:10px 14px;border-top:1px solid rgba(0,0,0,0.06);}
+.sp-hints p{font-size:10px;color:var(--text-3);margin-bottom:2px;line-height:1.5;}
+.anomaly-badge{background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;}
+.anomaly-list .anomaly-item{margin-bottom:3px;padding:4px 8px;background:rgba(255,149,0,0.08);border-left:3px solid var(--orange);border-radius:0 6px 6px 0;font-size:11px;color:var(--text-1);}
+
+/* ── Valve Matrix ── */
+#floating-matrix {
+    position: fixed;
+    top: 64px;
+    right: 16px;
+    width: 256px;
+    min-height: 60px;
+    max-height: calc(100vh - 100px); /* ★これを追加（画面の高さから100px引いた長さを限界にする） */
+    z-index: 190;
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    resize: both;
+    overflow: hidden;
+}
+.matrix-header{padding:8px 12px;display:flex;align-items:center;gap:8px;cursor:grab;touch-action:none;border-bottom:1px solid rgba(0,0,0,0.06);}
+.matrix-header:active{cursor:grabbing;}
+.matrix-drag-dots{display:flex;flex-direction:column;gap:2px;opacity:.25;flex-shrink:0;width:8px;}
+.matrix-drag-dots span{display:flex;gap:2px;}
+.matrix-drag-dots span::before,.matrix-drag-dots span::after{content:'';width:3px;height:3px;border-radius:50%;background:currentColor;flex-shrink:0;}
+.matrix-title-input{background:transparent;border:none;font-size:13px;font-weight:600;color:var(--text-1);outline:none;flex:1;min-width:0;font-family:var(--font);}
+#valveMatrixContent {
+    flex: 1 1 auto; /* ★ flex-grow: 1; から変更（縮小も許可する） */
+    min-height: 0;  /* ★ 追加（Flexbox内で正しくスクロールさせるための魔法のコード） */
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    grid-auto-rows: min-content;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-radius: 0 0 14px 14px;
+}
+#valveMatrixContent::-webkit-scrollbar{width:3px;}
+#valveMatrixContent::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.1);border-radius:2px;}
+.matrix-item {
+  background: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0,0,0,0.02);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.matrix-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0,0,0,0.02);
+}
+.matrix-item-title {
+  font-size: 11px; font-weight: 700; color: var(--text-1); text-align: center;
+}
+.status-badge{display:inline-block;padding:2px 8px;border-radius:10px;color:#fff;font-size:10px;font-weight:600;}
+.badge-0{background:var(--red);} .badge-1{background:var(--orange);} .badge-2{background:var(--green);}
+.valve-state-0{fill:rgba(255,59,48,.2)!important;} .valve-state-1{fill:rgba(255,149,0,.2)!important;} .valve-state-2{fill:rgba(52,199,89,.2)!important;}
+.matrix-empty{font-size:11px;color:var(--text-3);text-align:center;grid-column:1/-1;padding:14px 0;}
+
+/* ── Minimap ── */
+#minimap-container{position:fixed;bottom:72px;left:16px;z-index:190;border-radius:12px;overflow:hidden;cursor:default;}
+#minimap-header{font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--text-3);padding:6px 10px 3px;text-transform:uppercase;display:flex;align-items:center;gap:6px;cursor:grab;touch-action:none;border-bottom:1px solid rgba(0,0,0,0.06);}
+#minimap-header:active{cursor:grabbing;}
+
+#minimap{display:block;cursor:crosshair;}
+
+/* ── Zoom Controls ── */
+#zoom-controls{position:fixed;bottom:16px;right:16px;z-index:190;display:flex;align-items:center;padding:4px;gap:2px;border-radius:100px;}
+#zoom-controls button{height:32px;padding:0 10px;font-size:16px;font-weight:500;background:transparent;color:var(--text-1);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:var(--font);transition:background .15s;}
+#zoom-controls button:hover{background:rgba(0,0,0,0.05);}
+#btn-zoom-in,#btn-zoom-out{width:32px;font-size:18px;}
+#btn-zoom-reset{font-size:11px;font-weight:600;padding:0 10px;letter-spacing:.3px;}
+#zoom-display{width:50px;text-align:center;font-size:12px;font-weight:600;color:var(--text-1);user-select:none;font-variant-numeric:tabular-nums;}
+
+/* ── Connect Banner ── */
+#connect-banner{position:fixed;top:58px;left:50%;transform:translateX(-50%);z-index:210;padding:6px 18px;border-radius:100px;font-size:12px;font-weight:600;color:#fff;display:none;pointer-events:none;white-space:nowrap;background:rgba(255,149,0,0.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 2px 12px rgba(255,149,0,0.25);}
+
+/* ── Selection Toolbar ── */
+#selection-toolbar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:200;padding:6px 14px;border-radius:100px;font-size:12px;display:none;align-items:center;gap:10px;white-space:nowrap;background:rgba(29,29,31,0.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.15);}
+#selection-toolbar.visible{display:flex;}
+#selection-toolbar button{padding:4px 12px;font-size:11px;font-weight:500;background:rgba(255,255,255,0.15);border:none;border-radius:100px;color:#fff;cursor:pointer;transition:background .15s;font-family:var(--font);}
+#selection-toolbar button:hover{background:rgba(255,255,255,0.25);}
+
+/* ── Connect Mode ── */
+#workspace.connect-mode{cursor:crosshair;box-shadow:inset 0 0 0 3px rgba(255,149,0,0.35);}
+#workspace.connect-mode .node{cursor:pointer;}
+
+/* ── SVG Elements ── */
+.flow-base{fill:none;stroke-linecap:round;pointer-events:none;}
+.flow-base.backward{stroke-dasharray:1,14;}
+.edge-path{fill:none;stroke-linecap:round;opacity:.6;pointer-events:stroke;cursor:pointer;}
+.edge-path.empty{opacity:.25;}
+/* .flow-arrow は Task 1-1 で .flow-dash (CSS破線) に置き換え済みのため廃止 */
+/* .flow-arrow{paint-order:stroke;stroke:rgba(255,255,255,.92);stroke-width:3px;stroke-linejoin:round;pointer-events:none;} */
+.waypoint-handle{cursor:move;touch-action:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.12));}
+.node{cursor:grab;touch-action:none;}
+.node:active{cursor:grabbing;}
+.node-shape{stroke-width:2.5;fill:rgba(255,255,255,0.25);stroke-opacity: 0.4;transition:stroke .2s,fill .2s,transform .3s cubic-bezier(.175,.885,.32,1.275);stroke-linejoin:round;}
+.node.selected .node-shape{stroke-dasharray:4;animation:dash 1s linear infinite;}
+.node.multi-selected .node-shape{stroke:var(--accent)!important;stroke-width:3;filter:drop-shadow(0 0 4px rgba(0,122,255,0.4));}
+.selection-ring{animation:dash .8s linear infinite;pointer-events:none;}
+.node-label{cursor:grab;pointer-events:auto;user-select:none;touch-action:none;}
+.node-label:active{cursor:grabbing;}
+.leader-line{stroke:var(--text-3);stroke-width:1;stroke-dasharray:3,3;pointer-events:none;}
+.state-0{stroke:var(--color-0);} .state-1{stroke:var(--color-1);} .state-2{stroke:var(--color-2);} .state-3{stroke:var(--color-3);}
+.anomaly-ring{animation:anomalyPulse 1.6s ease-in-out infinite;pointer-events:none;}
+.anomaly-icon{animation:anomalyBlink 1.6s ease-in-out infinite;pointer-events:none;}
+.connect-preview-anim{animation:dashMove .4s linear infinite;}
+.snap-guide{pointer-events:none;}
+
+@keyframes dash{to{stroke-dashoffset:-8;}}
+@keyframes dashMove{from{stroke-dashoffset:0;}to{stroke-dashoffset:-12;}}
+@keyframes anomalyPulse{0%,100%{stroke-opacity:.9;stroke-width:2;}50%{stroke-opacity:.2;stroke-width:5;}}
+@keyframes anomalyBlink{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+/* ── Valve Selector ── */
+#valve-selector{position:fixed;z-index:350;display:flex;gap:8px;padding:10px 12px;border-radius:20px;pointer-events:auto;transform-origin:center top;}
+@keyframes vsPop{from{opacity:0;transform:scale(.82) translateY(-8px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.vs-pop{animation:vsPop .22s cubic-bezier(.175,.885,.32,1.275) both;}
+.vs-opt{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 10px 8px;border-radius:12px;cursor:pointer;border:2px solid transparent;transition:background .13s,transform .12s,border-color .13s;min-width:66px;position:relative;user-select:none;-webkit-tap-highlight-color:transparent;}
+.vs-opt:focus{outline:none;}
+.vs-opt.vs-0{color:var(--red);} .vs-opt.vs-1{color:var(--orange);} .vs-opt.vs-2{color:var(--green);}
+.vs-opt.vs-0:hover,.vs-opt.vs-0:focus{background:rgba(255,59,48,.1);border-color:rgba(255,59,48,.2);}
+.vs-opt.vs-1:hover,.vs-opt.vs-1:focus{background:rgba(255,149,0,.1);border-color:rgba(255,149,0,.2);}
+.vs-opt.vs-2:hover,.vs-opt.vs-2:focus{background:rgba(52,199,89,.1);border-color:rgba(52,199,89,.2);}
+.vs-opt.vs-cur.vs-0{border-color:var(--red);background:rgba(255,59,48,.07);}
+.vs-opt.vs-cur.vs-1{border-color:var(--orange);background:rgba(255,149,0,.07);}
+.vs-opt.vs-cur.vs-2{border-color:var(--green);background:rgba(52,199,89,.07);}
+.vs-dot{position:absolute;bottom:5px;font-size:7px;opacity:.55;font-weight:900;line-height:1;}
+.vs-lbl{font-size:11px;font-weight:700;letter-spacing:.2px;}
+.vs-svg{width:44px;height:32px;overflow:visible;}
+.vs-ghost{pointer-events:none;}
+
+/* ── Edge Hitbox ── */
+.edge-hitbox {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+/* ── Sealed Unknown ── */
+@keyframes sealedPulse {
+  0%, 100% { stroke: #FF3B30; opacity: 1; }
+  50% { stroke: #AF52DE; opacity: 1; }
+}
+@keyframes sealedBgPulse {
+  0%, 100% { stroke: #FF3B30; opacity: 0.3; }
+  50% { stroke: #AF52DE; opacity: 0.3; }
+}
+.edge-sealed {
+  animation: sealedPulse 2.4s ease-in-out infinite !important;
+  stroke-dasharray: 8, 6 !important;
+}
+.edge-sealed-bg {
+  animation: sealedBgPulse 2.4s ease-in-out infinite !important;
+}
+.sealed-icon {
+  animation: anomalyBlink 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Grid sub-settings accordion ── */
+#grid-settings{
+  overflow:hidden;
+  max-height:0;
+  transition:max-height .22s ease, opacity .18s ease;
+  opacity:0;
+  margin-left:10px;
+  border-left:2px solid rgba(0,122,255,0.15);
+  padding-left:10px;
+}
+#grid-settings.open{
+  max-height:120px;
+  opacity:1;
+}
+.sp-unit{font-size:11px;color:var(--text-3);margin-left:2px;}
+
+/* ── Hints accordion ── */
+.sp-hints-toggle{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px 10px;border-top:1px solid rgba(0,0,0,0.06);
+  font-size:11px;font-weight:600;color:var(--text-3);
+  cursor:pointer;user-select:none;letter-spacing:.3px;
+}
+.sp-hints-toggle:hover{color:var(--text-2);}
+.sp-hints-arrow{font-size:9px;transition:transform .2s;}
+.sp-hints-arrow.open{transform:rotate(90deg);}
+#sp-hints-body{
+  overflow:hidden;max-height:0;
+  transition:max-height .22s ease;
+}
+#sp-hints-body.open{max-height:200px;}
+.sp-hints-body-inner{padding:0 14px 10px;}
+.sp-hints-body-inner p{font-size:10px;color:var(--text-3);margin-bottom:2px;line-height:1.5;}
+
+/* ── Epic 6-1: data-*属性によるエッジ/ノード状態の CSS 制御 ── */
+/* エッジグループの流体状態 → stroke/opacity/stroke-width をCSSで一括管理 */
+:root { --esw: 3px; }
+g.edge-grp[data-fluid="0"] .edge-path{stroke:#1D1D1F;opacity:0.35;stroke-width:1.5px;}
+g.edge-grp[data-fluid="1"] .edge-path{stroke:#007AFF;opacity:0.6;stroke-width:var(--esw);}
+g.edge-grp[data-fluid="2"] .edge-path{stroke:#AF52DE;opacity:0.6;stroke-width:var(--esw);}
+g.edge-grp[data-fluid="3"] .edge-path{stroke:#FF3B30;opacity:0.6;stroke-width:var(--esw);}
+/* flow-base の stroke もCSS管理（opacity は dRate 依存なので JS で設定継続） */
+g.edge-grp[data-fluid="1"] .flow-base:not(.edge-sealed-bg){stroke:#007AFF;}
+g.edge-grp[data-fluid="2"] .flow-base:not(.edge-sealed-bg){stroke:#AF52DE;}
+g.edge-grp[data-fluid="3"] .flow-base:not(.edge-sealed-bg){stroke:#FF3B30;}
+/* ノードグループの流体状態 */
+g.node[data-fluid-state="0"] .node-shape{stroke:#8E8E93;}
+g.node[data-fluid-state="1"] .node-shape{stroke:#007AFF;}
+g.node[data-fluid-state="2"] .node-shape{stroke:#AF52DE;}
+g.node[data-fluid-state="3"] .node-shape{stroke:#FF3B30;}
+/* バルブ開閉状態 */
+g.node[data-valve-state="0"] .node-shape{fill:rgba(255,59,48,.2);}
+g.node[data-valve-state="1"] .node-shape{fill:rgba(255,149,0,.2);}
+g.node[data-valve-state="2"] .node-shape{fill:rgba(52,199,89,.2);}
+
+/* ── Epic 7: Viewport Culling — 画面外エッジのアニメーション停止 ── */
+g.edge-grp[data-culled="1"] .flow-dash{animation-play-state:paused;}
+g.edge-grp[data-culled="1"] .flow-base{animation-play-state:paused;}
+
+/* ── Epic 6-2: ドラッグ中GPU昇格ヒント ── */
+.node-dragging{will-change:transform;}
+
+/* ── Task 1-1: flow-dash — textPath矢印の代替となるCSS破線アニメーション ── */
+@keyframes flowDash {
+  to { stroke-dashoffset: -24; }
+}
+.flow-dash {
+  fill: none;
+  stroke-linecap: round;
+  pointer-events: none;
+  stroke-dasharray: 6, 6;
+  animation: flowDash linear infinite;
+}
+/* ── Epic 10: 残留液表示 — data-residual="1" でアニメーション停止・不透明度調整 ── */
+g.edge-grp[data-residual="1"] .flow-dash{
+  animation-play-state:paused !important;
+  stroke-opacity:0.8;
+}
+g.edge-grp[data-residual="1"] .flow-base{
+  stroke-opacity:0.35 !important;
+}
+
+/* ── Matrix Tabs & Pin UI ── */
+.matrix-tabs { display:flex; gap: 4px; padding: 4px 8px 8px; border-bottom: 1px solid rgba(0,0,0,0.06); background: rgba(255,255,255,0.5); }
+.matrix-tab { flex: 1; text-align: center; font-size: 11px; font-weight: 600; padding: 5px 0; cursor: pointer; border-radius: 6px; color: var(--text-2); transition: all 0.2s; }
+.matrix-tab.active { background: var(--accent); color: #fff; box-shadow: 0 2px 6px rgba(0,122,255,0.2); }
+.matrix-item-header { display: flex; justify-content: center; position: relative; width: 100%; align-items: center; }
+.matrix-pin-btn { position: absolute; right: -2px; cursor: pointer; opacity: 0.2; transition: opacity 0.2s, transform 0.2s; font-size: 11px; user-select: none; }
+.matrix-pin-btn:hover { transform: scale(1.2); }
+.matrix-pin-btn.pinned { opacity: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2)); }
+
+/* ── Reducer Selector ── */
+.rs-pop { width: 160px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.rs-val-display { text-align: center; font-size: 14px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.rs-slider { width: 100%; -webkit-appearance: none; appearance: none; height: 4px; background: rgba(0,0,0,0.1); border-radius: 2px; outline: none; }
+.rs-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.2), 0 0 0 0.5px rgba(0,0,0,0.08); cursor: pointer; }
+
+</style>
+</head>
+<body>
+
+<div id="splash-screen">
+  <div class="splash-content">
+    
+    <svg class="splash-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+      
+      <circle cx="100" cy="100" r="92" fill="#ffffff" stroke="#1D1D1F" stroke-width="8"/>
+      <circle cx="100" cy="100" r="80" fill="none" stroke="#007AFF" stroke-width="12" stroke-dasharray="16 15" opacity="0.15"/>
+      <circle cx="100" cy="100" r="74" fill="none" stroke="#1D1D1F" stroke-width="4"/>
+
+      <circle cx="100" cy="100" r="48" fill="#ffffff" stroke="#1D1D1F" stroke-width="8"/>
+
+      <path d="M 52 100 A 48 48 0 0 1 148 100" fill="#007AFF" stroke="#1D1D1F" stroke-width="8"/>
+      <path d="M 52 100 L 52 115 Q 60 125 68 115 L 68 100 Z" fill="#007AFF" stroke="#1D1D1F" stroke-width="8" stroke-linejoin="round"/>
+      <path d="M 148 100 L 148 115 Q 140 125 132 115 L 132 100 Z" fill="#007AFF" stroke="#1D1D1F" stroke-width="8" stroke-linejoin="round"/>
+
+      <rect x="46" y="80" width="108" height="14" fill="#1D1D1F" rx="2"/>
+
+      <circle cx="74" cy="87" r="22" fill="#ffffff" stroke="#1D1D1F" stroke-width="8"/>
+      <circle cx="126" cy="87" r="22" fill="#ffffff" stroke="#1D1D1F" stroke-width="8"/>
+      <circle cx="74" cy="87" r="11" fill="#007AFF"/>
+      <circle cx="126" cy="87" r="11" fill="#007AFF"/>
+      <circle cx="69" cy="82" r="4" fill="#ffffff"/>
+      <circle cx="121" cy="82" r="4" fill="#ffffff"/>
+
+      <path d="M 88 127 Q 100 137 112 127" fill="none" stroke="#1D1D1F" stroke-width="6" stroke-linecap="round"/>
+
+    </svg>
+
+    <h1 class="splash-text">STEAM-BOY</h1>
+    <p class="splash-subtext">Simulator Loading...</p>
+  </div>
+</div>
+
+<style>
+  #splash-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #ffffff; 
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 99999; 
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.8s cubic-bezier(0.25, 1, 0.5, 1), visibility 0.8s;
+  }
+
+  .splash-content {
+    text-align: center;
+    animation: floatLogo 3s ease-in-out infinite; 
+  }
+
+  @keyframes floatLogo {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+    100% { transform: translateY(0px); }
+  }
+
+  .splash-logo {
+    width: 180px;
+    height: 180px;
+    margin-bottom: 24px;
+    filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.08)); 
+  }
+
+  .splash-text {
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: #1D1D1F;
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    margin: 0;
+  }
+
+  .splash-subtext {
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: #8E8E93;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-top: 8px;
+    letter-spacing: 1px;
+  }
+
+  #splash-screen.fade-out {
+    opacity: 0;
+    visibility: hidden;
+  }
+</style>
+
+<script>
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      const splash = document.getElementById('splash-screen');
+      if (splash) {
+        splash.classList.add('fade-out');
+        setTimeout(function() {
+          splash.remove();
+        }, 800); 
+      }
+    }, 5000);
+  });
+</script>
+
+  
+<main id="workspace">
+  <div id="canvas-wrapper">
+    <div id="canvas-container">
+      <canvas id="pdf-canvas"></canvas>
+      <svg id="svg-layer"></svg>
+      <svg id="overlay-layer"></svg>
+    </div>
+  </div>
+</main>
+
+<header id="toolbar" class="glass">
+  <button class="tool-btn active" data-tool="pointer" title="操作・選択 (V)">
+    <svg viewBox="0 0 18 18" fill="none"><path d="M4 2v13l3.5-3.5H14z" fill="currentColor"/></svg>
+    <span class="shortcut-hint">V</span>
+  </button>
+  <button class="tool-btn" data-tool="rotate" title="回転 (R)">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 9a6.5 6.5 0 0112-3.5"/><path d="M14.5 2v4h-4"/></svg>
+    <span class="shortcut-hint">R</span>
+  </button>
+  <div class="toolbar-sep"></div>
+  <button class="tool-btn" data-tool="source" title="Source (S)">
+    <svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="5.5" fill="currentColor"/></svg>
+    <span class="shortcut-hint">S</span>
+  </button>
+  <button class="tool-btn" data-tool="valve" title="Valve (A)">
+    <svg viewBox="0 0 18 18"><polygon points="3,3.5 3,14.5 9,9" fill="currentColor"/><polygon points="15,3.5 15,14.5 9,9" fill="currentColor"/></svg>
+    <span class="shortcut-hint">A</span>
+  </button>
+  <button class="tool-btn" data-tool="trap" title="Trap (T)">
+    <svg viewBox="0 0 18 18"><rect x="4" y="4" width="10" height="10" rx="1" fill="currentColor"/></svg>
+    <span class="shortcut-hint">T</span>
+  </button>
+  <button class="tool-btn" data-tool="drain" title="Drain (D)">
+    <svg viewBox="0 0 18 18"><polygon points="3,4 15,4 9,15" fill="currentColor"/></svg>
+    <span class="shortcut-hint">D</span>
+  </button>
+  <button class="tool-btn" data-tool="split" title="Split (Y)">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 4l3 5m3-5l-3 5m0 0v5"/></svg>
+    <span class="shortcut-hint">Y</span>
+  </button>
+  <button class="tool-btn" data-tool="merge" title="Merge (M)">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 9h12M9 3v12"/></svg>
+    <span class="shortcut-hint">M</span>
+  </button>
+  <button class="tool-btn" data-tool="reducer" title="減圧弁 (E)">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="5" width="14" height="8" rx="1.5" stroke="currentColor" fill="none"/>
+      <line x1="5" y1="9" x2="13" y2="9" stroke="currentColor" stroke-width="2"/>
+    </svg>
+    <span class="shortcut-hint">E</span>
+  </button>
+  <button class="tool-btn" data-tool="safety" title="安全弁 (Q)">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8">
+      <text x="9" y="13.5" text-anchor="middle" font-weight="bold" font-size="14" fill="currentColor" stroke="none">Q</text>
+    </svg>
+    <span class="shortcut-hint">Q</span>
+  </button>
+  <button class="tool-btn" data-tool="heatex" title="熱交換器 (H)">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+      <polygon points="9,2 16,9 9,16 2,9" stroke="currentColor" fill="none"/>
+    </svg>
+    <span class="shortcut-hint">H</span>
+  </button>
+  <button class="tool-btn" data-tool="pin" title="ピン留め (P)">
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 2l-3 4v5l-2 2v1h10v-1l-2-2V6L9 2z"/><line x1="9" y1="14" x2="9" y2="17"/>
+      </svg>
+      <span class="shortcut-hint">P</span>
+    </button>
+
+  <div class="toolbar-sep"></div>
+  <button class="tool-btn" id="btn-connect" title="配管接続 (C)">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="5" cy="9" r="2.8" fill="none"/><circle cx="13" cy="9" r="2.8" fill="none"/><line x1="7.8" y1="9" x2="10.2" y2="9"/></svg>
+    <span class="shortcut-hint">C</span>
+  </button>
+  <div class="toolbar-sep"></div>
+  <button class="tool-btn" id="btn-undo" title="元に戻す (⌘Z)">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h8a3.5 3.5 0 010 7H9"/><path d="M7 5L4 8l3 3"/></svg>
+  </button>
+  <button class="tool-btn" id="btn-save-tb" title="保存">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v8m-3-2.5L9 11l3-2.5"/><path d="M3 12.5v1.5a2 2 0 002 2h8a2 2 0 002-2v-1.5"/></svg>
+  </button>
+  <div class="toolbar-sep"></div>
+  <button class="tool-btn" id="btn-settings" title="設定">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="3" y1="6" x2="15" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><circle cx="6.5" cy="6" r="2" fill="white" stroke="currentColor" stroke-width="1.5"/><circle cx="11.5" cy="12" r="2" fill="white" stroke="currentColor" stroke-width="1.5"/></svg>
+  </button>
+</header>
+
+<aside id="settings-panel" class="glass">
+  <div class="sp-header">
+    <span class="sp-title">設定</span>
+    <button class="sp-close" id="btn-close-settings">✕</button>
+  </div>
+
+  <div class="sp-section">
+    <div class="sp-section-title">背景PDF</div>
+    <div class="sp-row">
+      <span class="sp-label">スケール</span>
+      <input type="number" id="pdfScale" value="1.5" step="0.1" min="0.5" max="5.0">
+    </div>
+    <div class="sp-hint">※読込データ再適用時は同じスケールでPDF選択</div>
+    <label class="sp-file-label">PDFを選択...<input type="file" id="pdf-upload" accept="application/pdf"></label>
+  </div>
+
+  <div class="sp-section">
+    <div class="sp-section-title">表示設定</div>
+    <div class="sp-row">
+      <span class="sp-label">ノードサイズ</span>
+      <input type="range" id="sizeSlider" min="3" max="25" value="8">
+      <span id="sizeVal" style="font-size:12px;font-weight:600;min-width:18px;text-align:right;">8</span><span class="sp-unit">px</span>
+    </div>
+    <label class="sp-toggle"><input type="checkbox" id="toggleValveLabels" checked><span>バルブ名ラベル</span></label>
+    <label class="sp-toggle"><input type="checkbox" id="toggleReducerLabels"><span>減圧弁の数値表示</span></label>
+    <label class="sp-toggle"><input type="checkbox" id="toggleSnap" checked><span>スナップ（グリッド+軸合わせ）</span></label>
+    <div id="grid-settings" class="open">
+      <div class="sp-row" style="margin-bottom:6px;">
+        <span class="sp-label">グリッド間隔</span>
+        <input type="range" id="gridSizeSlider" min="10" max="80" step="5" value="20">
+        <span id="gridSizeVal" style="font-size:12px;font-weight:600;min-width:18px;text-align:right;">20</span><span class="sp-unit">px</span>
+      </div>
+      <div class="sp-row" style="margin-bottom:4px;">
+        <span class="sp-label">X基準点</span>
+        <input type="number" id="gridOffsetX" min="0" max="79" value="0">
+        <span class="sp-unit">px</span>
+      </div>
+      <div class="sp-row" style="margin-bottom:2px;">
+        <span class="sp-label">Y基準点</span>
+        <input type="number" id="gridOffsetY" min="0" max="79" value="0">
+        <span class="sp-unit">px</span>
+      </div>
+    </div>
+    <label class="sp-toggle"><input type="checkbox" id="toggleAutoElbow"><span>エルボー自動挿入</span></label>
+    <label class="sp-toggle"><input type="checkbox" id="toggleSealedAnim" checked><span>密閉・不確定表示</span></label>
+  </div>
+
+  <div class="sp-section">
+    <div class="sp-section-title">データ管理</div>
+    <div class="sp-buttons">
+      <button class="sp-btn" id="btn-save">保存</button>
+      <button class="sp-btn" id="btn-load">読込</button>
+      <button class="sp-btn danger" id="btn-clear">クリア</button>
+    </div>
+    <div class="sp-buttons" style="margin-top:8px;">
+      <button class="sp-btn" id="btn-renumber">連番再振</button>
+    </div>
+  </div>
+
+  <div class="sp-section" id="anomaly-panel">
+    <div class="sp-section-title">診断<span id="anomaly-badge" class="anomaly-badge" style="display:none"></span></div>
+    <div id="anomaly-list" style="font-size:11px;color:var(--green);font-weight:500;">✓ 異常なし</div>
+  </div>
+
+  <div class="sp-hints-toggle" id="sp-hints-toggle">
+    <span>ショートカット一覧</span>
+    <span class="sp-hints-arrow" id="sp-hints-arrow">▶</span>
+  </div>
+  <div id="sp-hints-body">
+    <div class="sp-hints-body-inner">
+      <p>配管ダブルクリック → 中継点追加</p>
+      <p>中継点 右クリック/ダブルクリック → 削除</p>
+      <p>ノード/配管 右クリック → 個別削除</p>
+      <p>空白ドラッグ → 矩形選択 ／ Del → 選択削除</p>
+    </div>
+  </div>
+</aside>
+
+<div id="connect-banner"></div>
+
+<div id="floating-matrix" class="glass">
+  <div class="matrix-header" id="matrix-header">
+    <div class="matrix-drag-dots"><span></span><span></span></div>
+    <input type="text" id="matrix-title-input" class="matrix-title-input" value="バルブステータス">
+  </div>
+  <div class="matrix-tabs" id="matrix-tabs">
+    <div class="matrix-tab active" data-tab="all">すべて</div>
+    <div class="matrix-tab" data-tab="pinned">📌 ピン留め</div>
+  </div>
+  <div id="valveMatrixContent"><div class="matrix-empty">バルブ未配置</div></div>
+</div>
+
+<div id="minimap-container" class="glass">
+  <div id="minimap-header" id="minimap-drag-handle">
+    <div class="matrix-drag-dots"><span></span><span></span></div>
+    <span>MAP</span>
+  </div>
+  <canvas id="minimap" width="170" height="120"></canvas>
+</div>
+
+<div id="zoom-controls" class="glass">
+  <button id="btn-zoom-out" title="縮小">−</button>
+  <div id="zoom-display">100%</div>
+  <button id="btn-zoom-in" title="拡大">+</button>
+  <button id="btn-zoom-reset" title="リセット">Reset</button>
+</div>
+
+<div id="selection-toolbar">
+  <span id="sel-count-label">0個選択中</span>
+  <button id="btn-del-sel">削除</button>
+  <button id="btn-clear-sel">✕ 解除</button>
+</div>
+
+<script>
+'use strict';
+/* ━━━━━━━━ HELPERS ━━━━━━━━ */
+const SVG_NS='http://www.w3.org/2000/svg';
+const createNS=(tag,attrs={})=>{const el=document.createElementNS(SVG_NS,tag);Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,String(v)));return el;};
+const distPtSeg=(p,a,b)=>{const dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy;if(l2<1e-9)return Math.hypot(p.x-a.x,p.y-a.y);const t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/l2));return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy);};
+
+/* ━━━━━━━━ CONSTANTS ━━━━━━━━ */
+const FLUID={EMPTY:0,WATER:1,DRAIN:2,STEAM:3};
+const NODE_TYPE={SOURCE:'source',VALVE:'valve',TRAP:'trap',DRAIN:'drain',SPLIT:'split',MERGE:'merge',POINTER:'pointer',ROTATE:'rotate',REDUCER:'reducer',HEATEX:'heatex',SAFETY:'safety'};
+const VALVE_STATE={CLOSED:0,PARTIAL:1,OPEN:2};
+const COLOR_MAP={0:'#8E8E93',1:'#007AFF',2:'#AF52DE',3:'#FF3B30'};
+
+/* ━━━━━━━━ STORE ━━━━━━━━ */
+const Store={
+  nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],
+  config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false},  
+  dragState:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
+  multiDrag:{active:false,nodes:[],gEl:null,startSvgX:0,startSvgY:0,startClientX:0,startClientY:0,hasDragged:false,pointerId:null,preSnapshot:null},
+  labelDrag:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,startX:0,startY:0,startOffsetX:0,startOffsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
+  waypointDrag:{active:false,edge:null,index:-1,wpEl:null,pointerId:null,hasDragged:false,startClientX:0,startClientY:0,preSnapshot:null},
+  rectSelect:{active:false,startSvgX:0,startSvgY:0,currentSvgX:0,currentSvgY:0,pointerId:null},
+  matrixDrag:{isDragging:false,offsetX:0,offsetY:0,pointerId:null,isMap:false},
+  generateId:()=>Date.now().toString(36)+Math.random().toString(36).substr(2,5),
+  createNode:(type,x,y,p={})=>({id:p.id||Store.generateId(),type,x,y,rotation:p.rotation||0,state:p.state||{valveState:VALVE_STATE.OPEN},labelOffset:p.labelOffset||{x:35,y:-25},ext:p.ext||{},_sim:{fIn:0,fOut:0,rateIn:0,rateOut:0}}),
+  createEdge:(fromId,toId,p={})=>({id:p.id||Store.generateId(),from:fromId,to:toId,ext:Object.assign({waypoints:[]},p.ext||{}),_sim:{f:0,b:0,rate:0,brate:0}}),
+  serialize:()=>JSON.stringify({nodes:Store.nodes.map(n=>({id:n.id,type:n.type,x:n.x,y:n.y,rotation:n.rotation,state:n.state,ext:n.ext,labelOffset:n.labelOffset})),edges:Store.edges.map(e=>({id:e.id,from:e.from,to:e.to,ext:e.ext}))}),
+  pushHistory:()=>{Store.history.push(Store.serialize());if(Store.history.length>60)Store.history.shift();},
+
+  pushSnapshot:(snap)=>{
+      Store.history.push(snap);
+      if(Store.history.length>60)Store.history.shift();
+    },
+
+  restore:(snap)=>{const d=JSON.parse(snap);Store.nodes=d.nodes.map(n=>Store.createNode(n.type,n.x,n.y,n));Store.edges=d.edges.map(e=>Store.createEdge(e.from,e.to,e));}
+};
+
+/* ━━━━━━━━ SIMULATOR CORE (Epic 8: Pure Function — Worker移行布石) ━━━━━━━━ */
+// DOM・Store への副作用ゼロ。将来的に worker.postMessage({ nodes, edges }) で呼び出せる設計。
+const SimulatorCore={
+  compute:(inputNodes,inputEdges)=>{
+    // _sim のみシャロウコピーして副作用ゼロの計算を行う
+    const nodes=inputNodes.map(n=>({...n,_sim:{...n._sim}}));
+    const edges=inputEdges.map(e=>({...e,_sim:{...e._sim}}));
+    const nodeMap=new Map(nodes.map(n=>[n.id,n]));
+
+    edges.forEach(e=>{e._sim.f=0;e._sim.b=0;e._sim.rate=0;e._sim.brate=0;});
+    nodes.forEach(n=>{n._sim.fIn=0;n._sim.fOut=0;n._sim.rateIn=0;n._sim.rateOut=0;});
+
+    let changed=true,iter=0;
+    while(changed&&iter<100){changed=false;
+      nodes.forEach(n=>{
+        const inE=edges.filter(e=>e.to===n.id);let mxF=0,rateIn=0;
+        inE.forEach(e=>{if(e._sim.f>mxF)mxF=e._sim.f;});
+        inE.forEach(e=>{if(e._sim.f===mxF&&e._sim.rate>rateIn)rateIn=e._sim.rate;});
+        n._sim.fIn=mxF;n._sim.rateIn=rateIn;let fOut=mxF,rOut=rateIn;
+        if(n.type===NODE_TYPE.SOURCE){fOut=FLUID.STEAM;rOut=1;}
+        else if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)){
+          if(n.state.valveState===VALVE_STATE.CLOSED){fOut=FLUID.EMPTY;rOut=0;}
+          else if(n.state.valveState===VALVE_STATE.PARTIAL){fOut=n._sim.fIn;rOut=Math.min(rateIn,.1);}
+          else{fOut=n._sim.fIn;rOut=rateIn;}
+        }
+        else if(n.type===NODE_TYPE.TRAP){
+          if(rateIn>0){fOut=(n._sim.fIn===FLUID.STEAM)?FLUID.DRAIN:n._sim.fIn;}
+          else{fOut=FLUID.EMPTY;rOut=0;}
+        }
+        else if(n.type===NODE_TYPE.DRAIN){fOut=(n._sim.fIn===FLUID.DRAIN)?FLUID.WATER:n._sim.fIn;}
+        else if(n.type===NODE_TYPE.REDUCER){fOut=n._sim.fIn;rOut=Math.min(rateIn, n.ext.limitRate ?? 0.45);}
+        else if(n.type===NODE_TYPE.HEATEX){fOut=n._sim.fIn;rOut=rateIn;}
+        if(fOut===FLUID.EMPTY)rOut=0;
+        if(n._sim.fOut!==fOut||n._sim.rateOut!==rOut){n._sim.fOut=fOut;n._sim.rateOut=rOut;changed=true;}
+      });
+      edges.forEach(e=>{
+        const fn=nodeMap.get(e.from);
+        if(fn&&(e._sim.f!==fn._sim.fOut||e._sim.rate!==fn._sim.rateOut)){e._sim.f=fn._sim.fOut;e._sim.rate=fn._sim.rateOut;changed=true;}
+      });
+      iter++;
+    }
+
+    // バックフロー（逆流）計算 — 流体優先順位＋圧力差による発生
+    nodes.forEach(n=>{
+      const inE=edges.filter(e=>e.to===n.id);if(inE.length<=1)return;
+      const mxF=n._sim.fIn;
+      // 合流する中で最も強い流体(mxF)を持つ配管の最大圧力を求める
+      let mxRateForMxF=0;
+      inE.forEach(e=>{if(e._sim.f===mxF&&e._sim.rate>mxRateForMxF)mxRateForMxF=e._sim.rate;});
+      inE.forEach(e=>{
+        // 自分の流体が最強流体より弱い、または同じ流体でも圧力が負けている場合に逆流発生
+        if(e._sim.f<mxF||(e._sim.f===mxF&&e._sim.rate<mxRateForMxF)){
+          e._sim.b=mxF;
+          e._sim.brate=mxRateForMxF;
+          SimulatorCore._backflow(e.from,mxF,mxRateForMxF,nodes,edges,nodeMap);
+        }
+      });
+    });
+    return{nodes,edges};
+  },
+  _backflow:(nid,val,rate,nodes,edges,nodeMap)=>{
+    const n=nodeMap.get(nid);
+    // TRAPとSOURCEは一律ブロック。REDUCER・HEATEXは透過。
+    if(!n||[NODE_TYPE.TRAP,NODE_TYPE.SOURCE].includes(n.type))return;
+    // VALVEとSAFETYはCLOSED時のみブロック（PARTIAL/OPENは逆流を通す）
+    if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)&&n.state.valveState===VALVE_STATE.CLOSED)return;
+    edges.filter(e=>e.to===nid).forEach(e=>{
+      // 拮抗条件: 「同じ流体」かつ「順方向の圧力が逆流の圧力以上」の場合のみストップ
+      if(val===e._sim.f&&rate<=e._sim.rate)return;
+      // 万が一逆流の流体のほうが弱い場合は進めない
+      if(val<e._sim.f)return;
+      // より強い逆流で上書きする判定
+      if(e._sim.b<val||(e._sim.b===val&&e._sim.brate<rate)){
+        e._sim.b=val;
+        e._sim.brate=rate;
+        SimulatorCore._backflow(e.from,val,rate,nodes,edges,nodeMap);
+      }
+    });
+  }
+};
+
+/* ━━━━━━━━ SIMULATOR ━━━━━━━━ */
+const Simulator={
+  // ValveSelectorのプレビュー用: Anomaly/SealedDetector を呼ばない軽量版
+  _baseRun:()=>{
+    const result=SimulatorCore.compute(Store.nodes,Store.edges);
+    Store.nodes.forEach((n,i)=>{n._sim=result.nodes[i]._sim;});
+    Store.edges.forEach((e,i)=>{e._sim=result.edges[i]._sim;});
+  },
+  // 通常呼び出し: 計算後に異常検知・密閉検知まで一括実行
+  run:()=>{
+    // シミュレーション直前の流体状態をスナップ（SealedDetector用）
+    Store.edges.forEach(e=>{e._sim._prevF=e._sim.f;e._sim._prevB=e._sim.b||0;});
+    Simulator._baseRun();
+    Anomaly.detect();
+    SealedDetector.compute();
+  }
+};
+
+/* ━━━━━━━━ ANIMATOR ━━━━━━━━ */
+const Animator={
+  _pending:null,
+  FILL_SPEED:900,
+  DRAIN_SPEED:650,
+  prepare:(valveNode,prevStates)=>{
+    const activated=[],deactivSeal=[],deactivDrain=[];
+    Store.edges.forEach(e=>{
+      const prev=prevStates.get(e.id)||{f:0,b:0};
+      const wasOn=prev.f>0||(prev.b||0)>0;
+      const isOn=e._sim.f>0||e._sim.b>0;
+      if(isOn&&!wasOn)activated.push(e.id);
+      else if(!isOn&&wasOn){if(e._anim&&e._anim.sealed)deactivSeal.push(e.id);else deactivDrain.push(e.id);}
+    });
+    if(!activated.length&&!deactivDrain.length&&!deactivSeal.length){Animator._pending=null;return;}
+    // BFS order for energize
+    const actSet=new Set(activated),activateOrder=[],vis=new Set();
+    const q=[{id:valveNode.id,cumTime:0}];
+    while(q.length){const{id,cumTime}=q.shift();Store.edges.filter(e=>e.from===id&&actSet.has(e.id)&&!vis.has(e.id)).forEach(e=>{vis.add(e.id);const nF=Store.nodes.find(n=>n.id===e.from),nT=Store.nodes.find(n=>n.id===e.to);const pL=(nF&&nT)?Renderer.computePathLength(nF,e,nT):80;const dur=Math.max(150,(pL/Animator.FILL_SPEED)*1000);activateOrder.push({id:e.id,startTime:cumTime,duration:dur,pathLen:pL});q.push({id:e.to,cumTime:cumTime+dur});});}
+    activated.forEach(id=>{if(!vis.has(id)){const e=Store.edges.find(x=>x.id===id);const nF=e?Store.nodes.find(n=>n.id===e.from):null,nT=e?Store.nodes.find(n=>n.id===e.to):null;const pL=(nF&&nT)?Renderer.computePathLength(nF,e,nT):80;activateOrder.push({id,startTime:0,duration:Math.max(150,(pL/Animator.FILL_SPEED)*1000),pathLen:pL});}});
+    // BFS order for deenergize (cascade both directions from valve)
+    const deactSet=new Set(deactivDrain),deactivateOrder=[],vis2=new Set();
+    const q2=[{id:valveNode.id,cascade:0}];
+    while(q2.length){const{id,cascade}=q2.shift();
+      // 下流方向
+      Store.edges.filter(e=>e.from===id&&deactSet.has(e.id)&&!vis2.has(e.id)).forEach(e=>{vis2.add(e.id);const nF=Store.nodes.find(n=>n.id===e.from),nT=Store.nodes.find(n=>n.id===e.to);const pL=(nF&&nT)?Renderer.computePathLength(nF,e,nT):80;deactivateOrder.push({id:e.id,cascade,pathLen:pL});q2.push({id:e.to,cascade:cascade+1});});
+      // 上流方向
+      Store.edges.filter(e=>e.to===id&&deactSet.has(e.id)&&!vis2.has(e.id)).forEach(e=>{vis2.add(e.id);const nF=Store.nodes.find(n=>n.id===e.from),nT=Store.nodes.find(n=>n.id===e.to);const pL=(nF&&nT)?Renderer.computePathLength(nF,e,nT):80;deactivateOrder.push({id:e.id,cascade,pathLen:pL});q2.push({id:e.from,cascade:cascade+1});});}
+    deactivDrain.forEach(id=>{if(!vis2.has(id)){const e=Store.edges.find(x=>x.id===id);const nF=e?Store.nodes.find(n=>n.id===e.from):null,nT=e?Store.nodes.find(n=>n.id===e.to):null;const pL=(nF&&nT)?Renderer.computePathLength(nF,e,nT):80;deactivateOrder.push({id,cascade:0,pathLen:pL});}});
+    Animator._pending={activate:activateOrder,deactivate:deactivateOrder,sealed:deactivSeal,valveNodeId:valveNode.id};
+  },
+  apply:()=>{
+    if(!Animator._pending)return;
+    const{activate,deactivate,valveNodeId}=Animator._pending;
+    // Energize: fill front upstream→downstream (dashoffset pathLen→0)
+    activate.forEach(({id,startTime,duration,pathLen})=>{
+      [document.getElementById(`flow-base-${id}`),document.getElementById(`edge-path-${id}`)].forEach(el=>{
+        if(!el)return;
+        el.style.strokeDasharray=`${pathLen}`;
+        el.animate([{strokeDashoffset:pathLen, opacity: 0.6},{strokeDashoffset:0, opacity: 1}],{duration,delay:startTime,easing:'ease-out',fill:'forwards'});
+        setTimeout(()=>{if(el.parentNode){el.style.strokeDasharray='';el.style.strokeDashoffset='';}},startTime+duration+100);
+      });
+    });
+    // Deenergize: condense→drain (dashoffset 0→pathLen = retreats from upstream)
+    deactivate.forEach(({id,cascade,pathLen})=>{
+      const delay=cascade*70;
+      const dur=Math.max(220,(pathLen/Animator.DRAIN_SPEED)*1000);
+      
+      const edge=Store.edges.find(x=>x.id===id);
+      const nF=edge?Store.nodes.find(n=>n.id===edge.from):null;
+      const nT=edge?Store.nodes.find(n=>n.id===edge.to):null;
+      
+      if(edge&&nF&&nT){
+        const esw=Math.max(2,Store.config.nodeRadius*.3);
+        const d=Renderer.buildTrimmedPath(nF,edge,nT);
+        
+        // 1. 水が抜けるベースの残像
+        const tempBase=createNS('path',{d,stroke:'#FF3B30','stroke-width':esw*2.6,'stroke-opacity':'.28','stroke-linecap':'round',fill:'none'});
+        // 2. 水が抜けるアニメーション本体（ゴースト）
+        const tempFlow=createNS('path',{d,stroke:'#FF3B30','stroke-width':esw,'stroke-opacity':'.6','stroke-linecap':'round',fill:'none'});
+        
+        Renderer.overlayLayer.appendChild(tempBase);
+        Renderer.overlayLayer.appendChild(tempFlow);
+
+        tempBase.animate([{strokeOpacity:.28},{strokeOpacity:0}],{duration:dur,delay:delay+80,easing:'ease-in',fill:'forwards'});
+        
+        tempFlow.style.strokeDasharray=`${pathLen}`;
+        tempFlow.animate([
+          {strokeDashoffset:0,opacity:.6,stroke:'#FF3B30'},
+          {strokeDashoffset:pathLen*.25,opacity:.5,stroke:'#AF52DE',offset:.3},
+          {strokeDashoffset:pathLen,opacity:0}
+        ],{duration:dur+220,delay,easing:'ease-in',fill:'forwards'});
+
+        // アニメーション完了後にゴーストを破棄
+        setTimeout(()=>{if(tempBase.parentNode)tempBase.remove();if(tempFlow.parentNode)tempFlow.remove();},delay+dur+300);
+      }
+    });
+    // Valve pop
+    const vGrp=document.getElementById(`node-grp-${valveNodeId}`);
+    if(vGrp){
+      const vEl=vGrp.querySelector('.node-shape');
+      if(vEl)vEl.animate([{transform:'scale(1.38)'},{transform:'scale(1)'}],{duration:320,easing:'cubic-bezier(.175,.885,.32,1.275)'});
+    }
+    Animator._pending=null;
+  }
+};
+
+/* ━━━━━━━━ ANOMALY ━━━━━━━━ */
+const Anomaly={
+  TYPE_NAMES:{source:'Source',valve:'バルブ',trap:'Trap',drain:'Drain',split:'Split',merge:'Merge',reducer:'減圧弁',heatex:'熱交換器'},
+  detect:()=>{
+    Store.anomalies=[];
+    Store.nodes.forEach(n=>{const inE=Store.edges.filter(e=>e.to===n.id),outE=Store.edges.filter(e=>e.from===n.id),all=[...inE,...outE];
+      if(all.length===0&&n.type!==NODE_TYPE.SOURCE)Store.anomalies.push({type:'isolated',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 孤立（配管未接続）`});
+      if(![NODE_TYPE.DRAIN,NODE_TYPE.SOURCE,NODE_TYPE.VALVE].includes(n.type))if(n._sim.fIn>0&&outE.length===0)Store.anomalies.push({type:'deadend',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 流体の行き止まり`});
+      // 熱交換器に高圧蒸気直撃の危険検出
+      if(n.type===NODE_TYPE.HEATEX&&n._sim.fIn===FLUID.STEAM&&n._sim.rateIn>0.45){
+        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 熱交換器に高圧蒸気！破損の恐れあり（要減圧または微開）'});
+      }
+      // ドレン管（ピット）に高圧蒸気放出の危険検出
+      if(n.type===NODE_TYPE.DRAIN&&n._sim.fIn===FLUID.STEAM&&n._sim.rateIn>0.1){
+        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: ドレン管に高圧蒸気！ピット周辺に危険（要トラップ経由または微開）'});
+      }
+    });
+    // 逆流（Backflow）自体はシミュレーションとして正しいため、異常（Anomaly）としての警告は削除（Epic 9-1）
+  },
+  renderPanel:()=>{
+    const list=document.getElementById('anomaly-list'),badge=document.getElementById('anomaly-badge');
+    if(!Store.anomalies.length){list.innerHTML='<span style="color:var(--green);font-weight:500;">✓ 異常なし</span>';badge.style.display='none';return;}
+    badge.textContent=Store.anomalies.length;badge.style.display='inline';
+    list.innerHTML=Store.anomalies.map(a=>`<div class="anomaly-item">⚠ ${a.msg}</div>`).join('');
+  }
+};
+
+/* ━━━━━━━━ SEALED DETECTOR (Epic 10で全面改修: 無向BFS + 重力ロジック) ━━━━━━━━ */
+const SealedDetector={
+  compute:()=>{
+    const nodeMap=new Map(Store.nodes.map(n=>[n.id,n]));
+
+    // Step 1: 動的流量が発生したエッジの残留を即座にリセット
+    Store.edges.forEach(e=>{
+      if(e._sim.f>0||(e._sim.b&&e._sim.b>0)){
+        e.ext.hasResidual=false;
+        e.ext.residualType=0;
+        if(e._anim)e._anim.sealed=false;
+      }
+    });
+
+    const drainNodes=Store.nodes.filter(n=>n.type===NODE_TYPE.DRAIN);
+    const steamDrainableSet=new Set();
+    const liquidDrainableSet=new Set();
+
+    // Step 2: 気体（STEAM）の全方位探索 (Undirected BFS)
+    {
+      const visitedEdges=new Set(),visitedNodes=new Set();
+      const queue=drainNodes.map(n=>n.id);
+      drainNodes.forEach(n=>visitedNodes.add(n.id));
+
+      while(queue.length){
+        const nodeId=queue.shift();
+        Store.edges.forEach(e=>{
+          const isUpstream=(e.to===nodeId);
+          const isDownstream=(e.from===nodeId);
+          if(!isUpstream&&!isDownstream)return;
+          if(visitedEdges.has(e.id))return;
+
+          const nextNodeId=isUpstream?e.from:e.to;
+          const nextNode=nodeMap.get(nextNodeId);
+          if(!nextNode)return;
+
+          // エッジ自体はDrainに繋がっているので排出可能として追加
+          visitedEdges.add(e.id);
+          steamDrainableSet.add(e.id);
+
+          // ノードが壁なら、これ以上先へは探索しない
+          if(nextNode.type===NODE_TYPE.TRAP)return;
+          if(nextNode.type===NODE_TYPE.VALVE&&nextNode.state.valveState===VALVE_STATE.CLOSED)return;
+
+          if(!visitedNodes.has(nextNodeId)){
+            visitedNodes.add(nextNodeId);
+            queue.push(nextNodeId);
+          }
+        });
+      }
+    }
+
+    // Step 3: 液体（WATER/DRAIN）の全方位＋重力探索 (Undirected BFS + 勾配チェック)
+    {
+      const visitedEdges=new Set(),visitedNodes=new Set();
+      const queue=drainNodes.map(n=>({nodeId:n.id,currentY:n.y}));
+      drainNodes.forEach(n=>visitedNodes.add(n.id));
+
+      while(queue.length){
+        const{nodeId,currentY}=queue.shift();
+        Store.edges.forEach(e=>{
+          const isUpstream=(e.to===nodeId);
+          const isDownstream=(e.from===nodeId);
+          if(!isUpstream&&!isDownstream)return;
+          if(visitedEdges.has(e.id))return;
+
+          const nextNodeId=isUpstream?e.from:e.to;
+          const nextNode=nodeMap.get(nextNodeId);
+          if(!nextNode)return;
+
+          // 勾配チェック: nextNode→nodeId 方向に水が重力で流れるか？
+          // （Yが増加=下る方向のみ許可。5pxの平坦マージンを許容）
+          const wps=e.ext.waypoints||[];
+          const pts=isUpstream
+            ?[nextNode,...wps,nodeMap.get(nodeId)]
+            :[nextNode,...[...wps].reverse(),nodeMap.get(nodeId)];
+
+          let prevY=pts[0].y,canGo=true;
+          for(let i=1;i<pts.length;i++){
+            if(pts[i].y<prevY-5){canGo=false;break;}
+            prevY=pts[i].y;
+          }
+          if(!canGo)return;
+
+          visitedEdges.add(e.id);
+          liquidDrainableSet.add(e.id);
+
+          if(nextNode.type===NODE_TYPE.TRAP)return;
+          if(nextNode.type===NODE_TYPE.VALVE&&nextNode.state.valveState===VALVE_STATE.CLOSED)return;
+
+          if(!visitedNodes.has(nextNodeId)){
+            visitedNodes.add(nextNodeId);
+            queue.push({nodeId:nextNodeId,currentY:nextNode.y});
+          }
+        });
+      }
+    }
+
+    // Step 4: 残留判定の再評価
+    Store.edges.forEach(e=>{
+      if(e._sim.f>0||(e._sim.b&&e._sim.b>0))return;
+      if(!e._anim)e._anim={};
+
+      const prevF=e._sim._prevF||0,prevB=e._sim._prevB||0;
+      let evalFluid=prevF>0?prevF:(prevB>0?prevB:0);
+
+      // ★修正: 動的流量が0でも、既に残圧がある場合はそれを評価対象にする
+      if(evalFluid===0&&e.ext.hasResidual) evalFluid=e.ext.residualType;
+
+      if(evalFluid===0)return;
+
+      if(evalFluid===FLUID.STEAM){
+        if(!steamDrainableSet.has(e.id)){
+          e.ext.hasResidual=true;
+          e.ext.residualType=FLUID.STEAM;
+          if(e._anim)e._anim.sealed=Store.config.showSealedAnim;
+        }else{
+          e.ext.hasResidual=false;
+          e.ext.residualType=0;
+          if(e._anim)e._anim.sealed=false;
+        }
+      }else{
+        if(!liquidDrainableSet.has(e.id)){
+          e.ext.hasResidual=true;
+          e.ext.residualType=evalFluid;
+          if(e._anim)e._anim.sealed=false;
+        }else{
+          e.ext.hasResidual=false;
+          e.ext.residualType=0;
+          if(e._anim)e._anim.sealed=false;
+        }
+      }
+    });
+  }
+};
+
+/* ━━━━━━━━ MINIMAP ━━━━━━━━ */
+const Minimap={
+  canvas:null,
+  draw:()=>{if(!Minimap.canvas)return;const c=Minimap.canvas,ctx=c.getContext('2d'),W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;
+    ctx.clearRect(0,0,W,H);ctx.fillStyle='#F0F0F5';ctx.fillRect(0,0,W,H);ctx.fillStyle='rgba(255,255,255,0.6)';ctx.fillRect(ox,oy,Store.config.baseWidth*ms,Store.config.baseHeight*ms);
+    Store.edges.forEach(edge=>{const nF=Store.nodes.find(n=>n.id===edge.from),nT=Store.nodes.find(n=>n.id===edge.to);if(!nF||!nT)return;const ds=Math.max(edge._sim.f,edge._sim.b);ctx.strokeStyle=COLOR_MAP[ds]||'#8E8E93';ctx.lineWidth=ds>0?1.5:.7;ctx.globalAlpha=ds>0?.8:.35;ctx.beginPath();const pts=[nF,...(edge.ext.waypoints||[]),nT];ctx.moveTo(ox+pts[0].x*ms,oy+pts[0].y*ms);pts.slice(1).forEach(p=>ctx.lineTo(ox+p.x*ms,oy+p.y*ms));ctx.stroke();});
+    ctx.globalAlpha=1;Store.nodes.forEach(n=>{ctx.fillStyle=COLOR_MAP[n._sim.fOut]||'#8E8E93';ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,3,0,Math.PI*2);ctx.fill();if(Store.anomalies.some(a=>a.nodeId===n.id)){ctx.strokeStyle='#FF3B30';ctx.lineWidth=1;ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,5,0,Math.PI*2);ctx.stroke();}});
+    const ws=document.getElementById('workspace');if(ws){const z=Store.config.currentZoom,vx=ws.scrollLeft/z,vy=ws.scrollTop/z,vw=ws.clientWidth/z,vh=ws.clientHeight/z;ctx.strokeStyle='rgba(0,122,255,.7)';ctx.lineWidth=1.5;ctx.strokeRect(ox+vx*ms,oy+vy*ms,vw*ms,vh*ms);}
+  },
+  panTo:(mx,my)=>{const c=Minimap.canvas,W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;const svgX=Math.max(0,Math.min((mx-ox)/ms,Store.config.baseWidth)),svgY=Math.max(0,Math.min((my-oy)/ms,Store.config.baseHeight));const ws=document.getElementById('workspace'),z=Store.config.currentZoom;ws.scrollLeft=svgX*z-ws.clientWidth/2;ws.scrollTop=svgY*z-ws.clientHeight/2;Minimap.draw();}
+};
+
+/* ━━━━━━━━ CULLING (Epic 7: Viewport Culling — 画面外アニメーション停止) ━━━━━━━━ */
+const Culling={
+  _timer:null,
+
+  // ワークスペースの現在の表示領域をSVG座標系で取得
+  getViewportBBox:()=>{
+    const ws=document.getElementById('workspace');
+    const z=Store.config.currentZoom;
+    return{
+      x1:ws.scrollLeft/z,
+      y1:ws.scrollTop/z,
+      x2:(ws.scrollLeft+ws.clientWidth)/z,
+      y2:(ws.scrollTop+ws.clientHeight)/z
+    };
+  },
+
+  // エッジのAABB（全ウェイポイント含む）がビューポートに掛かるか判定
+  isEdgeVisible:(edge,bbox)=>{
+    const nF=Store.nodes.find(n=>n.id===edge.from),nT=Store.nodes.find(n=>n.id===edge.to);
+    if(!nF||!nT)return true;
+    const pts=[nF,...(edge.ext.waypoints||[]),nT];
+    const minX=Math.min(...pts.map(p=>p.x)),maxX=Math.max(...pts.map(p=>p.x));
+    const minY=Math.min(...pts.map(p=>p.y)),maxY=Math.max(...pts.map(p=>p.y));
+    return maxX>=bbox.x1&&minX<=bbox.x2&&maxY>=bbox.y1&&minY<=bbox.y2;
+  },
+
+  // 画面外エッジに data-culled="1" を付与してアニメーションを停止
+  apply:()=>{
+    const bbox=Culling.getViewportBBox();
+    Store.edges.forEach(edge=>{
+      const eg=document.getElementById(`edge-grp-${edge.id}`);
+      if(!eg)return;
+      const visible=Culling.isEdgeVisible(edge,bbox);
+      eg.setAttribute('data-culled',visible?'0':'1');
+    });
+  },
+
+  // scroll/zoom終了後のスロットル実行（200ms待機で連続発火を抑制）
+  scheduleApply:()=>{
+    if(Culling._timer)clearTimeout(Culling._timer);
+    Culling._timer=setTimeout(Culling.apply,200);
+  }
+};
+
+/* ━━━━━━━━ RENDERER ━━━━━━━━ */
+const Renderer={
+  svgLayer:null,overlayLayer:null,edgesGroup:null,nodesGroup:null,
+  valveMatrixContent:null,zoomDisplay:null,container:null,wrapper:null,connectPreviewLine:null,selectRectEl:null,snapGuideX:null,snapGuideY:null,
+  
+  init:()=>{
+    Renderer.svgLayer=document.getElementById('svg-layer');Renderer.overlayLayer=document.getElementById('overlay-layer');
+    
+    // Grouping for delta updates
+    Renderer.edgesGroup=createNS('g',{id:'edges-group'});
+    Renderer.nodesGroup=createNS('g',{id:'nodes-group'});
+    Renderer.svgLayer.appendChild(Renderer.edgesGroup);
+    Renderer.svgLayer.appendChild(Renderer.nodesGroup);
+
+    Renderer.valveMatrixContent=document.getElementById('valveMatrixContent');Renderer.zoomDisplay=document.getElementById('zoom-display');
+    Renderer.container=document.getElementById('canvas-container');Renderer.wrapper=document.getElementById('canvas-wrapper');Minimap.canvas=document.getElementById('minimap');
+    Renderer.connectPreviewLine=createNS('line',{stroke:'var(--accent)','stroke-width':'2','stroke-dasharray':'8,4',display:'none',opacity:'.7',x1:'0',y1:'0',x2:'0',y2:'0'});
+    Renderer.connectPreviewLine.classList.add('connect-preview-anim');
+    Renderer.selectRectEl=createNS('rect',{fill:'rgba(0,122,255,.06)',stroke:'var(--accent)','stroke-width':'1.5','stroke-dasharray':'5,3',display:'none'});
+    Renderer.snapGuideX=createNS('line',{stroke:'var(--red)','stroke-width':'0.7','stroke-dasharray':'6,4',opacity:'.6',display:'none'});
+    Renderer.snapGuideY=createNS('line',{stroke:'var(--red)','stroke-width':'0.7','stroke-dasharray':'6,4',opacity:'.6',display:'none'});
+    [Renderer.connectPreviewLine,Renderer.selectRectEl,Renderer.snapGuideX,Renderer.snapGuideY].forEach(el=>Renderer.overlayLayer.appendChild(el));
+  },
+  
+  getMouseSvgCoords:(ev)=>{const r=Renderer.svgLayer.getBoundingClientRect();return{x:(ev.clientX-r.left)/Store.config.currentZoom,y:(ev.clientY-r.top)/Store.config.currentZoom};},
+  buildTrimmedPath:(nFrom,edge,nTo)=>{const wps=edge.ext.waypoints||[],allPts=[nFrom,...wps,nTo],trim=Store.config.nodeRadius;const s0=allPts[0],s1=allPts[1],sl=Math.hypot(s1.x-s0.x,s1.y-s0.y),st=sl>0?Math.min(trim,sl*0.4)/sl:0;const p0={x:s0.x+(s1.x-s0.x)*st,y:s0.y+(s1.y-s0.y)*st};const n=allPts.length,e0=allPts[n-1],e1=allPts[n-2],el=Math.hypot(e1.x-e0.x,e1.y-e0.y),et=el>0?Math.min(trim,el*0.4)/el:0;const pN={x:e0.x+(e1.x-e0.x)*et,y:e0.y+(e1.y-e0.y)*et};let d=`M ${p0.x.toFixed(1)} ${p0.y.toFixed(1)}`;allPts.slice(1,-1).forEach(pt=>d+=` L ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`);return d+` L ${pN.x.toFixed(1)} ${pN.y.toFixed(1)}`;},
+  computePathLength:(nFrom,edge,nTo)=>{const wps=edge.ext.waypoints||[];let len=0,prev=nFrom;[...wps,nTo].forEach(pt=>{len+=Math.hypot(pt.x-prev.x,pt.y-prev.y);prev=pt;});return len;},
+  
+  updateNodeLive:(node,gEl)=>{
+    // Epic 6-2 (A案): ドラッグ中は CSS style.transform でGPUレイヤーを活用。
+    // SVG内では 1ユーザー単位 = 1pxなので px単位で指定可能。
+    if(gEl)gEl.style.transform=`translate(${node.x}px,${node.y}px)`;
+    Store.edges.forEach(edge=>{if(edge.from!==node.id&&edge.to!==node.id)return;Renderer.updateEdgePathLive(edge);});
+  },
+  updateEdgePathLive:(edge)=>{
+    const nF=Store.nodes.find(n=>n.id===edge.from),nT=Store.nodes.find(n=>n.id===edge.to);if(!nF||!nT)return;
+    const d=Renderer.buildTrimmedPath(nF,edge,nT);
+    const eg=document.getElementById(`edge-grp-${edge.id}`);
+    if(eg){ eg.querySelectorAll('path.flow-base, path.edge-path').forEach(p=>p.setAttribute('d',d)); }
+  },
+  
+  updateZoom:()=>{Renderer.zoomDisplay.innerText=Math.round(Store.config.currentZoom*100)+'%';Renderer.container.style.transform=`scale(${Store.config.currentZoom})`;Renderer.wrapper.style.width=(Store.config.baseWidth*Store.config.currentZoom)+'px';Renderer.wrapper.style.height=(Store.config.baseHeight*Store.config.currentZoom)+'px';},
+  showSnapGuides:(gX,gY)=>{const bH=Store.config.baseHeight,bW=Store.config.baseWidth;if(gX!=null){Renderer.snapGuideX.setAttribute('x1',gX);Renderer.snapGuideX.setAttribute('y1',0);Renderer.snapGuideX.setAttribute('x2',gX);Renderer.snapGuideX.setAttribute('y2',bH);Renderer.snapGuideX.removeAttribute('display');}else Renderer.snapGuideX.setAttribute('display','none');if(gY!=null){Renderer.snapGuideY.setAttribute('x1',0);Renderer.snapGuideY.setAttribute('y1',gY);Renderer.snapGuideY.setAttribute('x2',bW);Renderer.snapGuideY.setAttribute('y2',gY);Renderer.snapGuideY.removeAttribute('display');}else Renderer.snapGuideY.setAttribute('display','none');},
+  hideSnapGuides:()=>{Renderer.snapGuideX.setAttribute('display','none');Renderer.snapGuideY.setAttribute('display','none');},
+
+  drawMatrix:(data)=>{
+      if(!data.length){Renderer.valveMatrixContent.innerHTML='<div class="matrix-empty">バルブ未配置</div>';return;}
+      const lb={[VALVE_STATE.CLOSED]:'<span class="status-badge badge-0">閉止</span>',[VALVE_STATE.PARTIAL]:'<span class="status-badge badge-1">微開</span>',[VALVE_STATE.OPEN]:'<span class="status-badge badge-2">開放</span>'};
+      
+      // タブによるフィルタリング
+      const filtered = Store.config.matrixTab === 'pinned' ? data.filter(v => v.isPinned) : data;
+      if(!filtered.length){Renderer.valveMatrixContent.innerHTML='<div class="matrix-empty">ピン留めなし</div>';return;}
+
+      Renderer.valveMatrixContent.innerHTML=filtered.map(v=>`
+        <div class="matrix-item" data-id="${v.id}">
+          <div class="matrix-item-header">
+            <div class="matrix-item-title">${v.name}</div>
+            <div class="matrix-pin-btn ${v.isPinned ? 'pinned' : ''}" title="ピン留めトグル">📌</div>
+          </div>
+          ${lb[v.state]}
+        </div>`).join('');
+    },
+
+  // ━━━━━━━━ DOM DIFFERENTIAL UPDATE (NO INNERHTML) ━━━━━━━━
+  renderAll:()=>{
+    if(!Renderer.edgesGroup)Renderer.init();
+    
+    const esw=Math.max(2,Store.config.nodeRadius*.3);
+    const scale=Store.config.nodeRadius/10;
+    // Epic 6-1: CSS変数 --esw を更新し、CSS側で stroke-width を自動適用させる
+    Renderer.svgLayer.style.setProperty('--esw', esw+'px');
+    let typeCounters={source:1,valve:1,trap:1,drain:1,split:1,merge:1,reducer:1,heatex:1,safety:1};
+    const labelsMap={source:'Source',valve:'バルブ',trap:'Trap',drain:'Drain',split:'Split',merge:'Merge',reducer:'減圧弁',heatex:'熱交換器',safety:'安全弁'};
+    let valveMatrixData=[];
+    const activeEdges=new Set(),activeNodes=new Set();
+
+    /* ── Edges ── */
+    Store.edges.forEach(edge=>{
+      activeEdges.add(edge.id);
+      const nF=Store.nodes.find(n=>n.id===edge.from),nT=Store.nodes.find(n=>n.id===edge.to);if(!nF||!nT)return;
+      
+      let eg=document.getElementById(`edge-grp-${edge.id}`);
+      if(!eg){
+        // edge-grpクラスを付与して CSS のデータ属性セレクタを有効化
+        eg=createNS('g',{id:`edge-grp-${edge.id}`,'data-id':edge.id,class:'edge-grp'});
+        Renderer.edgesGroup.appendChild(eg);
+      }
+
+      // 修正：同じ流体でも逆流側の圧力が強い場合は逆流として描画する
+      const isBk=edge._sim.b>edge._sim.f || (edge._sim.b===edge._sim.f && (edge._sim.brate||0)>edge._sim.rate);
+      const dsRaw=Math.max(edge._sim.f,edge._sim.b);
+      // Epic 10: 流量ゼロでも hasResidual なら residualType を流体として表示
+      const isResidual=(dsRaw===FLUID.EMPTY)&&!!edge.ext.hasResidual;
+      const ds=isResidual?edge.ext.residualType:dsRaw;
+      const dRate=isBk?(edge._sim.brate||.4):edge._sim.rate;
+      const pid=`edge-path-${edge.id}`,pathStr=Renderer.buildTrimmedPath(nF,edge,nT),fCol=COLOR_MAP[ds];
+      const isSealed=Store.config.showSealedAnim&&edge._anim&&edge._anim.sealed;
+      // Epic 6-1: 流体状態を data-fluid で投射→CSSが stroke/opacity を自動適用
+      // Epic 10: 残留時は residualType を data-fluid にセット
+      eg.setAttribute('data-fluid',ds);
+      // Epic 10: 残留フラグを data-residual で投射→CSS がアニメーション一時停止
+      eg.setAttribute('data-residual',isResidual?'1':'0');
+
+      // 1. 当たり判定用パス（極細になっても操作性を失わないため）
+
+      let hitbox=eg.querySelector('.edge-hitbox');
+      if(!hitbox){
+        hitbox=createNS('path'); hitbox.classList.add('edge-hitbox');
+        hitbox.addEventListener('contextmenu',ev=>{
+          const id=ev.target.closest('g.edge-grp').getAttribute('data-id');
+          const currentEdge=Store.edges.find(e=>e.id===id);
+          if(currentEdge) Controller.handleEdgeContextMenu(ev,currentEdge);
+        });
+        hitbox.addEventListener('dblclick',ev=>{
+          ev.stopPropagation();
+          const id=ev.target.closest('g.edge-grp').getAttribute('data-id');
+          const currentEdge=Store.edges.find(e=>e.id===id);
+          if(currentEdge) Controller.handleEdgeDblClick(ev,currentEdge);
+        });
+        eg.appendChild(hitbox);
+      }
+
+      hitbox.setAttribute('d',pathStr);
+      hitbox.setAttribute('stroke','transparent');
+      hitbox.setAttribute('stroke-width', Math.max(16, esw * 3));
+      hitbox.setAttribute('fill','none');
+
+      // 2. Flow Base
+      let base=eg.querySelector('.flow-base:not(.edge-sealed-bg)');
+      if(ds>FLUID.EMPTY){
+        if(!base){base=createNS('path');base.classList.add('flow-base');base.setAttribute('id',`flow-base-${edge.id}`);eg.appendChild(base);}
+        base.setAttribute('d',pathStr);
+        // stroke色は CSS (g.edge-grp[data-fluid]) で管理。opacity(dRate依存)は引き続きJSで設定。
+        base.setAttribute('stroke-width',esw*2.6);
+        base.setAttribute('stroke-opacity',(0.12+0.2*Math.max(.1,dRate)).toFixed(3));
+        if(isBk)base.classList.add('backward');else base.classList.remove('backward');
+      }else if(base)base.remove();
+
+      // 3. Sealed Background
+      let sBase=eg.querySelector('.edge-sealed-bg');
+      if(isSealed){
+        if(!sBase){sBase=createNS('path');sBase.classList.add('flow-base','edge-sealed-bg');eg.appendChild(sBase);}
+        sBase.setAttribute('d',pathStr);
+        sBase.setAttribute('stroke','#FF3B30');
+        sBase.setAttribute('stroke-width',esw*2.6);
+        sBase.setAttribute('stroke-linecap','round');
+        sBase.setAttribute('fill','none');
+      }else if(sBase)sBase.remove();
+
+      // 4. Main Path (見た目)
+      let path=eg.querySelector('.edge-path');
+      if(!path){
+        path=createNS('path',{id:pid});
+        path.style.pointerEvents='none'; // 操作はHitboxに任せる
+        eg.appendChild(path);
+      }
+      
+      path.setAttribute('d',pathStr);
+      // Epic 6-1: stroke/opacity/stroke-widthは CSS (g.edge-grp[data-fluid]) で一括管理。
+      // setAttribute 呼び出し数を大幅唤減することでブラウザのスタイル再計算コストを削減。
+      path.setAttribute('class',`edge-path${isSealed?' edge-sealed':''}`);
+
+      // Waypoints
+      const wps=edge.ext.waypoints||[];
+      const existingWps=Array.from(eg.querySelectorAll('.waypoint-handle'));
+
+      wps.forEach((wp,idx)=>{
+        let wpEl=existingWps[idx];
+        if(!wpEl){
+          wpEl=createNS('circle',{r:'5',fill:'#fff','stroke-width':'1.5',cursor:'move'});
+          wpEl.classList.add('waypoint-handle');wpEl.style.touchAction='none';
+          wpEl.setAttribute('data-idx', idx);
+          
+          const removeWaypoint = (ev) => {
+            ev.preventDefault();ev.stopPropagation();
+            const id=ev.target.closest('g.edge-grp').getAttribute('data-id');
+            const currentEdge=Store.edges.find(e=>e.id===id);
+            const currentIdx=parseInt(ev.target.getAttribute('data-idx'), 10);
+            if(currentEdge && !isNaN(currentIdx)){
+              Store.pushHistory();
+              currentEdge.ext.waypoints.splice(currentIdx,1);
+              Renderer.renderAll();
+            }
+          };
+          
+          wpEl.addEventListener('contextmenu', removeWaypoint);
+          wpEl.addEventListener('dblclick', removeWaypoint);
+          eg.appendChild(wpEl);
+        }
+
+        wpEl.setAttribute('cx',wp.x);
+        wpEl.setAttribute('cy',wp.y);
+        wpEl.setAttribute('stroke',fCol||'#888');
+      });
+      for(let i=wps.length;i<existingWps.length;i++)existingWps[i].remove();
+
+      // 5. Flow Dash (Task 1-1: textPath矢印を廃止し、CSS破線アニメーションに完全移行)
+      // textPath+SVG animateは「パス長計算・textNode操作・DOM書き込み」が毎フレーム発生していた。
+      // .flow-dashはpathのstroke-dashoffsetをCSSだけで動かすため、DOM更新コストが最小限。
+      let flowDash=eg.querySelector('.flow-dash');
+      if(ds>FLUID.EMPTY){
+        if(!flowDash){
+          flowDash=createNS('path');
+          flowDash.classList.add('flow-dash');
+          eg.appendChild(flowDash);
+        }
+        flowDash.setAttribute('d',pathStr);
+        // 配管の色に対して視認性の高い半透明白を重ねて流れを表現
+        flowDash.setAttribute('stroke','rgba(255,255,255,0.8)');
+        flowDash.setAttribute('stroke-width',Math.max(1.5,esw*0.8));
+        // 流速(dRate)に応じてアニメーション速度を変更
+        const dur=(0.6/Math.max(.18,dRate)).toFixed(2);
+        flowDash.style.animationDuration=`${dur}s`;
+        // 逆流時はアニメーションを逆回転
+        flowDash.style.animationDirection=isBk?'reverse':'normal';
+      }else if(flowDash){
+        flowDash.remove();
+      }
+    });
+
+    Array.from(Renderer.edgesGroup.children).forEach(child=>{if(!activeEdges.has(child.getAttribute('data-id')))child.remove();});
+
+    /* ── Nodes ── */
+    Store.nodes.forEach(n=>{
+      activeNodes.add(n.id);
+      const num=typeCounters[n.type]++;
+      const dispName=n.ext.customName || `${labelsMap[n.type]} ${num}`;
+      const isPinned = !!n.ext.isPinned;
+      if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type) && !n.ext.hideMatrix)valveMatrixData.push({id: n.id, name:dispName, state:n.state.valveState, isPinned: isPinned});
+      const isSM=n.type===NODE_TYPE.SPLIT||n.type===NODE_TYPE.MERGE;
+      const nodeScale=scale*(isSM?0.7:1);
+
+      let g=document.getElementById(`node-grp-${n.id}`);
+      if(!g){
+        g=createNS('g',{id:`node-grp-${n.id}`,'data-id':n.id});
+        g.addEventListener('contextmenu',ev=>{
+          const id=ev.currentTarget.getAttribute('data-id');
+          const currentNode=Store.nodes.find(node=>node.id===id);
+          if(currentNode) Controller.handleNodeContextMenu(ev,currentNode);
+        });
+        Renderer.nodesGroup.appendChild(g);
+      }
+
+      // Epic 6-2 (A案): style.transform がドラッグ中に設定されている場合、
+      // CSS transform は SVG属性より優先されるため明示的にクリア。
+      g.style.transform='';
+      g.setAttribute('transform',`translate(${n.x},${n.y})`);
+      g.setAttribute('class',`node ${n.id===Store.config.selectedNodeIdForConnection?'selected':''} ${Store.selection.has(n.id)?'multi-selected':''}`);
+      // Epic 6-1: 流体状態・バルブ状態を data-* 属性で投射→CSSで色制御
+      g.setAttribute('data-fluid-state', n._sim.fOut);
+      if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)) g.setAttribute('data-valve-state', n.state.valveState);
+      else g.removeAttribute('data-valve-state');
+
+      const hbR=Math.max(14,14/scale);
+      let hb=g.querySelector('.node-hitbox');
+      if(!hb){hb=createNS('circle');hb.classList.add('node-hitbox');g.appendChild(hb);}
+      hb.setAttribute('r',hbR);hb.setAttribute('fill','transparent');hb.setAttribute('transform',`scale(${scale})`);
+
+      const backR=isSM?9:13;
+      let backing=g.querySelector('.node-backing');
+      if(!backing){backing=createNS('circle');backing.classList.add('node-backing');g.appendChild(backing);}
+      backing.setAttribute('r',backR);backing.setAttribute('fill','white');backing.setAttribute('opacity','0.25');backing.setAttribute('transform',`scale(${nodeScale})`);
+
+      let sr=g.querySelector('.selection-ring');
+      if(Store.selection.has(n.id)){
+        if(!sr){sr=createNS('circle');sr.classList.add('selection-ring');g.appendChild(sr);}
+        sr.setAttribute('r',Math.max(18,18/scale)+2);sr.setAttribute('fill','none');sr.setAttribute('stroke','var(--accent)');sr.setAttribute('stroke-width','2');sr.setAttribute('stroke-dasharray','4,3');sr.setAttribute('transform',`scale(${scale})`);
+      }else if(sr)sr.remove();
+
+      // REDUCER はグループ要素を wrapper とするため専用セレクタで取得
+      let shape = n.type===NODE_TYPE.REDUCER
+        ? g.querySelector('g.reducer-grp')
+        : g.querySelector('.node-shape');
+
+      if(!shape){
+        if(n.type===NODE_TYPE.VALVE)shape=createNS('polygon',{points:'-10,-8 -10,8 10,-8 10,8'});
+        else if(n.type===NODE_TYPE.TRAP)shape=createNS('rect',{x:'-8',y:'-8',width:'16',height:'16',rx:'1'});
+        else if(n.type===NODE_TYPE.DRAIN)shape=createNS('polygon',{points:'-10,-8 10,-8 0,10'});
+        else if(n.type===NODE_TYPE.SPLIT){shape=createNS('path',{d:'M -5,-6 L 0,0 L 5,-6 M 0,0 L 0,7'});shape.style.cssText='fill:none;stroke-linecap:round;stroke-width:3.5';}
+        else if(n.type===NODE_TYPE.MERGE){shape=createNS('path',{d:'M -6,0 L 6,0 M 0,-6 L 0,6'});shape.style.cssText='fill:none;stroke-linecap:round;stroke-width:3.5';}
+        else if(n.type===NODE_TYPE.REDUCER){
+          // 減圧弁: 四角の中央に横線（[-]記号）
+          const grp=createNS('g');
+          grp.classList.add('reducer-grp');
+          const rect=createNS('rect',{x:'-10',y:'-7',width:'20',height:'14',rx:'2'});
+          rect.classList.add('node-shape');
+          const line=createNS('line',{x1:'-6',y1:'0',x2:'6',y2:'0','stroke-linecap':'round','stroke-width':'2.5'});
+          grp.appendChild(rect);
+          grp.appendChild(line);
+          shape=grp;
+        }
+        else if(n.type===NODE_TYPE.HEATEX){
+          // 熱交換器: 45度回転ひし形（◆）
+          shape=createNS('polygon',{points:'0,-11 11,0 0,11 -11,0'});
+        }
+        else if(n.type===NODE_TYPE.SAFETY){
+          shape=createNS('text',{x:0, y:5, 'text-anchor':'middle', 'font-size':'14', 'font-weight':'bold', fill:'currentColor'});
+          shape.textContent='Q';
+        }
+        else shape=createNS('circle',{r:'10'});
+        if(n.type!==NODE_TYPE.REDUCER) shape.classList.add('node-shape');
+        g.appendChild(shape);
+      }
+      // transform と class を毎フレーム更新
+      shape.setAttribute('transform',`scale(${nodeScale}) rotate(${n.rotation||0})`);
+      if(n.type!==NODE_TYPE.REDUCER) shape.setAttribute('class','node-shape');
+
+      let ll=g.querySelector('.leader-line'),lbl=g.querySelector('.node-label');
+      if(Store.config.showValveLabels&&[NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)){
+        if(!ll){ll=createNS('line');ll.classList.add('leader-line');g.appendChild(ll);}
+        ll.setAttribute('x1','0');ll.setAttribute('y1','0');ll.setAttribute('x2',n.labelOffset.x);ll.setAttribute('y2',n.labelOffset.y);
+
+        if(!lbl){
+          lbl=createNS('text');lbl.classList.add('node-label');
+          g.appendChild(lbl);
+        }
+        lbl.setAttribute('x',n.labelOffset.x);lbl.setAttribute('y',n.labelOffset.y);
+        lbl.setAttribute('text-anchor','middle');lbl.setAttribute('dominant-baseline','central');
+        lbl.setAttribute('font-size','12');lbl.setAttribute('font-family','var(--font)');lbl.setAttribute('font-weight','600');lbl.setAttribute('fill','var(--text-1)');
+
+        // 【修正後】超軽量な処理
+        lbl.style.filter = 'none';
+        lbl.setAttribute('paint-order', 'stroke');
+        lbl.setAttribute('stroke', 'white');
+        lbl.setAttribute('stroke-width', '3');
+        lbl.setAttribute('stroke-linejoin', 'round');
+        const finalLabelName = isPinned ? dispName + ' 📌' : dispName;
+        if(lbl.textContent!==finalLabelName)lbl.textContent=finalLabelName;    
+        g.appendChild(shape);g.appendChild(lbl);
+      }else{
+        if(ll)ll.remove();if(lbl)lbl.remove();
+      }
+
+      let ttl=g.querySelector('title');
+      if(!ttl){ttl=createNS('title');g.appendChild(ttl);}
+      if(ttl.textContent!==dispName)ttl.textContent=dispName;
+
+      // ▼▼▼ 追加：減圧弁の数値ラベル（デフォルト非表示） ▼▼▼
+      let rLbl = g.querySelector('.reducer-label');
+      if (n.type === NODE_TYPE.REDUCER && Store.config.showReducerLabels) {
+        if (!rLbl) {
+          rLbl = createNS('text'); rLbl.classList.add('reducer-label');
+          g.appendChild(rLbl);
+        }
+        rLbl.setAttribute('x', '0'); rLbl.setAttribute('y', '18');
+        rLbl.setAttribute('text-anchor', 'middle');
+        rLbl.setAttribute('font-size', '10');
+        rLbl.setAttribute('font-weight', '600');
+        rLbl.setAttribute('fill', 'var(--text-2)');
+        rLbl.textContent = `${Math.round((n.ext.limitRate ?? 0.45) * 100)}%`;
+      } else if (rLbl) {
+        rLbl.remove();
+      }
+      // ▲▲▲ 追加ここまで ▲▲▲
+
+      const hasAnomaly=Store.anomalies.some(a=>a.nodeId===n.id);
+      let aRing=g.querySelector('.anomaly-ring'),aIco=g.querySelector('.anomaly-icon');
+      if(hasAnomaly){
+        const r=Math.max(Store.config.nodeRadius+6,14);
+        if(!aRing){aRing=createNS('circle');aRing.classList.add('anomaly-ring');g.appendChild(aRing);}
+        aRing.setAttribute('cx',0);aRing.setAttribute('cy',0);aRing.setAttribute('r',r);
+        aRing.setAttribute('fill','none');aRing.setAttribute('stroke','var(--red)');aRing.setAttribute('stroke-width','2');
+        if(!aIco){aIco=createNS('text');aIco.classList.add('anomaly-icon');g.appendChild(aIco);}
+        aIco.setAttribute('x',r+1);aIco.setAttribute('y',-r+2);aIco.setAttribute('font-size','13');
+        if(aIco.textContent!=='⚠️')aIco.textContent='⚠️';
+      }else{
+        if(aRing)aRing.remove();if(aIco)aIco.remove();
+      }
+    });
+
+    Array.from(Renderer.nodesGroup.children).forEach(child=>{if(!activeNodes.has(child.getAttribute('data-id')))child.remove();});
+
+    /* ── Sub UI ── */
+    const tb=document.getElementById('selection-toolbar');
+    if(Store.selection.size>0){tb.classList.add('visible');document.getElementById('sel-count-label').textContent=`${Store.selection.size}個選択中`;}else{tb.classList.remove('visible');}
+
+    if(Store.config.isConnectMode&&Store.config.selectedNodeIdForConnection){const fn=Store.nodes.find(n=>n.id===Store.config.selectedNodeIdForConnection);if(fn){Renderer.connectPreviewLine.setAttribute('x1',fn.x);Renderer.connectPreviewLine.setAttribute('y1',fn.y);Renderer.connectPreviewLine.setAttribute('x2',fn.x);Renderer.connectPreviewLine.setAttribute('y2',fn.y);Renderer.connectPreviewLine.removeAttribute('display');}}else{Renderer.connectPreviewLine.setAttribute('display','none');}
+
+    Renderer.drawMatrix(valveMatrixData);
+    Anomaly.renderPanel();Minimap.draw();
+    // Epic 7: ボード更新後に画面外アニメーションをスロットル制御
+    Culling.scheduleApply();
+
+    const ws=document.getElementById('workspace'),banner=document.getElementById('connect-banner');
+    if(Store.config.isConnectMode){ws.classList.add('connect-mode');banner.style.display='block';banner.textContent=Store.config.selectedNodeIdForConnection?'接続先ノードをクリック — Esc = キャンセル':'配管接続モード — 接続元ノードをクリック — Esc = 終了';}
+    else{ws.classList.remove('connect-mode');banner.style.display='none';}
+  }
+};
+
+/* ━━━━━━━━ VALVE SELECTOR ━━━━━━━━ */
+const ValveSelector={
+  _el:null,_node:null,_ghosts:[],_outsideHandler:null,
+  _svgIcon:(state)=>{
+    const c=['#FF3B30','#FF9500','#34C759'][state];
+    if(state===0)return`<svg class="vs-svg" viewBox="-22 -15 44 30"><polygon points="-10,-8 -10,8 0,0" fill="${c}"/><polygon points="10,-8 10,8 0,0" fill="${c}"/><line x1="-13" y1="0" x2="13" y2="0" stroke="${c}" stroke-width="2.8" stroke-linecap="round"/></svg>`;
+    if(state===1)return`<svg class="vs-svg" viewBox="-22 -15 44 30"><polygon points="-10,-8 -10,8 -3.5,0" fill="${c}"/><polygon points="10,-8 10,8 3.5,0" fill="${c}"/></svg>`;
+    return`<svg class="vs-svg" viewBox="-22 -15 44 30"><polygon points="-10,-9 -10,9 0,0" fill="${c}" opacity=".18" stroke="${c}" stroke-width="1.5" stroke-linejoin="round"/><polygon points="10,-9 10,9 0,0" fill="${c}" opacity=".18" stroke="${c}" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+  },
+  _screenPos:(node)=>{const r=Renderer.svgLayer.getBoundingClientRect();return{x:node.x*Store.config.currentZoom+r.left,y:node.y*Store.config.currentZoom+r.top};},
+  open:(node)=>{
+    ValveSelector.close();
+    ValveSelector._node=node;
+    const pos=ValveSelector._screenPos(node);
+    const el=document.createElement('div');
+    el.id='valve-selector';el.className='glass vs-pop';el.setAttribute('role','menu');
+    const labels = node.type===NODE_TYPE.SAFETY ? ['静止','','動作'] : ['閉止','微開','開放'];
+    const options = node.type===NODE_TYPE.SAFETY ? [0,2] : [0,1,2];
+    options.forEach(s=>{
+      const opt=document.createElement('div');
+      opt.className=`vs-opt vs-${s}${node.state.valveState===s?' vs-cur':''}`;
+      opt.setAttribute('role','menuitem');opt.tabIndex=0;
+      opt.innerHTML=`${ValveSelector._svgIcon(s)}<span class="vs-lbl">${labels[s]}</span>${node.state.valveState===s?'<span class="vs-dot">●</span>':''}`;
+      opt.addEventListener('mouseenter',()=>ValveSelector._preview(s));
+      opt.addEventListener('mouseleave',()=>ValveSelector._clearGhosts());
+      opt.addEventListener('click',()=>ValveSelector._confirm(s));
+      opt.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();ValveSelector._confirm(s);}});
+      el.appendChild(opt);
+    });
+
+    const sep = document.createElement('div');
+    sep.style.cssText = 'border-top:1px solid rgba(0,0,0,0.1); margin:4px 0; padding-top:4px;';
+    el.appendChild(sep);
+
+    const renameBtn = document.createElement('div');
+    renameBtn.className = 'vs-opt';
+    renameBtn.style.cssText = 'justify-content:center; font-size:12px; font-weight:600; padding:6px;';
+    renameBtn.tabIndex = 0;
+    renameBtn.textContent = '✎ 名前変更';
+    renameBtn.addEventListener('click', () => {
+      ValveSelector.close();
+      const currentName = node.ext.customName || '';
+      const newName = prompt('新しい名前を入力してください（空でリセット）:', currentName);
+      if(newName !== null) {
+        Store.pushHistory();
+        if(newName.trim() === '') delete node.ext.customName;
+        else node.ext.customName = newName.trim();
+        Renderer.renderAll();
+      }
+    });
+    renameBtn.addEventListener('keydown', ev => { if(ev.key==='Enter'||ev.key===' '){ev.preventDefault(); renameBtn.click();} });
+    el.appendChild(renameBtn);
+
+    const checkWrap = document.createElement('label');
+    checkWrap.style.cssText = 'display:flex; align-items:center; gap:6px; font-size:11px; padding:4px 8px; cursor:pointer; font-weight:500; color:var(--text-1);';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!node.ext.hideMatrix;
+    cb.addEventListener('change', (ev) => {
+      Store.pushHistory();
+      node.ext.hideMatrix = ev.target.checked;
+      Renderer.renderAll();
+    });
+    checkWrap.appendChild(cb);
+    checkWrap.appendChild(document.createTextNode('マトリクスに表示しない'));
+    el.appendChild(checkWrap);
+    el.style.cssText=`left:${pos.x}px;top:${pos.y+22}px;transform:translateX(-50%)`;
+    document.body.appendChild(el);ValveSelector._el=el;
+    requestAnimationFrame(()=>{
+      const r2=el.getBoundingClientRect();
+      if(r2.left<8)el.style.left=(pos.x-r2.left+8)+'px';
+      if(r2.right>window.innerWidth-8)el.style.left=(pos.x-(r2.right-window.innerWidth+8))+'px';
+      if(r2.bottom>window.innerHeight-8)el.style.top=(pos.y-r2.height-22)+'px';
+    });
+    el.addEventListener('keydown',ev=>{
+      const opts=[...el.querySelectorAll('.vs-opt[tabindex]')],cur=document.activeElement,idx=opts.indexOf(cur);
+      if(ev.key==='ArrowRight'||ev.key==='ArrowDown'){ev.preventDefault();opts[(idx+1)%opts.length].focus();}
+      if(ev.key==='ArrowLeft'||ev.key==='ArrowUp'){ev.preventDefault();opts[(idx-1+opts.length)%opts.length].focus();}
+      if(ev.key==='Escape'){ev.preventDefault();ValveSelector.close();}
+    });
+    ValveSelector._outsideHandler=(ev)=>{if(ValveSelector._el&&!ValveSelector._el.contains(ev.target))ValveSelector.close();};
+    setTimeout(()=>document.addEventListener('pointerdown',ValveSelector._outsideHandler,{capture:true}),50);
+  },
+  _preview:(targetState)=>{
+    if(!ValveSelector._node)return;
+    const node=ValveSelector._node;
+    const saved=node.state.valveState;
+    const savedNodes=new Map(Store.nodes.map(n=>[n.id,{...n._sim}]));
+    const savedEdges=new Map(Store.edges.map(e=>[e.id,{...e._sim}]));
+    node.state.valveState=targetState;
+    Simulator._baseRun();
+    ValveSelector._clearGhosts();
+    Store.edges.forEach(e=>{
+      const prev=savedEdges.get(e.id);if(!prev)return;
+      const prevF=Math.max(prev.f,prev.b||0),currF=Math.max(e._sim.f,e._sim.b||0);
+      if(currF===prevF)return;
+      const nF=Store.nodes.find(n=>n.id===e.from),nT=Store.nodes.find(n=>n.id===e.to);if(!nF||!nT)return;
+      const d=Renderer.buildTrimmedPath(nF,e,nT);
+      const g=createNS('path',{d,stroke:currF>0?(COLOR_MAP[currF]||'#007AFF'):'#FF3B30','stroke-width':Math.max(2,Store.config.nodeRadius*.32)*2.2,'stroke-opacity':'.32',fill:'none','stroke-linecap':'round','stroke-dasharray':currF===0?'7,4':'none'});
+      g.classList.add('vs-ghost');Renderer.overlayLayer.appendChild(g);ValveSelector._ghosts.push(g);
+    });
+    node.state.valveState=saved;
+    Store.nodes.forEach(n=>{const s=savedNodes.get(n.id);if(s)Object.assign(n._sim,s);});
+    Store.edges.forEach(e=>{const s=savedEdges.get(e.id);if(s)Object.assign(e._sim,s);});
+  },
+  _clearGhosts:()=>{ValveSelector._ghosts.forEach(g=>g.remove());ValveSelector._ghosts=[];},
+  _confirm:(targetState)=>{
+    const node=ValveSelector._node;if(!node)return;
+    ValveSelector.close();
+    if(targetState===node.state.valveState)return;
+    const prevStates=new Map(Store.edges.map(e=>[e.id,{f:e._sim.f,b:e._sim.b||0}]));
+    Store.pushHistory();
+    node.state.valveState=targetState;
+    Simulator.run();
+    Animator.prepare(node,prevStates);
+    Renderer.renderAll();
+    
+    // ライフサイクルの分離: 差分DOMの更新がブラウザに描画された直後にアニメーションを発火
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        Animator.apply();
+      });
+    });
+  },
+  close:()=>{
+    ValveSelector._clearGhosts();
+    if(ValveSelector._el){ValveSelector._el.remove();ValveSelector._el=null;}
+    ValveSelector._node=null;
+    if(ValveSelector._outsideHandler){document.removeEventListener('pointerdown',ValveSelector._outsideHandler,{capture:true});ValveSelector._outsideHandler=null;}
+  }
+};
+
+/* ━━━━━━━━ REDUCER SELECTOR ━━━━━━━━ */
+const ReducerSelector={
+  _el:null,_node:null,_outsideHandler:null,
+  open:(node)=>{
+    ReducerSelector.close();
+    ReducerSelector._node=node;
+    const r=Renderer.svgLayer.getBoundingClientRect();
+    const pos={x:node.x*Store.config.currentZoom+r.left,y:node.y*Store.config.currentZoom+r.top};
+    
+    const el=document.createElement('div');
+    el.id='reducer-selector';el.className='glass vs-pop rs-pop';
+    
+    const currentVal = Math.round((node.ext.limitRate ?? 0.45) * 100);
+    
+    const display = document.createElement('div');
+    display.className = 'rs-val-display';
+    display.textContent = `${currentVal}%`;
+    
+    const slider = document.createElement('input');
+    slider.type = 'range'; slider.className = 'rs-slider';
+    slider.min = '0'; slider.max = '100'; slider.step = '5';
+    slider.value = currentVal;
+    
+    slider.addEventListener('input', (ev) => {
+      display.textContent = `${ev.target.value}%`;
+    });
+    
+    slider.addEventListener('change', (ev) => {
+      Store.pushHistory();
+      node.ext.limitRate = parseInt(ev.target.value, 10) / 100;
+      Simulator.run();
+      Renderer.renderAll();
+    });
+
+    const renameBtn = document.createElement('div');
+    renameBtn.className = 'vs-opt';
+    renameBtn.style.cssText = 'justify-content:center; font-size:12px; font-weight:600; padding:6px; margin-top:4px; border-top:1px solid rgba(0,0,0,0.06);';
+    renameBtn.textContent = '✎ 名前変更';
+    renameBtn.addEventListener('click', () => {
+      ReducerSelector.close();
+      const currentName = node.ext.customName || '';
+      const newName = prompt('減圧弁の名前を入力してください（空でリセット）:', currentName);
+      if(newName !== null) {
+        Store.pushHistory();
+        if(newName.trim() === '') delete node.ext.customName;
+        else node.ext.customName = newName.trim();
+        Renderer.renderAll();
+      }
+    });
+
+    el.appendChild(display);
+    el.appendChild(slider);
+    el.appendChild(renameBtn);
+    
+    el.style.cssText=`position:fixed; left:${pos.x}px; top:${pos.y+22}px; transform:translateX(-50%); z-index:350;`;
+    document.body.appendChild(el); ReducerSelector._el=el;
+    
+    ReducerSelector._outsideHandler=(ev)=>{if(ReducerSelector._el&&!ReducerSelector._el.contains(ev.target))ReducerSelector.close();};
+    setTimeout(()=>document.addEventListener('pointerdown',ReducerSelector._outsideHandler,{capture:true}),50);
+  },
+  close:()=>{
+    if(ReducerSelector._el){ReducerSelector._el.remove();ReducerSelector._el=null;}
+    ReducerSelector._node=null;
+    if(ReducerSelector._outsideHandler){document.removeEventListener('pointerdown',ReducerSelector._outsideHandler,{capture:true});ReducerSelector._outsideHandler=null;}
+  }
+};
+
+/* ━━━━━━━━ CONTROLLER ━━━━━━━━ */
+const Controller={
+  DRAG_THRESHOLD:5,
+
+  setTool:(tool)=>{Store.config.currentTool=tool;document.querySelectorAll('#toolbar [data-tool]').forEach(btn=>{btn.classList.toggle('active',btn.dataset.tool===tool);});},
+
+  init:()=>{
+    Renderer.init();
+    document.getElementById('workspace').addEventListener('contextmenu', ev => ev.preventDefault());
+
+    document.querySelectorAll('#toolbar [data-tool]').forEach(btn=>{btn.addEventListener('click',()=>Controller.setTool(btn.dataset.tool));});
+
+    document.getElementById('btn-connect').addEventListener('click',()=>{Store.config.isConnectMode=!Store.config.isConnectMode;Store.config.selectedNodeIdForConnection=null;document.getElementById('btn-connect').classList.toggle('connect-on',Store.config.isConnectMode);Renderer.renderAll();});
+
+    const sp=document.getElementById('settings-panel');
+    const openSettings=()=>{sp.style.opacity='1';sp.style.transform='none';sp.style.pointerEvents='auto';sp._isOpen=true;document.getElementById('btn-settings').classList.add('active');};
+    const closeSettings=()=>{sp.style.opacity='0';sp.style.transform='translateY(-6px) scale(0.98)';sp.style.pointerEvents='none';sp._isOpen=false;document.getElementById('btn-settings').classList.remove('active');};
+    document.getElementById('btn-settings').addEventListener('click',()=>{if(sp._isOpen)closeSettings();else openSettings();});
+    document.getElementById('btn-close-settings').addEventListener('click',closeSettings);
+
+    document.getElementById('sizeSlider').addEventListener('input',ev=>{Store.config.nodeRadius=parseInt(ev.target.value);document.getElementById('sizeVal').textContent=Store.config.nodeRadius;Renderer.renderAll();});
+    document.getElementById('toggleValveLabels').addEventListener('change',ev=>{Store.config.showValveLabels=ev.target.checked;Renderer.renderAll();});
+    document.getElementById('toggleReducerLabels').addEventListener('change',ev=>{Store.config.showReducerLabels=ev.target.checked;Renderer.renderAll();});
+    const _updateGridBg=()=>{const gs=Store.config.gridSize,ox=Store.config.gridOffsetX,oy=Store.config.gridOffsetY;document.getElementById('workspace').style.backgroundSize=`${gs}px ${gs}px`;document.getElementById('workspace').style.backgroundPosition=`${ox}px ${oy}px`;};
+    document.getElementById('gridSizeSlider').addEventListener('input',ev=>{const v=parseInt(ev.target.value);Store.config.gridSize=v;document.getElementById('gridSizeVal').textContent=v;document.getElementById('gridOffsetX').max=v-1;document.getElementById('gridOffsetY').max=v-1;_updateGridBg();});
+    document.getElementById('gridOffsetX').addEventListener('input',ev=>{Store.config.gridOffsetX=Math.max(0,Math.min(parseInt(ev.target.value)||0,Store.config.gridSize-1));ev.target.value=Store.config.gridOffsetX;_updateGridBg();});
+    document.getElementById('gridOffsetY').addEventListener('input',ev=>{Store.config.gridOffsetY=Math.max(0,Math.min(parseInt(ev.target.value)||0,Store.config.gridSize-1));ev.target.value=Store.config.gridOffsetY;_updateGridBg();});   
+    document.getElementById('toggleAutoElbow').addEventListener('change',ev=>{Store.config.autoElbow=ev.target.checked;});
+    document.getElementById('toggleSealedAnim').addEventListener('change',ev=>{Store.config.showSealedAnim=ev.target.checked;Renderer.renderAll();});
+
+    document.getElementById('btn-zoom-in').addEventListener('click',()=>Controller.setZoom(Store.config.currentZoom+.1));
+    document.getElementById('btn-zoom-out').addEventListener('click',()=>Controller.setZoom(Store.config.currentZoom-.1));
+    document.getElementById('btn-zoom-reset').addEventListener('click',()=>Controller.setZoom(1.0));
+    document.getElementById('workspace').addEventListener('wheel',ev=>{if(ev.ctrlKey||ev.metaKey){ev.preventDefault();Controller.setZoom(Store.config.currentZoom+(ev.deltaY>0?-.1:.1));}},{passive:false});
+    document.getElementById('workspace').addEventListener('scroll',()=>{Minimap.draw();Culling.scheduleApply();/*Epic7*/});
+
+    document.getElementById('matrix-header').addEventListener('pointerdown',ev=>{if(ev.target.tagName==='INPUT')return;const m=document.getElementById('floating-matrix');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
+    document.getElementById('minimap-header').addEventListener('pointerdown',ev=>{const m=document.getElementById('minimap-container');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,isMap:true};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
+
+    // Epic 5: rAFラッパーで 1フレーム 1回に限定。1000Hzマウスでも 60fpsと完全同期したドラッグ体験を実現。
+    let _pendingPointerEv=null,_rafPending=false;
+    window.addEventListener('pointermove',(ev)=>{
+      _pendingPointerEv=ev;           // 最新イベントだけ保持（途中の座標は対象内で最新を使う）
+      if(!_rafPending){
+        _rafPending=true;
+        requestAnimationFrame(()=>{
+          _rafPending=false;
+          if(_pendingPointerEv){
+            Controller.handleGlobalPointerMove(_pendingPointerEv);
+            _pendingPointerEv=null;
+          }
+        });
+      }
+    });
+    window.addEventListener('pointerup',Controller.handleGlobalPointerUp);
+    window.addEventListener('pointercancel',Controller.handleGlobalPointerUp);
+    Renderer.svgLayer.addEventListener('pointerdown',Controller.handleCanvasPointerDown);
+
+    const minimapEl=document.getElementById('minimap');let _mmDragging=false;
+    const _mmPan=(ev)=>{const r=minimapEl.getBoundingClientRect();Minimap.panTo(ev.clientX-r.left,ev.clientY-r.top);};
+    minimapEl.addEventListener('pointerdown',ev=>{_mmDragging=true;minimapEl.setPointerCapture(ev.pointerId);_mmPan(ev);});
+    minimapEl.addEventListener('pointermove',ev=>{if(_mmDragging)_mmPan(ev);});
+    minimapEl.addEventListener('pointerup',()=>{_mmDragging=false;});
+    minimapEl.addEventListener('pointercancel',()=>{_mmDragging=false;});
+
+    document.getElementById('btn-undo').addEventListener('click',Controller.undo);
+    document.getElementById('btn-save').addEventListener('click',Controller.saveData);
+    document.getElementById('btn-save-tb').addEventListener('click',Controller.saveData);
+    document.getElementById('btn-load').addEventListener('click',Controller.loadData);
+    document.getElementById('btn-clear').addEventListener('click',Controller.clearData);
+    document.getElementById('pdf-upload').addEventListener('change',Controller.handlePdfUpload);
+    document.getElementById('btn-del-sel').addEventListener('click',Controller.deleteSelected);
+    document.getElementById('btn-clear-sel').addEventListener('click',()=>{Store.selection.clear();Renderer.renderAll();});
+
+    document.getElementById('btn-renumber').addEventListener('click', () => {
+      Store.pushHistory();
+      const dist = new Map();
+      const q = [];
+      Store.nodes.filter(n => n.type === NODE_TYPE.SOURCE).forEach(src => {
+        dist.set(src.id, 0);
+        q.push(src.id);
+      });
+      
+      const adj = new Map();
+      Store.nodes.forEach(n => adj.set(n.id, []));
+      Store.edges.forEach(e => {
+        if(adj.has(e.from)) adj.get(e.from).push(e.to);
+        if(adj.has(e.to)) adj.get(e.to).push(e.from);
+      });
+
+      while(q.length > 0) {
+        const curr = q.shift();
+        const d = dist.get(curr);
+        adj.get(curr).forEach(nxt => {
+          if(!dist.has(nxt)) {
+            dist.set(nxt, d + 1);
+            q.push(nxt);
+          }
+        });
+      }
+
+      const targets = Store.nodes.filter(n => [NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type));
+      targets.sort((a, b) => {
+        const da = dist.has(a.id) ? dist.get(a.id) : 9999;
+        const db = dist.has(b.id) ? dist.get(b.id) : 9999;
+        if(da !== db) return da - db;
+        if(Math.abs(a.y - b.y) > 10) return a.y - b.y;
+        return a.x - b.x;
+      });
+
+      const labelsMap = {valve:'バルブ', safety:'安全弁'};
+      let counts = {valve: 1, safety: 1};
+      targets.forEach(n => {
+        const c = counts[n.type]++;
+        n.ext.customName = `${labelsMap[n.type]} ${c}`;
+      });
+
+      Renderer.renderAll();
+    });
+
+    // ▼▼▼ 追加：マトリクスタブとピン留めクリック処理 ▼▼▼
+    document.querySelectorAll('.matrix-tab').forEach(tab => {
+      tab.addEventListener('click', (ev) => {
+        document.querySelectorAll('.matrix-tab').forEach(t => t.classList.remove('active'));
+        ev.target.classList.add('active');
+        Store.config.matrixTab = ev.target.dataset.tab;
+        Renderer.renderAll();
+      });
+    });
+
+    Renderer.valveMatrixContent.addEventListener('click', (ev) => {
+      if (ev.target.classList.contains('matrix-pin-btn')) {
+        const id = ev.target.closest('.matrix-item').dataset.id;
+        const node = Store.nodes.find(n => n.id === id);
+        if (node) {
+          Store.pushHistory();
+          node.ext.isPinned = !node.ext.isPinned;
+          Renderer.renderAll();
+        }
+      }
+    });
+    // ▲▲▲ 追加ここまで ▲▲▲
+
+    window.addEventListener('keydown',ev=>{
+      if(['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+      if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault();Controller.undo();return;}
+      if(ev.key==='Escape'){ValveSelector.close();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
+      if((ev.key==='Delete'||ev.key==='Backspace')&&Store.selection.size>0){ev.preventDefault();Controller.deleteSelected();return;}
+      if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
+      const toolKeys={v:'pointer',r:'rotate',s:'source',a:'valve',t:'trap',d:'drain',y:'split',m:'merge',e:'reducer',h:'heatex',q:'safety',p:'pin'};
+      const k=ev.key.toLowerCase();
+      if(toolKeys[k]){Controller.setTool(toolKeys[k]);return;}
+      if(k==='c'){document.getElementById('btn-connect').click();return;}
+    });
+
+    Renderer.updateZoom();Renderer.renderAll();
+  },
+
+  setZoom:(z)=>{Store.config.currentZoom=Math.max(.2,Math.min(z,3.0));Renderer.updateZoom();requestAnimationFrame(()=>{Minimap.draw();Culling.scheduleApply();/*Epic7*/});},
+  undo:()=>{if(!Store.history.length)return;Store.restore(Store.history.pop());Store.selection.clear();Store.config.selectedNodeIdForConnection=null;Simulator.run();Renderer.renderAll();},
+  deleteSelected:()=>{if(!Store.selection.size)return;Store.pushHistory();const del=new Set(Store.selection);Store.nodes=Store.nodes.filter(n=>!del.has(n.id));Store.edges=Store.edges.filter(e=>!del.has(e.from)&&!del.has(e.to));Store.selection.clear();Simulator.run();Renderer.renderAll();},
+  applySnap:(x,y,excludeId)=>{
+    if(!Store.config.snapEnabled)return{x,y,gX:null,gY:null};
+    const gs=Store.config.gridSize,ox=Store.config.gridOffsetX,oy=Store.config.gridOffsetY;
+    const axisThresh=gs*0.6;
+    let sx=Math.round((x-ox)/gs)*gs+ox,sy=Math.round((y-oy)/gs)*gs+oy,gX=null,gY=null;
+    Store.nodes.forEach(n=>{if(n.id===excludeId)return;if(Math.abs(x-n.x)<axisThresh){sx=n.x;gX=n.x;}if(Math.abs(y-n.y)<axisThresh){sy=n.y;gY=n.y;}});
+    return{x:sx,y:sy,gX,gY};
+  },
+
+  handleGlobalPointerMove:(ev)=>{
+    if(Store.matrixDrag.isDragging){const m=document.getElementById(Store.matrixDrag.isMap?'minimap-container':'floating-matrix');m.style.left=(ev.clientX-Store.matrixDrag.offsetX)+'px';m.style.top=(ev.clientY-Store.matrixDrag.offsetY)+'px';m.style.right='auto';m.style.bottom='auto';}
+    if(Store.multiDrag.active&&ev.pointerId===Store.multiDrag.pointerId){const moved=Math.hypot(ev.clientX-Store.multiDrag.startClientX,ev.clientY-Store.multiDrag.startClientY);if(!Store.multiDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD)Store.multiDrag.hasDragged=true;if(Store.multiDrag.hasDragged){const coords=Renderer.getMouseSvgCoords(ev),dx=coords.x-Store.multiDrag.startSvgX,dy=coords.y-Store.multiDrag.startSvgY;Store.multiDrag.nodes.forEach(item=>{item.node.x=item.startX+dx;item.node.y=item.startY+dy;const gEl=Renderer.nodesGroup.querySelector(`[data-id="${item.node.id}"]`);if(gEl)Renderer.updateNodeLive(item.node,gEl);});}}
+    if(Store.dragState.isDragging&&Store.dragState.targetNode&&ev.pointerId===Store.dragState.pointerId){const moved=Math.hypot(ev.clientX-Store.dragState.startClientX,ev.clientY-Store.dragState.startClientY);if(!Store.dragState.hasDragged&&moved>Controller.DRAG_THRESHOLD)Store.dragState.hasDragged=true;if(Store.dragState.hasDragged&&!Store.config.isConnectMode){const raw=Renderer.getMouseSvgCoords(ev),sn=Controller.applySnap(raw.x-Store.dragState.offsetX,raw.y-Store.dragState.offsetY,Store.dragState.targetNode.id);Store.dragState.targetNode.x=sn.x;Store.dragState.targetNode.y=sn.y;Renderer.updateNodeLive(Store.dragState.targetNode,Store.dragState.gEl);Renderer.showSnapGuides(sn.gX,sn.gY);}}
+    if(Store.labelDrag.isDragging&&Store.labelDrag.targetNode&&ev.pointerId===Store.labelDrag.pointerId){const moved=Math.hypot(ev.clientX-Store.labelDrag.startClientX,ev.clientY-Store.labelDrag.startClientY);if(!Store.labelDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD)Store.labelDrag.hasDragged=true;if(Store.labelDrag.hasDragged){const c=Renderer.getMouseSvgCoords(ev),nx=Store.labelDrag.startOffsetX+(c.x-Store.labelDrag.startX),ny=Store.labelDrag.startOffsetY+(c.y-Store.labelDrag.startY);Store.labelDrag.targetNode.labelOffset={x:nx,y:ny};const lEl=Store.labelDrag.gEl;if(lEl){lEl.setAttribute('x',nx);lEl.setAttribute('y',ny);}const g=lEl?.closest('g.node');if(g){const ll=g.querySelector('.leader-line');if(ll){ll.setAttribute('x2',nx);ll.setAttribute('y2',ny);}}}}
+    if(Store.waypointDrag.active&&ev.pointerId===Store.waypointDrag.pointerId){const moved=Math.hypot(ev.clientX-Store.waypointDrag.startClientX,ev.clientY-Store.waypointDrag.startClientY);if(!Store.waypointDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD)Store.waypointDrag.hasDragged=true;if(Store.waypointDrag.hasDragged){const c=Renderer.getMouseSvgCoords(ev);Store.waypointDrag.edge.ext.waypoints[Store.waypointDrag.index]={x:c.x,y:c.y};Renderer.updateEdgePathLive(Store.waypointDrag.edge);if(Store.waypointDrag.wpEl){Store.waypointDrag.wpEl.setAttribute('cx',c.x);Store.waypointDrag.wpEl.setAttribute('cy',c.y);}}}
+    if(Store.rectSelect.active&&ev.pointerId===Store.rectSelect.pointerId){const c=Renderer.getMouseSvgCoords(ev);Store.rectSelect.currentSvgX=c.x;Store.rectSelect.currentSvgY=c.y;const x=Math.min(Store.rectSelect.startSvgX,c.x),y=Math.min(Store.rectSelect.startSvgY,c.y),w=Math.abs(c.x-Store.rectSelect.startSvgX),h=Math.abs(c.y-Store.rectSelect.startSvgY);Renderer.selectRectEl.setAttribute('x',x);Renderer.selectRectEl.setAttribute('y',y);Renderer.selectRectEl.setAttribute('width',w);Renderer.selectRectEl.setAttribute('height',h);Renderer.selectRectEl.removeAttribute('display');}
+    if(Store.config.isConnectMode&&Store.config.selectedNodeIdForConnection){const c=Renderer.getMouseSvgCoords(ev);Renderer.connectPreviewLine.setAttribute('x2',c.x);Renderer.connectPreviewLine.setAttribute('y2',c.y);}
+  },
+
+  handleGlobalPointerUp:(ev)=>{
+    if(Store.matrixDrag.isDragging)Store.matrixDrag.isDragging=false;
+    if(Store.multiDrag.active&&ev.pointerId===Store.multiDrag.pointerId){
+      try{if(Store.multiDrag.gEl?.hasPointerCapture(ev.pointerId))Store.multiDrag.gEl.releasePointerCapture(ev.pointerId);}catch(_){}
+      if(Store.multiDrag.hasDragged&&Store.multiDrag.preSnapshot)Store.pushSnapshot(Store.multiDrag.preSnapshot);
+      if(Store.multiDrag.hasDragged){
+        Store.multiDrag.nodes.forEach(item=>{
+          const deltaX=item.node.x-item.startX,deltaY=item.node.y-item.startY;
+          if(Math.abs(deltaX)>0.5||Math.abs(deltaY)>0.5){
+            Store.edges.forEach(edge=>{if((edge.from===item.node.id||edge.to===item.node.id)&&edge.ext.waypoints?.length){edge.ext.waypoints.forEach(wp=>{wp.x+=deltaX;wp.y+=deltaY;});}});
+          }
+        });
+      }
+      // Epic 6-2: will-change を除去（renderAllが style.transformもクリアする）
+      Store.multiDrag.nodes.forEach(item=>{
+        const el=Renderer.nodesGroup.querySelector(`[data-id="${item.node.id}"]`);
+        if(el)el.classList.remove('node-dragging');
+      });
+      Store.multiDrag={active:false,nodes:[],gEl:null,startSvgX:0,startSvgY:0,startClientX:0,startClientY:0,hasDragged:false,pointerId:null,preSnapshot:null};
+      Renderer.hideSnapGuides();Simulator.run();Renderer.renderAll();return;
+    }
+    if(Store.dragState.isDragging&&ev.pointerId===Store.dragState.pointerId){
+      const node=Store.dragState.targetNode,dragged=Store.dragState.hasDragged,gEl=Store.dragState.gEl;
+      try{if(gEl?.hasPointerCapture(ev.pointerId))gEl.releasePointerCapture(ev.pointerId);}catch(_){}
+      // Epic 6-2: will-change を除去（renderAll内で style.transform もクリア済み）
+      if(gEl)gEl.classList.remove('node-dragging');
+      Renderer.hideSnapGuides();let mutated=false;
+      if(Store.config.isConnectMode){if(!dragged&&node){if(!Store.config.selectedNodeIdForConnection){Store.config.selectedNodeIdForConnection=node.id;}else{if(Store.config.selectedNodeIdForConnection!==node.id&&!Store.edges.some(e=>e.from===Store.config.selectedNodeIdForConnection&&e.to===node.id)){Store.pushHistory();const newEdge=Store.createEdge(Store.config.selectedNodeIdForConnection,node.id);if(Store.config.autoElbow){const fn=Store.nodes.find(n=>n.id===Store.config.selectedNodeIdForConnection);if(fn){const dx=Math.abs(node.x-fn.x),dy=Math.abs(node.y-fn.y);if(dx>25&&dy>25)newEdge.ext.waypoints=[{x:node.x,y:fn.y}];}}Store.edges.push(newEdge);mutated=true;}Store.config.selectedNodeIdForConnection=null;}}}
+
+      else{const tool=Store.config.currentTool;if(!dragged&&node){if(tool===NODE_TYPE.ROTATE){Store.pushHistory();node.rotation=((node.rotation||0)+90)%360;mutated=true;}else if(tool===NODE_TYPE.POINTER&&[NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(node.type)){ValveSelector.open(node);Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};return;}else if(tool===NODE_TYPE.POINTER&&node.type===NODE_TYPE.REDUCER){ReducerSelector.open(node);Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};return;}}
+              else if(dragged&&node){if(Store.dragState.preSnapshot)Store.pushSnapshot(Store.dragState.preSnapshot);const deltaX=node.x-Store.dragState.preNodeX,deltaY=node.y-Store.dragState.preNodeY;if(Math.abs(deltaX)>0.5||Math.abs(deltaY)>0.5){Store.edges.forEach(edge=>{if((edge.from===node.id||edge.to===node.id)&&edge.ext.waypoints?.length){edge.ext.waypoints.forEach(wp=>{wp.x+=deltaX;wp.y+=deltaY;});}});}mutated=true;}}
+            Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};if(mutated)Simulator.run();Renderer.renderAll();}
+
+      if(Store.labelDrag.isDragging&&ev.pointerId===Store.labelDrag.pointerId){try{if(Store.labelDrag.gEl?.hasPointerCapture(ev.pointerId))Store.labelDrag.gEl.releasePointerCapture(ev.pointerId);}catch(_){}if(Store.labelDrag.hasDragged&&Store.labelDrag.preSnapshot)Store.pushSnapshot(Store.labelDrag.preSnapshot);Store.labelDrag={isDragging:false,hasDragged:false,targetNode:null,gEl:null,startX:0,startY:0,startOffsetX:0,startOffsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null};Renderer.renderAll();}
+    if(Store.waypointDrag.active&&ev.pointerId===Store.waypointDrag.pointerId){try{if(Store.waypointDrag.wpEl?.hasPointerCapture(ev.pointerId))Store.waypointDrag.wpEl.releasePointerCapture(ev.pointerId);}catch(_){}if(Store.waypointDrag.hasDragged&&Store.waypointDrag.preSnapshot)Store.pushSnapshot(Store.waypointDrag.preSnapshot);Store.waypointDrag={active:false,edge:null,index:-1,wpEl:null,pointerId:null,hasDragged:false,startClientX:0,startClientY:0,preSnapshot:null};Renderer.renderAll();}
+    if(Store.rectSelect.active&&ev.pointerId===Store.rectSelect.pointerId){const x1=Math.min(Store.rectSelect.startSvgX,Store.rectSelect.currentSvgX),y1=Math.min(Store.rectSelect.startSvgY,Store.rectSelect.currentSvgY),x2=Math.max(Store.rectSelect.startSvgX,Store.rectSelect.currentSvgX),y2=Math.max(Store.rectSelect.startSvgY,Store.rectSelect.currentSvgY);const wasDrag=x2-x1>5||y2-y1>5;if(wasDrag){if(!ev.shiftKey)Store.selection.clear();Store.nodes.forEach(n=>{if(n.x>=x1&&n.x<=x2&&n.y>=y1&&n.y<=y2)Store.selection.add(n.id);});}else{Store.selection.clear();}Store.rectSelect={active:false,startSvgX:0,startSvgY:0,currentSvgX:0,currentSvgY:0,pointerId:null};Renderer.selectRectEl.setAttribute('display','none');Renderer.renderAll();}
+  },
+
+  handleCanvasPointerDown:(ev)=>{
+    if(ev.button&&ev.button!==0)return;
+
+  // 1. ラベルがクリックされたか？
+    if(ev.target.classList.contains('node-label')) {
+        const g = ev.target.closest('g.node');
+        const nodeId = g?.getAttribute('data-id');
+        const node = Store.nodes.find(n => n.id === nodeId);
+        if (node) {
+            Controller.handleLabelPointerDown(ev, node, ev.target);
+            return;
+        }
+    }
+
+    // 2. ノード本体がクリックされたか？ (SVG背景以外の g.node 内の要素)
+    const nodeGroup = ev.target.closest('g.node');
+    if(nodeGroup && ev.target.tagName !== 'svg') {
+        const nodeId = nodeGroup.getAttribute('data-id');
+        const node = Store.nodes.find(n => n.id === nodeId);
+        if (node) {
+            Controller.handleNodePointerDown(ev, node, nodeGroup);
+            return;
+        }
+    }
+
+    // 3. 中継点(Waypoint)がクリックされたか？
+    if(ev.target.classList.contains('waypoint-handle')) {
+        const edgeGroup = ev.target.closest('g'); 
+        const edgeId = edgeGroup?.getAttribute('data-id');
+        const edge = Store.edges.find(e => e.id === edgeId);
+        const idx = parseInt(ev.target.getAttribute('data-idx'), 10);
+        if (edge && !isNaN(idx)) {
+            Controller.handleWaypointPointerDown(ev, edge, idx, ev.target);
+            return;
+        }
+    }
+    // ------------------------------------------------
+
+    const isSvgBg=(ev.target.tagName==='svg'||ev.target.id==='svg-layer');if(!isSvgBg)return;
+    if(Store.config.isConnectMode){if(Store.config.selectedNodeIdForConnection){Store.config.selectedNodeIdForConnection=null;Renderer.renderAll();}return;}
+    const tool=Store.config.currentTool;
+    if(tool===NODE_TYPE.POINTER){const c=Renderer.getMouseSvgCoords(ev);Store.rectSelect={active:true,startSvgX:c.x,startSvgY:c.y,currentSvgX:c.x,currentSvgY:c.y,pointerId:ev.pointerId};return;}
+    if(tool===NODE_TYPE.ROTATE)return;
+    const raw=Renderer.getMouseSvgCoords(ev),sn=Controller.applySnap(raw.x,raw.y,null);
+    Store.pushHistory();Store.nodes.push(Store.createNode(tool,sn.x,sn.y));Simulator.run();Renderer.renderAll();
+    Controller.setTool('pointer');
+  },
+
+
+
+
+
+  
+  handleNodePointerDown:(ev,node,gEl)=>{
+    if(ev.button&&ev.button!==0)return;ev.stopPropagation();
+    // ▼▼▼ 追加：ピンツール使用時の早期リターン ▼▼▼
+    if(Store.config.currentTool === 'pin') {
+      if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(node.type)) {
+        Store.pushHistory();
+        node.ext.isPinned = !node.ext.isPinned;
+        Renderer.renderAll();
+      }
+      return; // ここで処理を終わらせて、ドラッグなどを防ぐ
+    }
+    // ▲▲▲ 追加ここまで ▲▲▲
+    const coords=Renderer.getMouseSvgCoords(ev);
+    if(Store.selection.size>1&&Store.selection.has(node.id)){
+      Store.multiDrag={active:true,gEl,nodes:[...Store.selection].map(id=>{const n=Store.nodes.find(x=>x.id===id);return n?{node:n,startX:n.x,startY:n.y}:null;}).filter(Boolean),startSvgX:coords.x,startSvgY:coords.y,startClientX:ev.clientX,startClientY:ev.clientY,hasDragged:false,pointerId:ev.pointerId,preSnapshot:Store.serialize()};
+      try{gEl.setPointerCapture(ev.pointerId);}catch(_){}
+      // Epic 6-2: 選択ノード全てに will-change を付与してGPUレイヤーに昇格
+      Store.multiDrag.nodes.forEach(item=>{
+        const el=Renderer.nodesGroup.querySelector(`[data-id="${item.node.id}"]`);
+        if(el)el.classList.add('node-dragging');
+      });
+      return;
+    }
+    if(ev.shiftKey){if(Store.selection.has(node.id))Store.selection.delete(node.id);else Store.selection.add(node.id);Renderer.renderAll();return;}
+    if(!Store.selection.has(node.id))Store.selection.clear();
+    Store.dragState={isDragging:true,hasDragged:false,targetNode:node,gEl,offsetX:coords.x-node.x,offsetY:coords.y-node.y,startClientX:ev.clientX,startClientY:ev.clientY,pointerId:ev.pointerId,preSnapshot:Store.serialize(),preNodeX:node.x,preNodeY:node.y};
+    try{gEl.setPointerCapture(ev.pointerId);}catch(_){}
+    // Epic 6-2: ドラッグ対象に will-change を付与してブラウザに GPU 昇格を事前通知
+    gEl.classList.add('node-dragging');
+  },
+
+  handleLabelPointerDown:(ev,node,lEl)=>{if(ev.button&&ev.button!==0)return;ev.stopPropagation();if(Store.config.isConnectMode)return;const c=Renderer.getMouseSvgCoords(ev);Store.labelDrag={isDragging:true,hasDragged:false,targetNode:node,gEl:lEl,startX:c.x,startY:c.y,startOffsetX:node.labelOffset.x,startOffsetY:node.labelOffset.y,startClientX:ev.clientX,startClientY:ev.clientY,pointerId:ev.pointerId,preSnapshot:Store.serialize()};try{lEl.setPointerCapture(ev.pointerId);}catch(_){}},
+  handleWaypointPointerDown:(ev,edge,idx,wpEl)=>{if(ev.button&&ev.button!==0)return;ev.stopPropagation();Store.waypointDrag={active:true,edge,index:idx,wpEl,pointerId:ev.pointerId,hasDragged:false,startClientX:ev.clientX,startClientY:ev.clientY,preSnapshot:Store.serialize()};try{wpEl.setPointerCapture(ev.pointerId);}catch(_){}},
+  handleNodeContextMenu:(ev,node)=>{ev.preventDefault();ev.stopPropagation();Store.pushHistory();Store.nodes=Store.nodes.filter(n=>n.id!==node.id);Store.edges=Store.edges.filter(e=>e.from!==node.id&&e.to!==node.id);Store.selection.delete(node.id);if(Store.config.selectedNodeIdForConnection===node.id)Store.config.selectedNodeIdForConnection=null;Simulator.run();Renderer.renderAll();},
+  handleEdgeContextMenu:(ev,edge)=>{ev.preventDefault();ev.stopPropagation();Store.pushHistory();Store.edges=Store.edges.filter(e=>e.id!==edge.id);Simulator.run();Renderer.renderAll();},
+  handleEdgeDblClick:(ev,edge)=>{ev.preventDefault();ev.stopPropagation();const coords=Renderer.getMouseSvgCoords(ev);const nF=Store.nodes.find(n=>n.id===edge.from),nT=Store.nodes.find(n=>n.id===edge.to);if(!nF||!nT)return;const wps=edge.ext.waypoints||[],pts=[nF,...wps,nT];let bestSeg=0,bestDist=Infinity;for(let i=0;i<pts.length-1;i++){const d=distPtSeg(coords,pts[i],pts[i+1]);if(d<bestDist){bestDist=d;bestSeg=i;}}Store.pushHistory();wps.splice(bestSeg,0,{x:coords.x,y:coords.y});edge.ext.waypoints=wps;Renderer.renderAll();},
+
+  saveData: () => {
+      // 1. 既存のロジックで保存用データオブジェクトを構築
+      const d = {
+        pdfScale: parseFloat(document.getElementById('pdfScale').value) || 1.5,
+        matrixTitle: document.getElementById('matrix-title-input').value,
+        savedZoom: Store.config.currentZoom,
+        baseWidth: Store.config.baseWidth,
+        baseHeight: Store.config.baseHeight,
+        gridSize: Store.config.gridSize,
+        gridOffsetX: Store.config.gridOffsetX,
+        gridOffsetY: Store.config.gridOffsetY,
+        nodes: Store.nodes.map(n => ({ id: n.id, type: n.type, x: n.x, y: n.y, rotation: n.rotation, state: n.state, ext: n.ext, labelOffset: n.labelOffset })),
+        edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext }))
+      };
+      
+      // 2. Blobを作成してファイルダウンロードを発火
+      const jsonStr = JSON.stringify(d, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      // 日付入りファイル名の生成 (例: steamboy_20260609_1530.json)
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const min = String(now.getMinutes()).padStart(2, '0');
+      const filename = `steamboy_${yyyy}${mm}${dd}_${hh}${min}.json`;
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      
+      // 3. メモリ解放
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+    },
+
+    loadData: () => {
+          // 1. 動的にファイル選択inputを生成してクリック
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.json';
+          
+          input.addEventListener('change', (ev) => {
+            const file = ev.target.files[0];
+            if (!file) return;
+            
+            // 2. ファイルをテキストとして読み込む
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              try {
+                const d = JSON.parse(e.target.result);
+                
+                // 3. 既存の復元ロジックを実行
+                if (d.pdfScale) document.getElementById('pdfScale').value = d.pdfScale;
+                if (d.matrixTitle) document.getElementById('matrix-title-input').value = d.matrixTitle;
+                if (d.baseWidth) Store.config.baseWidth = d.baseWidth;
+                if (d.baseHeight) Store.config.baseHeight = d.baseHeight;
+
+                if (d.gridSize) {
+                  Store.config.gridSize = d.gridSize;
+                  document.getElementById('gridSizeSlider').value = d.gridSize;
+                  document.getElementById('gridSizeVal').textContent = d.gridSize;
+                }
+                if (d.gridOffsetX != null) {
+                  Store.config.gridOffsetX = d.gridOffsetX;
+                  document.getElementById('gridOffsetX').value = d.gridOffsetX;
+                }
+                if (d.gridOffsetY != null) {
+                  Store.config.gridOffsetY = d.gridOffsetY;
+                  document.getElementById('gridOffsetY').value = d.gridOffsetY;
+                }
+                // 背景グリッドをロード値に同期
+                const gs2=Store.config.gridSize,ox2=Store.config.gridOffsetX,oy2=Store.config.gridOffsetY;
+                document.getElementById('workspace').style.backgroundSize=`${gs2}px ${gs2}px`;
+                document.getElementById('workspace').style.backgroundPosition=`${ox2}px ${oy2}px`;
+          
+                Store.nodes = (d.nodes || []).map(n => Store.createNode(n.type || NODE_TYPE.SOURCE, n.x || 0, n.y || 0, n));
+                Store.edges = (d.edges || []).map(e => Store.createEdge(e.from, e.to, e));
+                
+                Store.history = [];
+                Store.selection.clear();
+                Controller.setZoom(d.savedZoom || 1.0);
+                Simulator.run();
+                Renderer.renderAll();
+
+                // 🌟🌟🌟 追加：PDFクリア機能 🌟🌟🌟
+                const pdfCanvas = document.getElementById('pdf-canvas');
+                // PDFがすでに表示されている場合のみ実行
+                if (pdfCanvas.style.display === 'block') {
+                  // 1. キャンバスを非表示にして内容をクリア
+                  pdfCanvas.style.display = 'none';
+                  const ctx = pdfCanvas.getContext('2d');
+                  ctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+
+                  // 2. ファイル選択欄をリセット（同じPDFを連続で再選択できるようにするため）
+                  document.getElementById('pdf-upload').value = '';
+
+                  // 3. ユーザーに通知（描画完了を待つため少し遅らせてアラートを出す）
+                  setTimeout(() => {
+                    alert('JSONデータを読み込みました。\nスケール設定が更新されたため、背景のPDFをクリアしました。お手数ですが、再度PDFファイルを選択してください。');
+                  }, 50);
+                }
+                // 🌟🌟🌟 追加ここまで 🌟🌟🌟
+                
+              } catch (err) {
+                alert('ファイルの読み込みに失敗しました。正しいJSONファイルを選択してください。');
+                console.error(err);
+              }
+            };
+            reader.readAsText(file);
+          });
+          
+          input.click();
+        },
+
+  clearData:()=>{if(!confirm('全削除しますか？'))return;Store.pushHistory();Store.nodes=[];Store.edges=[];Store.selection.clear();Store.config.selectedNodeIdForConnection=null;document.getElementById('pdf-canvas').style.display='none';document.getElementById('pdf-upload').value='';Simulator.run();Renderer.renderAll();},
+  handlePdfUpload:(ev)=>{const file=ev.target.files[0];if(!file||file.type!=='application/pdf')return;const fr=new FileReader();fr.onload=function(){pdfjsLib.getDocument(new Uint8Array(this.result)).promise.then(pdf=>pdf.getPage(1)).then(page=>{const sc=parseFloat(document.getElementById('pdfScale').value)||1.5;const vp=page.getViewport({scale:sc});const canvas=document.getElementById('pdf-canvas');Store.config.baseWidth=vp.width;Store.config.baseHeight=vp.height;canvas.width=vp.width;canvas.height=vp.height;canvas.style.display='block';page.render({canvasContext:canvas.getContext('2d'),viewport:vp});Controller.setZoom(Store.config.currentZoom);}).catch(()=>alert('PDF展開エラー'));};fr.readAsArrayBuffer(file);}
+};
+
+// Epic 8: Simulator は SimulatorCore を使う Pure Function 設計に再構築済み。
+// Simulator._baseRun / Simulator.run は Simulator オブジェクト内に統合されたため
+// ここでのラッパー上書きは不要。
+Controller.init();
+
+// スナップOFF時にグリッド詳細を折りたたむ
+document.getElementById('toggleSnap').addEventListener('change', ev => {
+  Store.config.snapEnabled = ev.target.checked;
+  document.getElementById('grid-settings').classList.toggle('open', ev.target.checked);
+});
+
+// ショートカット一覧アコーディオン
+document.getElementById('sp-hints-toggle').addEventListener('click', () => {
+  const body = document.getElementById('sp-hints-body');
+  const arrow = document.getElementById('sp-hints-arrow');
+  const isOpen = body.classList.toggle('open');
+  arrow.classList.toggle('open', isOpen);
+});
+
+</script>
+</body>
+</html>

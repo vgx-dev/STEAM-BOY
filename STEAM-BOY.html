@@ -220,9 +220,11 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 .node.selected .node-shape{stroke-dasharray:4;animation:dash 1s linear infinite;}
 .node.multi-selected .node-shape{stroke:var(--accent)!important;stroke-width:3;filter:drop-shadow(0 0 4px rgba(0,122,255,0.4));}
 .selection-ring{animation:dash .8s linear infinite;pointer-events:none;}
-.node-label{cursor:grab;pointer-events:auto;user-select:none;touch-action:none;}
+.node-label{cursor:grab;pointer-events:auto;user-select:none;touch-action:none;opacity:0;transition:opacity .18s ease;}
 .node-label:active{cursor:grabbing;}
-.leader-line{stroke:var(--text-3);stroke-width:1;stroke-dasharray:3,3;pointer-events:none;}
+.node:hover .node-label{opacity:1;}
+.leader-line{stroke:var(--text-3);stroke-width:1;stroke-dasharray:3,3;pointer-events:none;opacity:0;transition:opacity .18s ease;}
+.node:hover .leader-line{opacity:1;}
 .state-0{stroke:var(--color-0);} .state-1{stroke:var(--color-1);} .state-2{stroke:var(--color-2);} .state-3{stroke:var(--color-3);}
 .anomaly-ring{animation:anomalyPulse 1.6s ease-in-out infinite;pointer-events:none;}
 .anomaly-icon{animation:anomalyBlink 1.6s ease-in-out infinite;pointer-events:none;}
@@ -375,6 +377,54 @@ g.edge-grp[data-residual="1"] .flow-base{
 .rs-val-display { text-align: center; font-size: 14px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
 .rs-slider { width: 100%; -webkit-appearance: none; appearance: none; height: 4px; background: rgba(0,0,0,0.1); border-radius: 2px; outline: none; }
 .rs-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.2), 0 0 0 0.5px rgba(0,0,0,0.08); cursor: pointer; }
+
+/* ── Feature 1: Isolation Trace ── */
+#svg-layer.isolation-mode g.node:not(.focus),
+#svg-layer.isolation-mode g.edge-grp:not(.focus) {
+  opacity: 0.1;
+  filter: grayscale(100%);
+  transition: opacity 0.25s ease, filter 0.25s ease;
+}
+#svg-layer.isolation-mode g.node.focus,
+#svg-layer.isolation-mode g.edge-grp.focus {
+  transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+/* ── Feature 2: ZEN Mode ── */
+#toolbar, #floating-matrix, #minimap-container, #zoom-controls {
+  transition: opacity 0.3s ease;
+}
+body.zen-mode #toolbar,
+body.zen-mode #floating-matrix,
+body.zen-mode #minimap-container,
+body.zen-mode #zoom-controls {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* ── Feature 6: Breathing Active Nodes ── */
+@keyframes nodeBreath {
+  0%, 100% { filter: none; }
+  50%       { filter: drop-shadow(0 0 6px rgba(0,0,0,0.22)); }
+}
+g.node[data-active="1"] {
+  animation: nodeBreath 2.5s ease-in-out infinite;
+}
+
+/* ── Feature 7: Kinetic Ripple ── */
+@keyframes rippleExpand {
+  0%   { transform: scale(0.05); opacity: 0.75; }
+  100% { transform: scale(1);    opacity: 0;    }
+}
+.placement-ripple {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  pointer-events: none;
+  animation: rippleExpand 0.42s ease-out forwards;
+  transform-box: fill-box;
+  transform-origin: center;
+}
 
 </style>
 </head>
@@ -649,6 +699,8 @@ g.edge-grp[data-residual="1"] .flow-base{
       <p>中継点 右クリック/ダブルクリック → 削除</p>
       <p>ノード/配管 右クリック → 個別削除</p>
       <p>空白ドラッグ → 矩形選択 ／ Del → 選択削除</p>
+      <p>Alt + クリック → 経路ハイライト（再クリックで解除）</p>
+      <p>Tab → ZENモード（UI非表示）トグル</p>
     </div>
   </div>
 </aside>
@@ -806,6 +858,44 @@ const SimulatorCore={
   }
 };
 
+/* ━━━━━━━━ ISOLATION TRACER (Feature 1) ━━━━━━━━ */
+const IsolationTracer={
+  active:false,
+  _focusNodes:new Set(),
+  _focusEdges:new Set(),
+  trace:(startId)=>{
+    const vN=new Set(),vE=new Set(),q=[startId];
+    vN.add(startId);
+    while(q.length){
+      const id=q.shift();
+      Store.edges.forEach(e=>{
+        if(e.from!==id&&e.to!==id)return;
+        if(vE.has(e.id))return;
+        vE.add(e.id);
+        const other=e.from===id?e.to:e.from;
+        if(!vN.has(other)){vN.add(other);q.push(other);}
+      });
+    }
+    IsolationTracer._focusNodes=vN;
+    IsolationTracer._focusEdges=vE;
+    IsolationTracer.active=true;
+    IsolationTracer._apply();
+  },
+  _apply:()=>{
+    if(!IsolationTracer.active)return;
+    if(Renderer.svgLayer)Renderer.svgLayer.classList.add('isolation-mode');
+    Store.nodes.forEach(n=>{const g=document.getElementById(`node-grp-${n.id}`);if(g)g.classList.toggle('focus',IsolationTracer._focusNodes.has(n.id));});
+    Store.edges.forEach(e=>{const eg=document.getElementById(`edge-grp-${e.id}`);if(eg)eg.classList.toggle('focus',IsolationTracer._focusEdges.has(e.id));});
+  },
+  clear:()=>{
+    if(Renderer.svgLayer)Renderer.svgLayer.classList.remove('isolation-mode');
+    document.querySelectorAll('#svg-layer .focus').forEach(el=>el.classList.remove('focus'));
+    IsolationTracer.active=false;
+    IsolationTracer._focusNodes=new Set();
+    IsolationTracer._focusEdges=new Set();
+  }
+};
+
 /* ━━━━━━━━ SIMULATOR ━━━━━━━━ */
 const Simulator={
   // ValveSelectorのプレビュー用: Anomaly/SealedDetector を呼ばない軽量版
@@ -918,7 +1008,7 @@ const Anomaly={
     Store.anomalies=[];
     Store.nodes.forEach(n=>{const inE=Store.edges.filter(e=>e.to===n.id),outE=Store.edges.filter(e=>e.from===n.id),all=[...inE,...outE];
       if(all.length===0&&n.type!==NODE_TYPE.SOURCE)Store.anomalies.push({type:'isolated',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 孤立（配管未接続）`});
-      if(![NODE_TYPE.DRAIN,NODE_TYPE.SOURCE,NODE_TYPE.VALVE].includes(n.type))if(n._sim.fIn>0&&outE.length===0)Store.anomalies.push({type:'deadend',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 流体の行き止まり`});
+      if(![NODE_TYPE.DRAIN,NODE_TYPE.SOURCE,NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(n.type))if(n._sim.fIn>0&&outE.length===0)Store.anomalies.push({type:'deadend',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 流体の行き止まり`});
       // 熱交換器に高圧蒸気直撃の危険検出
       if(n.type===NODE_TYPE.HEATEX&&n._sim.fIn===FLUID.STEAM&&n._sim.rateIn>0.45){
         Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 熱交換器に高圧蒸気！破損の恐れあり（要減圧または微開）'});
@@ -952,8 +1042,13 @@ const SealedDetector={
       }
     });
 
-    const drainNodes=Store.nodes.filter(n=>n.type===NODE_TYPE.DRAIN);
+    // 安全弁(開放/微開)も大気開放として排出口リストに含める
+    const drainNodes=Store.nodes.filter(n=>
+      n.type===NODE_TYPE.DRAIN || 
+      (n.type===NODE_TYPE.SAFETY && n.state.valveState!==VALVE_STATE.CLOSED)
+    );
     const steamDrainableSet=new Set();
+
     const liquidDrainableSet=new Set();
 
     // Step 2: 気体（STEAM）の全方位探索 (Undirected BFS)
@@ -980,7 +1075,7 @@ const SealedDetector={
 
           // ノードが壁なら、これ以上先へは探索しない
           if(nextNode.type===NODE_TYPE.TRAP)return;
-          if(nextNode.type===NODE_TYPE.VALVE&&nextNode.state.valveState===VALVE_STATE.CLOSED)return;
+          if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(nextNode.type)&&nextNode.state.valveState===VALVE_STATE.CLOSED)return;
 
           if(!visitedNodes.has(nextNodeId)){
             visitedNodes.add(nextNodeId);
@@ -1026,7 +1121,7 @@ const SealedDetector={
           liquidDrainableSet.add(e.id);
 
           if(nextNode.type===NODE_TYPE.TRAP)return;
-          if(nextNode.type===NODE_TYPE.VALVE&&nextNode.state.valveState===VALVE_STATE.CLOSED)return;
+          if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(nextNode.type)&&nextNode.state.valveState===VALVE_STATE.CLOSED)return;
 
           if(!visitedNodes.has(nextNodeId)){
             visitedNodes.add(nextNodeId);
@@ -1077,10 +1172,32 @@ const SealedDetector={
 /* ━━━━━━━━ MINIMAP ━━━━━━━━ */
 const Minimap={
   canvas:null,
-  draw:()=>{if(!Minimap.canvas)return;const c=Minimap.canvas,ctx=c.getContext('2d'),W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;
+  _rafId:null,
+  draw:()=>{
+    if(!Minimap.canvas)return;
+    const c=Minimap.canvas,ctx=c.getContext('2d'),W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;
     ctx.clearRect(0,0,W,H);ctx.fillStyle='#F0F0F5';ctx.fillRect(0,0,W,H);ctx.fillStyle='rgba(255,255,255,0.6)';ctx.fillRect(ox,oy,Store.config.baseWidth*ms,Store.config.baseHeight*ms);
     Store.edges.forEach(edge=>{const nF=Store.nodes.find(n=>n.id===edge.from),nT=Store.nodes.find(n=>n.id===edge.to);if(!nF||!nT)return;const ds=Math.max(edge._sim.f,edge._sim.b);ctx.strokeStyle=COLOR_MAP[ds]||'#8E8E93';ctx.lineWidth=ds>0?1.5:.7;ctx.globalAlpha=ds>0?.8:.35;ctx.beginPath();const pts=[nF,...(edge.ext.waypoints||[]),nT];ctx.moveTo(ox+pts[0].x*ms,oy+pts[0].y*ms);pts.slice(1).forEach(p=>ctx.lineTo(ox+p.x*ms,oy+p.y*ms));ctx.stroke();});
-    ctx.globalAlpha=1;Store.nodes.forEach(n=>{ctx.fillStyle=COLOR_MAP[n._sim.fOut]||'#8E8E93';ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,3,0,Math.PI*2);ctx.fill();if(Store.anomalies.some(a=>a.nodeId===n.id)){ctx.strokeStyle='#FF3B30';ctx.lineWidth=1;ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,5,0,Math.PI*2);ctx.stroke();}});
+    ctx.globalAlpha=1;
+    Store.nodes.forEach(n=>{ctx.fillStyle=COLOR_MAP[n._sim.fOut]||'#8E8E93';ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,3,0,Math.PI*2);ctx.fill();if(Store.anomalies.some(a=>a.nodeId===n.id)){ctx.strokeStyle='#FF3B30';ctx.lineWidth=1;ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,5,0,Math.PI*2);ctx.stroke();}});
+    // Feature 8: Radar ripple for anomaly nodes
+    const anomalyNodes=Store.nodes.filter(n=>Store.anomalies.some(a=>a.nodeId===n.id));
+    if(anomalyNodes.length){
+      const t=Date.now()/1000,PERIOD=1.8,MAX_R=11;
+      anomalyNodes.forEach(n=>{
+        const cx=ox+n.x*ms,cy=oy+n.y*ms;
+        for(let i=0;i<2;i++){
+          const phase=((t/PERIOD)+i*0.5)%1;
+          const r=phase*MAX_R,alpha=(1-phase)*0.85;
+          ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
+          ctx.strokeStyle=`rgba(255,59,48,${alpha.toFixed(2)})`;
+          ctx.lineWidth=1.5;ctx.stroke();
+        }
+      });
+      if(!Minimap._rafId)Minimap._rafId=requestAnimationFrame(()=>{Minimap._rafId=null;Minimap.draw();});
+    }else{
+      if(Minimap._rafId){cancelAnimationFrame(Minimap._rafId);Minimap._rafId=null;}
+    }
     const ws=document.getElementById('workspace');if(ws){const z=Store.config.currentZoom,vx=ws.scrollLeft/z,vy=ws.scrollTop/z,vw=ws.clientWidth/z,vh=ws.clientHeight/z;ctx.strokeStyle='rgba(0,122,255,.7)';ctx.lineWidth=1.5;ctx.strokeRect(ox+vx*ms,oy+vy*ms,vw*ms,vh*ms);}
   },
   panTo:(mx,my)=>{const c=Minimap.canvas,W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;const svgX=Math.max(0,Math.min((mx-ox)/ms,Store.config.baseWidth)),svgY=Math.max(0,Math.min((my-oy)/ms,Store.config.baseHeight));const ws=document.getElementById('workspace'),z=Store.config.currentZoom;ws.scrollLeft=svgX*z-ws.clientWidth/2;ws.scrollTop=svgY*z-ws.clientHeight/2;Minimap.draw();}
@@ -1132,12 +1249,16 @@ const Culling={
 
 /* ━━━━━━━━ RENDERER ━━━━━━━━ */
 const Renderer={
-  svgLayer:null,overlayLayer:null,edgesGroup:null,nodesGroup:null,
+  svgLayer:null,overlayLayer:null,edgesGroup:null,nodesGroup:null,svgDefs:null,
   valveMatrixContent:null,zoomDisplay:null,container:null,wrapper:null,connectPreviewLine:null,selectRectEl:null,snapGuideX:null,snapGuideY:null,
   
   init:()=>{
     Renderer.svgLayer=document.getElementById('svg-layer');Renderer.overlayLayer=document.getElementById('overlay-layer');
-    
+
+    // SVG defs for thermal gradients (Feature 4)
+    Renderer.svgDefs=createNS('defs',{id:'svg-defs'});
+    Renderer.svgLayer.insertBefore(Renderer.svgDefs,Renderer.svgLayer.firstChild);
+
     // Grouping for delta updates
     Renderer.edgesGroup=createNS('g',{id:'edges-group'});
     Renderer.nodesGroup=createNS('g',{id:'nodes-group'});
@@ -1155,7 +1276,26 @@ const Renderer={
   },
   
   getMouseSvgCoords:(ev)=>{const r=Renderer.svgLayer.getBoundingClientRect();return{x:(ev.clientX-r.left)/Store.config.currentZoom,y:(ev.clientY-r.top)/Store.config.currentZoom};},
-  buildTrimmedPath:(nFrom,edge,nTo)=>{const wps=edge.ext.waypoints||[],allPts=[nFrom,...wps,nTo],trim=Store.config.nodeRadius;const s0=allPts[0],s1=allPts[1],sl=Math.hypot(s1.x-s0.x,s1.y-s0.y),st=sl>0?Math.min(trim,sl*0.4)/sl:0;const p0={x:s0.x+(s1.x-s0.x)*st,y:s0.y+(s1.y-s0.y)*st};const n=allPts.length,e0=allPts[n-1],e1=allPts[n-2],el=Math.hypot(e1.x-e0.x,e1.y-e0.y),et=el>0?Math.min(trim,el*0.4)/el:0;const pN={x:e0.x+(e1.x-e0.x)*et,y:e0.y+(e1.y-e0.y)*et};let d=`M ${p0.x.toFixed(1)} ${p0.y.toFixed(1)}`;allPts.slice(1,-1).forEach(pt=>d+=` L ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`);return d+` L ${pN.x.toFixed(1)} ${pN.y.toFixed(1)}`;},
+  buildTrimmedPath:(nFrom,edge,nTo)=>{
+    const ELBOW=15;
+    const wps=edge.ext.waypoints||[],allPts=[nFrom,...wps,nTo],trim=Store.config.nodeRadius;
+    const s0=allPts[0],s1=allPts[1],sl=Math.hypot(s1.x-s0.x,s1.y-s0.y),st=sl>0?Math.min(trim,sl*0.4)/sl:0;
+    const p0={x:s0.x+(s1.x-s0.x)*st,y:s0.y+(s1.y-s0.y)*st};
+    const n=allPts.length,e0=allPts[n-1],e1=allPts[n-2],el=Math.hypot(e1.x-e0.x,e1.y-e0.y),et=el>0?Math.min(trim,el*0.4)/el:0;
+    const pN={x:e0.x+(e1.x-e0.x)*et,y:e0.y+(e1.y-e0.y)*et};
+    let d=`M ${p0.x.toFixed(1)} ${p0.y.toFixed(1)}`;
+    for(let i=1;i<allPts.length-1;i++){
+      const prev=allPts[i-1],cur=allPts[i],nxt=allPts[i+1];
+      const d1=Math.hypot(cur.x-prev.x,cur.y-prev.y),d2=Math.hypot(nxt.x-cur.x,nxt.y-cur.y);
+      if(d1<0.1)continue;
+      const r=Math.min(ELBOW,d1*0.4,d2*0.4);
+      const t1=r/d1,t2=r/d2;
+      const bx=cur.x-(cur.x-prev.x)*t1,by=cur.y-(cur.y-prev.y)*t1;
+      const ax=cur.x+(nxt.x-cur.x)*t2,ay=cur.y+(nxt.y-cur.y)*t2;
+      d+=` L ${bx.toFixed(1)} ${by.toFixed(1)} Q ${cur.x.toFixed(1)} ${cur.y.toFixed(1)} ${ax.toFixed(1)} ${ay.toFixed(1)}`;
+    }
+    return d+` L ${pN.x.toFixed(1)} ${pN.y.toFixed(1)}`;
+  },
   computePathLength:(nFrom,edge,nTo)=>{const wps=edge.ext.waypoints||[];let len=0,prev=nFrom;[...wps,nTo].forEach(pt=>{len+=Math.hypot(pt.x-prev.x,pt.y-prev.y);prev=pt;});return len;},
   
   updateNodeLive:(node,gEl)=>{
@@ -1262,10 +1402,25 @@ const Renderer={
       if(ds>FLUID.EMPTY){
         if(!base){base=createNS('path');base.classList.add('flow-base');base.setAttribute('id',`flow-base-${edge.id}`);eg.appendChild(base);}
         base.setAttribute('d',pathStr);
-        // stroke色は CSS (g.edge-grp[data-fluid]) で管理。opacity(dRate依存)は引き続きJSで設定。
         base.setAttribute('stroke-width',esw*2.6);
         base.setAttribute('stroke-opacity',(0.12+0.2*Math.max(.1,dRate)).toFixed(3));
         if(isBk)base.classList.add('backward');else base.classList.remove('backward');
+        // Feature 4: Thermal gradient for steam edges
+        if(ds===FLUID.STEAM&&Renderer.svgDefs){
+          const gid=`tg-${edge.id}`;
+          let grad=document.getElementById(gid);
+          if(!grad){
+            grad=createNS('linearGradient',{id:gid,gradientUnits:'userSpaceOnUse'});
+            grad.appendChild(createNS('stop',{offset:'0%','stop-color':'#FF3B30'}));
+            grad.appendChild(createNS('stop',{offset:'100%','stop-color':'#C44328','stop-opacity':'0.75'}));
+            Renderer.svgDefs.appendChild(grad);
+          }
+          grad.setAttribute('x1',nF.x);grad.setAttribute('y1',nF.y);
+          grad.setAttribute('x2',nT.x);grad.setAttribute('y2',nT.y);
+          base.style.stroke=`url(#${gid})`;
+        }else{
+          base.style.stroke='';
+        }
       }else if(base)base.remove();
 
       // 3. Sealed Background
@@ -1351,6 +1506,8 @@ const Renderer={
     });
 
     Array.from(Renderer.edgesGroup.children).forEach(child=>{if(!activeEdges.has(child.getAttribute('data-id')))child.remove();});
+    // Cleanup orphaned thermal gradients
+    if(Renderer.svgDefs)Array.from(Renderer.svgDefs.querySelectorAll('linearGradient[id^="tg-"]')).forEach(g=>{if(!activeEdges.has(g.id.slice(3)))g.remove();});
 
     /* ── Nodes ── */
     Store.nodes.forEach(n=>{
@@ -1382,6 +1539,8 @@ const Renderer={
       g.setAttribute('data-fluid-state', n._sim.fOut);
       if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)) g.setAttribute('data-valve-state', n.state.valveState);
       else g.removeAttribute('data-valve-state');
+      // Feature 6: Breathing — active node detection
+      g.setAttribute('data-active',(n._sim.fOut>0||n._sim.rateOut>0)?'1':'0');
 
       const hbR=Math.max(14,14/scale);
       let hb=g.querySelector('.node-hitbox');
@@ -1507,6 +1666,9 @@ const Renderer={
     if(Store.selection.size>0){tb.classList.add('visible');document.getElementById('sel-count-label').textContent=`${Store.selection.size}個選択中`;}else{tb.classList.remove('visible');}
 
     if(Store.config.isConnectMode&&Store.config.selectedNodeIdForConnection){const fn=Store.nodes.find(n=>n.id===Store.config.selectedNodeIdForConnection);if(fn){Renderer.connectPreviewLine.setAttribute('x1',fn.x);Renderer.connectPreviewLine.setAttribute('y1',fn.y);Renderer.connectPreviewLine.setAttribute('x2',fn.x);Renderer.connectPreviewLine.setAttribute('y2',fn.y);Renderer.connectPreviewLine.removeAttribute('display');}}else{Renderer.connectPreviewLine.setAttribute('display','none');}
+
+    // Feature 1: Re-apply isolation focus classes after DOM update
+    if(IsolationTracer.active)IsolationTracer._apply();
 
     Renderer.drawMatrix(valveMatrixData);
     Anomaly.renderPanel();Minimap.draw();
@@ -1864,7 +2026,8 @@ const Controller={
     window.addEventListener('keydown',ev=>{
       if(['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;
       if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault();Controller.undo();return;}
-      if(ev.key==='Escape'){ValveSelector.close();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
+      if(ev.key==='Tab'){ev.preventDefault();document.body.classList.toggle('zen-mode');return;}
+      if(ev.key==='Escape'){ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
       if((ev.key==='Delete'||ev.key==='Backspace')&&Store.selection.size>0){ev.preventDefault();Controller.deleteSelected();return;}
       if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
       const toolKeys={v:'pointer',r:'rotate',s:'source',a:'valve',t:'trap',d:'drain',y:'split',m:'merge',e:'reducer',h:'heatex',q:'safety',p:'pin'};
@@ -1939,6 +2102,22 @@ const Controller={
   handleCanvasPointerDown:(ev)=>{
     if(ev.button&&ev.button!==0)return;
 
+    // Feature 1: Isolation Trace (Alt+Click)
+    if(ev.altKey){
+      const nodeGroup=ev.target.closest('g.node');
+      const edgeGroup=ev.target.closest('g.edge-grp');
+      if(nodeGroup){
+        IsolationTracer.trace(nodeGroup.getAttribute('data-id'));
+      }else if(edgeGroup){
+        const eid=edgeGroup.getAttribute('data-id');
+        const edge=Store.edges.find(e=>e.id===eid);
+        if(edge)IsolationTracer.trace(edge.from);
+      }else{
+        IsolationTracer.clear();
+      }
+      return;
+    }
+
   // 1. ラベルがクリックされたか？
     if(ev.target.classList.contains('node-label')) {
         const g = ev.target.closest('g.node');
@@ -1981,6 +2160,11 @@ const Controller={
     if(tool===NODE_TYPE.ROTATE)return;
     const raw=Renderer.getMouseSvgCoords(ev),sn=Controller.applySnap(raw.x,raw.y,null);
     Store.pushHistory();Store.nodes.push(Store.createNode(tool,sn.x,sn.y));Simulator.run();Renderer.renderAll();
+    // Feature 7: Kinetic ripple on node placement
+    const _rpl=createNS('circle',{cx:sn.x,cy:sn.y,r:45,fill:'none','stroke-width':2});
+    _rpl.classList.add('placement-ripple');
+    Renderer.overlayLayer.appendChild(_rpl);
+    setTimeout(()=>_rpl.remove(),460);
     Controller.setTool('pointer');
   },
 

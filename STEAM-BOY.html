@@ -347,16 +347,17 @@ g.edge-grp[data-culled="1"] .flow-base{animation-play-state:paused;}
 /* ── Epic 6-2: ドラッグ中GPU昇格ヒント ── */
 .node-dragging{will-change:transform;}
 
-/* ── Task 1-1: flow-dash — textPath矢印の代替となるCSS破線アニメーション ── */
+/* ── Task 1-1 / REQ-02: flow-dash — 光速トレーサーパーティクル ── */
 @keyframes flowDash {
-  to { stroke-dashoffset: -24; }
+  to { stroke-dashoffset: -31; }
 }
 .flow-dash {
   fill: none;
   stroke-linecap: round;
   pointer-events: none;
-  stroke-dasharray: 6, 6;
+  stroke-dasharray: 1, 30;
   animation: flowDash linear infinite;
+  filter: drop-shadow(0 0 4px rgba(255,255,255,0.9)) drop-shadow(0 0 8px rgba(255,255,255,0.5));
 }
 /* ── Epic 10: 残留液表示 — data-residual="1" でアニメーション停止・不透明度調整 ── */
 g.edge-grp[data-residual="1"] .flow-dash{
@@ -415,17 +416,30 @@ g.node[data-active="1"] {
   animation: nodeBreath 2.5s ease-in-out infinite;
 }
 
-/* ── Feature 7: Kinetic Ripple ── */
-@keyframes rippleExpand {
-  0%   { transform: scale(0.05); opacity: 0.75; }
-  100% { transform: scale(1);    opacity: 0;    }
+/* ── REQ-01: Kinetic Shockwave ── */
+@keyframes shockwaveExpand {
+  0%   { transform: scale(0.05); opacity: 1;   filter: brightness(3); }
+  50%  { opacity: 0.7;           filter: brightness(1.5); }
+  100% { transform: scale(10);   opacity: 0;   filter: brightness(1); }
+}
+@keyframes shockwaveInner {
+  0%   { transform: scale(0.05); opacity: 0.6; }
+  100% { transform: scale(6);    opacity: 0;   }
 }
 .placement-ripple {
   fill: none;
   stroke: var(--accent);
   stroke-width: 2.5;
   pointer-events: none;
-  animation: rippleExpand 0.42s ease-out forwards;
+  animation: shockwaveExpand 0.55s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.placement-ripple-inner {
+  fill: rgba(0,122,255,0.15);
+  stroke: none;
+  pointer-events: none;
+  animation: shockwaveInner 0.35s ease-out forwards;
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -458,6 +472,135 @@ g.node[data-active="1"] {
 #floating-matrix.minimized #valveMatrixContent { display: none !important; }
 #floating-matrix.minimized { min-height: 0 !important; resize: none !important; }
 #minimap-container.minimized #minimap { display: none !important; }
+
+/* ═══════════════════════════════════════════════
+   VFX LAYER — REQ-03/04/05/06/07
+   ═══════════════════════════════════════════════ */
+
+/* ── REQ-03/04: Arc Spark & Purge Splash ── */
+@keyframes vfxSparkFly {
+  0%   { opacity: 0.95; }
+  100% { opacity: 0;    }
+}
+.vfx-spark {
+  pointer-events: none;
+  animation: vfxSparkFly 0.55s ease-out forwards;
+}
+
+/* ── REQ-05: Hologram Build-up (.booting) ── */
+@keyframes holoNodeAppear {
+  0%   { opacity: 0; filter: drop-shadow(0 0 16px var(--accent)) brightness(4); }
+  40%  { opacity: 1; filter: drop-shadow(0 0 8px var(--accent)) brightness(1.8); }
+  100% { opacity: 1; filter: none; }
+}
+@keyframes holoEdgeDraw {
+  0%   { stroke-dashoffset: 3000; opacity: 0; }
+  10%  { opacity: 1; }
+  100% { stroke-dashoffset: 0;    opacity: 1; }
+}
+#svg-layer.booting g.node {
+  animation: holoNodeAppear 0.7s ease-out both;
+}
+#svg-layer.booting g.edge-grp .edge-path,
+#svg-layer.booting g.edge-grp .flow-base {
+  stroke-dasharray: 3000 !important;
+  stroke-dashoffset: 3000 !important;
+  animation: holoEdgeDraw 1.4s ease-out both !important;
+}
+
+/* ── REQ-06: Holographic Tooltip ── */
+#holo-tooltip {
+  position: fixed;
+  z-index: 500;
+  padding: 8px 14px 10px;
+  border-radius: 10px;
+  min-width: 110px;
+  max-width: 200px;
+  pointer-events: none;
+  opacity: 0;
+  overflow: hidden;
+  clip-path: inset(0 100% 0 0 round 10px);
+  transition: clip-path 0.22s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.08s;
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(0,122,255,0.25);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1), 0 0 0 0.5px rgba(0,122,255,0.15);
+}
+#holo-tooltip.visible {
+  opacity: 1;
+  clip-path: inset(0 0% 0 0 round 10px);
+}
+#holo-tooltip .holo-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  text-transform: uppercase;
+  opacity: 0.7;
+  margin-bottom: 2px;
+}
+#holo-tooltip .holo-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#holo-tooltip .holo-scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent) 40%, rgba(0,122,255,0.8) 60%, transparent 100%);
+  opacity: 0;
+  transform: translateY(0);
+}
+#holo-tooltip.visible .holo-scanline {
+  animation: holoScan 0.75s ease-out 0.18s 1 forwards;
+}
+@keyframes holoScan {
+  0%   { opacity: 1; transform: translateY(0px); }
+  100% { opacity: 0; transform: translateY(36px); }
+}
+
+/* ── REQ-07: Minimap Radar ── */
+#minimap-radar-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: 28px;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 0 0 12px 12px;
+}
+.radar-sweep {
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(
+    from 0deg,
+    rgba(52,199,89,0.22) 0deg,
+    rgba(52,199,89,0.08) 45deg,
+    transparent 70deg
+  );
+  animation: radarSpin 4s linear infinite;
+  transform-origin: center center;
+}
+.radar-dot {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 100%; height: 1px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, transparent 0%, rgba(52,199,89,0.6) 80%, rgba(52,199,89,0.9) 100%);
+  animation: radarSpin 4s linear infinite;
+}
+@keyframes radarSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 
 </style>
 </head>
@@ -581,6 +724,12 @@ g.node[data-active="1"] {
 </main>
 
 <div id="vignette-overlay"></div>
+
+<div id="holo-tooltip">
+  <div class="holo-scanline"></div>
+  <div class="holo-tag">NODE</div>
+  <div class="holo-name" id="holo-tooltip-name"></div>
+</div>
 
 <header id="toolbar" class="glass">
   <button class="tool-btn active" data-tool="pointer" title="操作・選択 (V)">
@@ -765,6 +914,9 @@ g.node[data-active="1"] {
     <button class="panel-minimize-btn" title="最小化/展開"><svg viewBox="0 0 12 12" width="10" height="10"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   </div>
   <canvas id="minimap" width="170" height="120"></canvas>
+<div id="minimap-radar-overlay">
+  <div class="radar-sweep"></div>
+</div>
 </div>
 
 <div id="zoom-controls" class="glass">
@@ -1669,7 +1821,9 @@ const Renderer={
 
       let ttl=g.querySelector('title');
       if(!ttl){ttl=createNS('title');g.appendChild(ttl);}
-      if(ttl.textContent!==dispName)ttl.textContent=dispName;
+      ttl.textContent='';
+      // REQ-06: Bind holographic tooltip (data attrs updated every renderAll)
+      VFX.bindNodeTooltip(g,dispName,labelsMap[n.type]||n.type);
 
       // ▼▼▼ 追加：減圧弁の数値ラベル（デフォルト非表示） ▼▼▼
       let rLbl = g.querySelector('.reducer-label');
@@ -2096,7 +2250,7 @@ const Controller={
 
   setZoom:(z)=>{Store.config.currentZoom=Math.max(.2,Math.min(z,3.0));Renderer.updateZoom();requestAnimationFrame(()=>{Minimap.draw();Culling.scheduleApply();/*Epic7*/});},
   undo:()=>{if(!Store.history.length)return;Store.restore(Store.history.pop());Store.selection.clear();Store.config.selectedNodeIdForConnection=null;Simulator.run();Renderer.renderAll();},
-  deleteSelected:()=>{if(!Store.selection.size)return;Store.pushHistory();const del=new Set(Store.selection);Store.nodes=Store.nodes.filter(n=>!del.has(n.id));Store.edges=Store.edges.filter(e=>!del.has(e.from)&&!del.has(e.to));Store.selection.clear();Simulator.run();Renderer.renderAll();},
+  deleteSelected:()=>{if(!Store.selection.size)return;const del=new Set(Store.selection);Store.edges.filter(e=>del.has(e.from)||del.has(e.to)).forEach(e=>VFX.purgeSplash(e));Store.pushHistory();Store.nodes=Store.nodes.filter(n=>!del.has(n.id));Store.edges=Store.edges.filter(e=>!del.has(e.from)&&!del.has(e.to));Store.selection.clear();Simulator.run();Renderer.renderAll();},
   applySnap:(x,y,excludeId)=>{
     if(!Store.config.snapEnabled)return{x,y,gX:null,gY:null};
     const gs=Store.config.gridSize,ox=Store.config.gridOffsetX,oy=Store.config.gridOffsetY;
@@ -2147,7 +2301,7 @@ const Controller={
       // Epic 6-2: will-change を除去（renderAll内で style.transform もクリア済み）
       if(gEl)gEl.classList.remove('node-dragging');
       Renderer.hideSnapGuides();let mutated=false;
-      if(Store.config.isConnectMode){if(!dragged&&node){if(!Store.config.selectedNodeIdForConnection){Store.config.selectedNodeIdForConnection=node.id;}else{if(Store.config.selectedNodeIdForConnection!==node.id&&!Store.edges.some(e=>e.from===Store.config.selectedNodeIdForConnection&&e.to===node.id)){Store.pushHistory();const newEdge=Store.createEdge(Store.config.selectedNodeIdForConnection,node.id);if(Store.config.autoElbow){const fn=Store.nodes.find(n=>n.id===Store.config.selectedNodeIdForConnection);if(fn){const dx=Math.abs(node.x-fn.x),dy=Math.abs(node.y-fn.y);if(dx>25&&dy>25)newEdge.ext.waypoints=[{x:node.x,y:fn.y}];}}Store.edges.push(newEdge);mutated=true;}Store.config.selectedNodeIdForConnection=null;}}}
+      if(Store.config.isConnectMode){if(!dragged&&node){if(!Store.config.selectedNodeIdForConnection){Store.config.selectedNodeIdForConnection=node.id;}else{if(Store.config.selectedNodeIdForConnection!==node.id&&!Store.edges.some(e=>e.from===Store.config.selectedNodeIdForConnection&&e.to===node.id)){Store.pushHistory();const newEdge=Store.createEdge(Store.config.selectedNodeIdForConnection,node.id);if(Store.config.autoElbow){const fn=Store.nodes.find(n=>n.id===Store.config.selectedNodeIdForConnection);if(fn){const dx=Math.abs(node.x-fn.x),dy=Math.abs(node.y-fn.y);if(dx>25&&dy>25)newEdge.ext.waypoints=[{x:node.x,y:fn.y}];}}Store.edges.push(newEdge);mutated=true;VFX.arcSpark(node.x,node.y,'#007AFF');}Store.config.selectedNodeIdForConnection=null;}}}
 
       else{const tool=Store.config.currentTool;if(!dragged&&node){if(tool===NODE_TYPE.ROTATE){Store.pushHistory();node.rotation=((node.rotation||0)+90)%360;mutated=true;}else if(tool===NODE_TYPE.POINTER&&[NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(node.type)){ValveSelector.open(node);Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};return;}else if(tool===NODE_TYPE.POINTER&&node.type===NODE_TYPE.REDUCER){ReducerSelector.open(node);Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};return;}}
               else if(dragged&&node){if(Store.dragState.preSnapshot)Store.pushSnapshot(Store.dragState.preSnapshot);const deltaX=node.x-Store.dragState.preNodeX,deltaY=node.y-Store.dragState.preNodeY;if(Math.abs(deltaX)>0.5||Math.abs(deltaY)>0.5){Store.edges.forEach(edge=>{if((edge.from===node.id||edge.to===node.id)&&edge.ext.waypoints?.length){edge.ext.waypoints.forEach(wp=>{wp.x+=deltaX;wp.y+=deltaY;});}});}mutated=true;}}
@@ -2219,11 +2373,15 @@ const Controller={
     if(tool===NODE_TYPE.ROTATE)return;
     const raw=Renderer.getMouseSvgCoords(ev),sn=Controller.applySnap(raw.x,raw.y,null);
     Store.pushHistory();Store.nodes.push(Store.createNode(tool,sn.x,sn.y));Simulator.run();Renderer.renderAll();
-    // Feature 7: Kinetic ripple on node placement
-    const _rpl=createNS('circle',{cx:sn.x,cy:sn.y,r:45,fill:'none','stroke-width':2});
+    // REQ-01: Kinetic Shockwave on node placement
+    const _rpl=createNS('circle',{cx:sn.x,cy:sn.y,r:8,fill:'none','stroke-width':2.5});
     _rpl.classList.add('placement-ripple');
     Renderer.overlayLayer.appendChild(_rpl);
-    setTimeout(()=>_rpl.remove(),460);
+    setTimeout(()=>{if(_rpl.parentNode)_rpl.remove();},600);
+    const _rplI=createNS('circle',{cx:sn.x,cy:sn.y,r:8});
+    _rplI.classList.add('placement-ripple-inner');
+    Renderer.overlayLayer.appendChild(_rplI);
+    setTimeout(()=>{if(_rplI.parentNode)_rplI.remove();},380);
     Controller.setTool('pointer');
   },
 
@@ -2266,7 +2424,7 @@ const Controller={
   handleLabelPointerDown:(ev,node,lEl)=>{if(ev.button&&ev.button!==0)return;ev.stopPropagation();if(Store.config.isConnectMode)return;const c=Renderer.getMouseSvgCoords(ev);Store.labelDrag={isDragging:true,hasDragged:false,targetNode:node,gEl:lEl,startX:c.x,startY:c.y,startOffsetX:node.labelOffset.x,startOffsetY:node.labelOffset.y,startClientX:ev.clientX,startClientY:ev.clientY,pointerId:ev.pointerId,preSnapshot:Store.serialize()};try{lEl.setPointerCapture(ev.pointerId);}catch(_){}},
   handleWaypointPointerDown:(ev,edge,idx,wpEl)=>{if(ev.button&&ev.button!==0)return;ev.stopPropagation();Store.waypointDrag={active:true,edge,index:idx,wpEl,pointerId:ev.pointerId,hasDragged:false,startClientX:ev.clientX,startClientY:ev.clientY,preSnapshot:Store.serialize()};try{wpEl.setPointerCapture(ev.pointerId);}catch(_){}},
   handleNodeContextMenu:(ev,node)=>{ev.preventDefault();ev.stopPropagation();Store.pushHistory();Store.nodes=Store.nodes.filter(n=>n.id!==node.id);Store.edges=Store.edges.filter(e=>e.from!==node.id&&e.to!==node.id);Store.selection.delete(node.id);if(Store.config.selectedNodeIdForConnection===node.id)Store.config.selectedNodeIdForConnection=null;Simulator.run();Renderer.renderAll();},
-  handleEdgeContextMenu:(ev,edge)=>{ev.preventDefault();ev.stopPropagation();Store.pushHistory();Store.edges=Store.edges.filter(e=>e.id!==edge.id);Simulator.run();Renderer.renderAll();},
+  handleEdgeContextMenu:(ev,edge)=>{ev.preventDefault();ev.stopPropagation();VFX.purgeSplash(edge);Store.pushHistory();Store.edges=Store.edges.filter(e=>e.id!==edge.id);Simulator.run();Renderer.renderAll();},
   handleEdgeDblClick:(ev,edge)=>{ev.preventDefault();ev.stopPropagation();const coords=Renderer.getMouseSvgCoords(ev);const nF=Store.nodes.find(n=>n.id===edge.from),nT=Store.nodes.find(n=>n.id===edge.to);if(!nF||!nT)return;const wps=edge.ext.waypoints||[],pts=[nF,...wps,nT];let bestSeg=0,bestDist=Infinity;for(let i=0;i<pts.length-1;i++){const d=distPtSeg(coords,pts[i],pts[i+1]);if(d<bestDist){bestDist=d;bestSeg=i;}}Store.pushHistory();wps.splice(bestSeg,0,{x:coords.x,y:coords.y});edge.ext.waypoints=wps;Renderer.renderAll();},
 
   saveData: () => {
@@ -2365,6 +2523,8 @@ const Controller={
                 Controller.setZoom(d.savedZoom || 1.0);
                 Simulator.run();
                 Renderer.renderAll();
+                // REQ-05: Hologram build-up on data load
+                requestAnimationFrame(()=>requestAnimationFrame(()=>VFX.holoBuildup()));
 
                 // 🌟🌟🌟 追加：PDFクリア機能 🌟🌟🌟
                 const pdfCanvas = document.getElementById('pdf-canvas');
@@ -2398,6 +2558,131 @@ const Controller={
 
   clearData:()=>{if(!confirm('全削除しますか？'))return;Store.pushHistory();Store.nodes=[];Store.edges=[];Store.selection.clear();Store.config.selectedNodeIdForConnection=null;document.getElementById('pdf-canvas').style.display='none';document.getElementById('pdf-upload').value='';Simulator.run();Renderer.renderAll();},
   handlePdfUpload:(ev)=>{const file=ev.target.files[0];if(!file||file.type!=='application/pdf')return;const fr=new FileReader();fr.onload=function(){pdfjsLib.getDocument(new Uint8Array(this.result)).promise.then(pdf=>pdf.getPage(1)).then(page=>{const sc=parseFloat(document.getElementById('pdfScale').value)||1.5;const vp=page.getViewport({scale:sc});const canvas=document.getElementById('pdf-canvas');Store.config.baseWidth=vp.width;Store.config.baseHeight=vp.height;canvas.width=vp.width;canvas.height=vp.height;canvas.style.display='block';page.render({canvasContext:canvas.getContext('2d'),viewport:vp});Controller.setZoom(Store.config.currentZoom);}).catch(()=>alert('PDF展開エラー'));};fr.readAsArrayBuffer(file);}
+};
+
+/* ━━━━━━━━ VFX (REQ-01~07) ━━━━━━━━ */
+const VFX={
+  _tooltipEl:null,_tooltipHideTimer:null,
+
+  // REQ-03: Arc Discharge Sparks
+  arcSpark:(svgX,svgY,color='#007AFF')=>{
+    if(!Renderer.overlayLayer)return;
+    const COUNT=12,BASE_DIST=35,SPREAD=55;
+    for(let i=0;i<COUNT;i++){
+      const angle=(i/COUNT)*Math.PI*2+(Math.random()-.5)*.5;
+      const dist=BASE_DIST+Math.random()*SPREAD;
+      const dx=Math.cos(angle)*dist;
+      const dy=Math.sin(angle)*dist;
+      const r=1.2+Math.random()*2.2;
+      const spark=createNS('circle',{cx:svgX,cy:svgY,r,fill:color});
+      spark.classList.add('vfx-spark');
+      Renderer.overlayLayer.appendChild(spark);
+      spark.animate(
+        [{transform:'translate(0px,0px)',opacity:.95},{transform:`translate(${dx}px,${dy}px)`,opacity:0}],
+        {duration:380+Math.random()*220,easing:'ease-out',fill:'forwards'}
+      );
+      const ms=620;setTimeout(()=>{if(spark.parentNode)spark.remove();},ms);
+    }
+  },
+
+  // REQ-04: Purge Splash
+  purgeSplash:(edge)=>{
+    if(!Renderer.overlayLayer)return;
+    const nF=Store.nodes.find(n=>n.id===edge.from),nT=Store.nodes.find(n=>n.id===edge.to);
+    if(!nF||!nT)return;
+    const fluid=Math.max(edge._sim.f,edge._sim.b||0);
+    if(fluid===FLUID.EMPTY)return;
+    const colorMap={[FLUID.STEAM]:'#FF3B30',[FLUID.WATER]:'#007AFF',[FLUID.DRAIN]:'#AF52DE'};
+    const color=colorMap[fluid]||'#8E8E93';
+    // Midpoint via waypoints
+    const wps=edge.ext.waypoints||[];
+    const allPts=[nF,...wps,nT];
+    const midIdx=Math.floor((allPts.length-1)/2);
+    const pA=allPts[midIdx],pB=allPts[midIdx+1]||allPts[midIdx];
+    const mx=(pA.x+pB.x)/2,my=(pA.y+pB.y)/2;
+    VFX.arcSpark(mx,my,color);
+    // Extra scale splash bubble
+    const bubble=createNS('circle',{cx:mx,cy:my,r:6,fill:color,'fill-opacity':'.18',stroke:color,'stroke-width':'1.5'});
+    bubble.classList.add('vfx-spark');
+    Renderer.overlayLayer.appendChild(bubble);
+    bubble.animate(
+      [{transform:'scale(1)',opacity:.7},{transform:'scale(5)',opacity:0}],
+      {duration:400,easing:'ease-out',fill:'forwards',transformOrigin:`${mx}px ${my}px`}
+    );
+    setTimeout(()=>{if(bubble.parentNode)bubble.remove();},450);
+  },
+
+  // REQ-05: Hologram Buildup
+  holoBuildup:()=>{
+    const svg=document.getElementById('svg-layer');
+    if(!svg)return;
+    svg.classList.add('booting');
+    // Stagger node animations
+    const nodeGs=svg.querySelectorAll('g.node');
+    nodeGs.forEach((g,i)=>{g.style.animationDelay=`${i*40}ms`;});
+    const edgeGs=svg.querySelectorAll('g.edge-grp');
+    edgeGs.forEach((g,i)=>{
+      const ep=g.querySelector('.edge-path');
+      const fb=g.querySelector('.flow-base');
+      const delay=`${100+i*30}ms`;
+      if(ep)ep.style.animationDelay=delay;
+      if(fb)fb.style.animationDelay=delay;
+    });
+    setTimeout(()=>{
+      svg.classList.remove('booting');
+      nodeGs.forEach(g=>{g.style.animationDelay='';});
+      edgeGs.forEach(g=>{
+        const ep=g.querySelector('.edge-path');
+        const fb=g.querySelector('.flow-base');
+        if(ep){ep.style.animationDelay='';ep.style.strokeDasharray='';ep.style.strokeDashoffset='';}
+        if(fb){fb.style.animationDelay='';fb.style.strokeDasharray='';fb.style.strokeDashoffset='';}
+      });
+    },2500);
+  },
+
+  // REQ-06: Tooltip show/hide
+  _tooltipBound:new WeakSet(),
+  showTooltip:(label,typeName,screenX,screenY)=>{
+    if(!VFX._tooltipEl)VFX._tooltipEl=document.getElementById('holo-tooltip');
+    const el=VFX._tooltipEl;if(!el)return;
+    clearTimeout(VFX._tooltipHideTimer);
+    document.getElementById('holo-tooltip-name').textContent=label;
+    el.querySelector('.holo-tag').textContent=typeName||'NODE';
+    el.classList.remove('visible');
+    // Force reflow to restart clip-path animation
+    void el.offsetWidth;
+    const W=window.innerWidth,H=window.innerHeight;
+    let lx=screenX+14,ly=screenY-10;
+    if(lx+220>W)lx=screenX-224;
+    if(ly+60>H)ly=screenY-70;
+    el.style.left=`${lx}px`;el.style.top=`${ly}px`;
+    el.classList.add('visible');
+  },
+  hideTooltip:()=>{
+    VFX._tooltipHideTimer=setTimeout(()=>{
+      const el=document.getElementById('holo-tooltip');
+      if(el)el.classList.remove('visible');
+    },80);
+  },
+  bindNodeTooltip:(g,dispName,typeName)=>{
+    g.setAttribute('data-vfx-label',dispName);
+    g.setAttribute('data-vfx-type',typeName);
+    if(!VFX._tooltipBound.has(g)){
+      VFX._tooltipBound.add(g);
+      g.addEventListener('pointerenter',(ev)=>{
+        const id=ev.currentTarget.getAttribute('data-id');
+        const node=Store.nodes.find(n=>n.id===id);
+        if(!node)return;
+        const lbl=ev.currentTarget.getAttribute('data-vfx-label')||'';
+        const typ=ev.currentTarget.getAttribute('data-vfx-type')||'';
+        const r=Renderer.svgLayer.getBoundingClientRect();
+        const sx=node.x*Store.config.currentZoom+r.left;
+        const sy=node.y*Store.config.currentZoom+r.top;
+        VFX.showTooltip(lbl,typ,sx,sy);
+      });
+      g.addEventListener('pointerleave',VFX.hideTooltip);
+    }
+  }
 };
 
 // Epic 8: Simulator は SimulatorCore を使う Pure Function 設計に再構築済み。

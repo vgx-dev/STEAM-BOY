@@ -1708,6 +1708,126 @@ const SealedDetector={
         }
       }
     });
+
+    // Step 5: 密閉空間内の残留伝播（圧力均一化）
+    // 流量ゼロのエッジを密閉連結成分に分割し、成分内で残圧・残液を伝播させる。
+    // 物理: 密閉された気体は接続された全容積に膨張して圧力が均一化する。
+    {
+      const edgeMap=Store.edgeMap();
+      const edgeVisited=new Set();
+      const components=[];
+
+      // 5-1: 流量ゼロエッジの密閉連結成分を構築（無向BFS）
+      // 壁ルールは Step 2/3 と同一: TRAP、閉止の VALVE/SAFETY で探索停止
+      // ただしエッジは壁ノードに「接する」までは成分に含む
+      Store.edges.forEach(se=>{
+        if(se._sim.f>0||(se._sim.b&&se._sim.b>0))return;
+        if(edgeVisited.has(se.id))return;
+        const comp={edges:new Set()};
+        edgeVisited.add(se.id);
+        comp.edges.add(se.id);
+        const nodeVis=new Set();
+        const q=[];
+        [se.from,se.to].forEach(nid=>{
+          if(nodeVis.has(nid))return;
+          nodeVis.add(nid);
+          const nd=nodeMap.get(nid);
+          if(!nd)return;
+          if(nd.type===NODE_TYPE.TRAP)return;
+          if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(nd.type)&&nd.state.valveState===VALVE_STATE.CLOSED)return;
+          q.push(nid);
+        });
+        while(q.length){
+          const nid=q.shift();
+          (edgesByNode.get(nid)||EMPTY_EDGES).forEach(e=>{
+            if(edgeVisited.has(e.id))return;
+            if(e._sim.f>0||(e._sim.b&&e._sim.b>0))return;
+            edgeVisited.add(e.id);
+            comp.edges.add(e.id);
+            const other=(e.from===nid)?e.to:e.from;
+            if(nodeVis.has(other))return;
+            nodeVis.add(other);
+            const on=nodeMap.get(other);
+            if(!on)return;
+            if(on.type===NODE_TYPE.TRAP)return;
+            if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(on.type)&&on.state.valveState===VALVE_STATE.CLOSED)return;
+            q.push(other);
+          });
+        }
+        if(comp.edges.size>0)components.push(comp);
+      });
+
+      // 5-3（液体を先に伝播）: 液体（残液）の下方向伝播 — 重力に従い非上昇方向のみ
+      // 液体エッジの両端ノードから成分内BFS。上り方向には波及しない（物理的に正しい）。
+      components.forEach(comp=>{
+        const liquidSources=[];
+        comp.edges.forEach(eid=>{
+          const e=edgeMap.get(eid);
+          if(e&&e.ext.hasResidual&&(e.ext.residualType===FLUID.WATER||e.ext.residualType===FLUID.DRAIN)){
+            liquidSources.push(e);
+          }
+        });
+        if(!liquidSources.length)return;
+        const liqVis=new Set(liquidSources.map(e=>e.id));
+        const lq=[];
+        liquidSources.forEach(e=>{
+          [e.from,e.to].forEach(nid=>{
+            const nd=nodeMap.get(nid);
+            if(!nd)return;
+            if(nd.type===NODE_TYPE.TRAP)return;
+            if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(nd.type)&&nd.state.valveState===VALVE_STATE.CLOSED)return;
+            lq.push({nodeId:nid,srcFluid:e.ext.residualType});
+          });
+        });
+        while(lq.length){
+          const{nodeId,srcFluid}=lq.shift();
+          (edgesByNode.get(nodeId)||EMPTY_EDGES).forEach(e=>{
+            if(!comp.edges.has(e.id))return;
+            if(liqVis.has(e.id))return;
+            if(liquidDrainableSet.has(e.id))return;
+            // 勾配チェック: nodeIdから離れる方向に下っているか（Step 3 と同一ロジック）
+            const isOut=(e.from===nodeId);
+            const sn=nodeMap.get(nodeId),en=nodeMap.get(isOut?e.to:e.from);
+            if(!sn||!en)return;
+            const wps=e.ext.waypoints||[],wl=wps.length;
+            let prevY=sn.y,canGo=true;
+            if(isOut){for(let i=0;i<wl;i++){if(wps[i].y<prevY-5){canGo=false;break;}prevY=wps[i].y;}}
+            else{for(let i=wl-1;i>=0;i--){if(wps[i].y<prevY-5){canGo=false;break;}prevY=wps[i].y;}}
+            if(canGo&&en.y<prevY-5)canGo=false;
+            if(!canGo)return;
+            liqVis.add(e.id);
+            e.ext.hasResidual=true;e.ext.residualType=srcFluid;
+            if(!e._anim)e._anim={};
+            e._anim.sealed=false;
+            // 次のノードが壁でなければ探索継続
+            if(en.type===NODE_TYPE.TRAP)return;
+            if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(en.type)&&en.state.valveState===VALVE_STATE.CLOSED)return;
+            lq.push({nodeId:isOut?e.to:e.from,srcFluid});
+          });
+        }
+      });
+
+      // 5-2: 蒸気（残圧）の全方位伝播 — 圧力均一化
+      // 成分内に残圧(STEAM)があり排出口がなければ、液体残留以外の全エッジに蒸気を充填。
+      // 5-3 で液体伝播済みのため、液体エッジは自然にスキップされる（5-4 混在処理）。
+      components.forEach(comp=>{
+        let hasSteam=false,isDrainable=false;
+        comp.edges.forEach(eid=>{
+          const e=edgeMap.get(eid);if(!e)return;
+          if(e.ext.hasResidual&&e.ext.residualType===FLUID.STEAM)hasSteam=true;
+          if(steamDrainableSet.has(eid))isDrainable=true;
+        });
+        if(!hasSteam||isDrainable)return;
+        comp.edges.forEach(eid=>{
+          const e=edgeMap.get(eid);if(!e)return;
+          // 既に液体残留があるエッジはスキップ（液体表示を維持）
+          if(e.ext.hasResidual&&(e.ext.residualType===FLUID.WATER||e.ext.residualType===FLUID.DRAIN))return;
+          e.ext.hasResidual=true;e.ext.residualType=FLUID.STEAM;
+          if(!e._anim)e._anim={};
+          e._anim.sealed=Store.config.showSealedAnim;
+        });
+      });
+    }
   }
 };
 

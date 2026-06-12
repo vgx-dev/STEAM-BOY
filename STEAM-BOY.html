@@ -622,24 +622,6 @@ g.node[data-active="1"] {
 }
 .mt-url-input:focus, .mt-name-input:focus { border-color: var(--accent); }
 .mt-name-input { font-weight: 600; }
-.mt-thumb-wrap { width: 44px; height: 34px; position: relative; }
-.mt-thumb {
-  width: 44px; height: 34px;
-  object-fit: cover;
-  border-radius: 5px;
-  display: block;
-  background: rgba(0,0,0,0.04);
-}
-.mt-thumb-placeholder {
-  width: 44px; height: 34px;
-  border-radius: 5px;
-  background: rgba(0,0,0,0.06);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  color: var(--text-3);
-}
 .mt-empty {
   text-align: center; padding: 28px;
   color: var(--text-3); font-size: 13px;
@@ -1026,7 +1008,6 @@ g.node[data-active="1"] {
           <th style="width:90px;">ID / 種別</th>
           <th>名前</th>
           <th>画像URL</th>
-          <th style="width:60px;">プレビュー</th>
         </tr>
       </thead>
       <tbody id="mt-tbody"></tbody>
@@ -2788,14 +2769,14 @@ const ImageViewer = {
 
 /* ━━━━━━━━ MASTER TABLE ━━━━━━━━ */
 const MasterTable = {
-  _filterText: '',
+  _nodeMap: null,
   _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX, NODE_TYPE.SOURCE],
   _LABELS: { valve: 'バルブ', safety: '安全弁', reducer: '減圧弁', trap: 'トラップ', drain: 'ドレン', heatex: '熱交換器', source: 'Source' },
 
   open: () => {
+    MasterTable._nodeMap = new Map(Store.nodes.map(n => [n.id, n]));
     document.getElementById('master-table-overlay').classList.add('open');
     document.getElementById('master-table-modal').classList.add('open');
-    MasterTable._filterText = '';
     document.getElementById('mt-search').value = '';
     MasterTable.render();
     document.getElementById('mt-search').focus();
@@ -2822,34 +2803,25 @@ const MasterTable = {
 
   render: () => {
     const all = MasterTable._collectNodes();
-    const q = MasterTable._filterText.toLowerCase();
-    const filtered = q
-      ? all.filter(item => item.node.id.toLowerCase().includes(q) || item.name.toLowerCase().includes(q))
-      : all;
-
     const tbody = document.getElementById('mt-tbody');
     const empty = document.getElementById('mt-empty');
 
-    if (!filtered.length) {
+    if (!all.length) {
       tbody.innerHTML = '';
       empty.style.display = 'block';
       return;
     }
     empty.style.display = 'none';
 
-    tbody.innerHTML = filtered.map(({ node, name, typeLabel }) => {
+    tbody.innerHTML = all.map(({ node, name, typeLabel }) => {
       const url = node.ext.imageUrl || '';
       const shortId = node.id.slice(-6);
       const escapedUrl = url.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-      const thumbHtml = url
-        ? `<img class="mt-thumb" src="${escapedUrl}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="mt-thumb-placeholder" style="display:none;font-size:8px;">ERR</div>`
-        : `<div class="mt-thumb-placeholder">—</div>`;
       const escapedName = name.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-      return `<tr data-id="${node.id}">
+      return `<tr data-id="${node.id}" data-search="${(node.id + ' ' + name).toLowerCase()}">
         <td style="font-size:10px;color:var(--text-3);font-variant-numeric:tabular-nums;">${shortId}<br><span class="mt-type-badge">${typeLabel}</span></td>
         <td><input type="text" class="mt-name-input" data-node-id="${node.id}" value="${escapedName}" placeholder="名前を入力..."></td>
         <td><input type="text" class="mt-url-input" data-node-id="${node.id}" placeholder="https://..." value="${escapedUrl}"></td>
-        <td><div class="mt-thumb-wrap">${thumbHtml}</div></td>
       </tr>`;
     }).join('');
   },
@@ -2859,38 +2831,44 @@ const MasterTable = {
     document.getElementById('mt-close').addEventListener('click', MasterTable.close);
     document.getElementById('master-table-overlay').addEventListener('click', MasterTable.close);
 
-    // リアルタイムフィルター
+    // CSSベースリアルタイムフィルター（DOM再構築なし）
     document.getElementById('mt-search').addEventListener('input', (ev) => {
-      MasterTable._filterText = ev.target.value;
-      MasterTable.render();
+      const q = ev.target.value.toLowerCase();
+      const tbody = document.getElementById('mt-tbody');
+      let visible = 0;
+      tbody.querySelectorAll('tr').forEach(tr => {
+        const show = !q || tr.dataset.search.includes(q);
+        tr.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      document.getElementById('mt-empty').style.display = visible ? 'none' : 'block';
     });
 
-    // 名前入力 — イベントデリゲーション (change イベント)
+    // 名前・URL入力 — イベントデリゲーション (change イベント)
     document.getElementById('mt-tbody').addEventListener('change', (ev) => {
-      if (!ev.target.classList.contains('mt-name-input')) return;
       const nodeId = ev.target.dataset.nodeId;
-      const node = Store.nodes.find(n => n.id === nodeId);
+      if (!nodeId) return;
+      const node = MasterTable._nodeMap.get(nodeId);
       if (!node) return;
-      const newName = ev.target.value.trim();
-      Store.pushHistory();
-      if (newName) node.ext.customName = newName;
-      else delete node.ext.customName;
-      Renderer.renderAll();
-      MasterTable.render();
-    });
 
-    // URL入力 — イベントデリゲーション (change イベント)
-    document.getElementById('mt-tbody').addEventListener('change', (ev) => {
-      if (!ev.target.classList.contains('mt-url-input')) return;
-      const nodeId = ev.target.dataset.nodeId;
-      const node = Store.nodes.find(n => n.id === nodeId);
-      if (!node) return;
-      const parsed = parseSharePointUrl(ev.target.value);
-      ev.target.value = parsed;
-      Store.pushHistory();
-      if (parsed) node.ext.imageUrl = parsed;
-      else delete node.ext.imageUrl;
-      MasterTable.render();
+      if (ev.target.classList.contains('mt-name-input')) {
+        const newName = ev.target.value.trim();
+        Store.pushHistory();
+        if (newName) node.ext.customName = newName;
+        else delete node.ext.customName;
+        const tr = ev.target.closest('tr');
+        if (tr) tr.dataset.search = (node.id + ' ' + ev.target.value).toLowerCase();
+        Renderer.renderAll();
+        return;
+      }
+
+      if (ev.target.classList.contains('mt-url-input')) {
+        const parsed = parseSharePointUrl(ev.target.value);
+        ev.target.value = parsed;
+        Store.pushHistory();
+        if (parsed) node.ext.imageUrl = parsed;
+        else delete node.ext.imageUrl;
+      }
     });
 
     // Escキーでモーダルを閉じる

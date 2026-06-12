@@ -607,7 +607,7 @@ g.node[data-active="1"] {
   border-bottom: 1px solid rgba(0,0,0,0.04);
 }
 .mt-table tbody tr:hover td { background: rgba(0,122,255,0.03); }
-.mt-url-input {
+.mt-url-input, .mt-name-input {
   width: 100%;
   padding: 5px 8px;
   border: 1px solid rgba(0,0,0,0.1);
@@ -620,7 +620,8 @@ g.node[data-active="1"] {
   user-select: auto;
   -webkit-user-select: auto;
 }
-.mt-url-input:focus { border-color: var(--accent); }
+.mt-url-input:focus, .mt-name-input:focus { border-color: var(--accent); }
+.mt-name-input { font-weight: 600; }
 .mt-thumb-wrap { width: 44px; height: 34px; position: relative; }
 .mt-thumb {
   width: 44px; height: 34px;
@@ -2712,7 +2713,7 @@ const parseSharePointUrl = (rawUrl) => {
 
 /* ━━━━━━━━ IMAGE VIEWER ━━━━━━━━ */
 const ImageViewer = {
-  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX],
+  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX, NODE_TYPE.SOURCE],
 
   init: () => {
     // ドラッグ (Store.matrixDrag 機構を流用)
@@ -2788,8 +2789,8 @@ const ImageViewer = {
 /* ━━━━━━━━ MASTER TABLE ━━━━━━━━ */
 const MasterTable = {
   _filterText: '',
-  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX],
-  _LABELS: { valve: 'バルブ', safety: '安全弁', reducer: '減圧弁', trap: 'トラップ', drain: 'ドレン', heatex: '熱交換器' },
+  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX, NODE_TYPE.SOURCE],
+  _LABELS: { valve: 'バルブ', safety: '安全弁', reducer: '減圧弁', trap: 'トラップ', drain: 'ドレン', heatex: '熱交換器', source: 'Source' },
 
   open: () => {
     document.getElementById('master-table-overlay').classList.add('open');
@@ -2843,9 +2844,10 @@ const MasterTable = {
       const thumbHtml = url
         ? `<img class="mt-thumb" src="${escapedUrl}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="mt-thumb-placeholder" style="display:none;font-size:8px;">ERR</div>`
         : `<div class="mt-thumb-placeholder">—</div>`;
+      const escapedName = name.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
       return `<tr data-id="${node.id}">
         <td style="font-size:10px;color:var(--text-3);font-variant-numeric:tabular-nums;">${shortId}<br><span class="mt-type-badge">${typeLabel}</span></td>
-        <td style="font-weight:600;font-size:12px;">${name}</td>
+        <td><input type="text" class="mt-name-input" data-node-id="${node.id}" value="${escapedName}" placeholder="名前を入力..."></td>
         <td><input type="text" class="mt-url-input" data-node-id="${node.id}" placeholder="https://..." value="${escapedUrl}"></td>
         <td><div class="mt-thumb-wrap">${thumbHtml}</div></td>
       </tr>`;
@@ -2860,6 +2862,20 @@ const MasterTable = {
     // リアルタイムフィルター
     document.getElementById('mt-search').addEventListener('input', (ev) => {
       MasterTable._filterText = ev.target.value;
+      MasterTable.render();
+    });
+
+    // 名前入力 — イベントデリゲーション (change イベント)
+    document.getElementById('mt-tbody').addEventListener('change', (ev) => {
+      if (!ev.target.classList.contains('mt-name-input')) return;
+      const nodeId = ev.target.dataset.nodeId;
+      const node = Store.nodes.find(n => n.id === nodeId);
+      if (!node) return;
+      const newName = ev.target.value.trim();
+      Store.pushHistory();
+      if (newName) node.ext.customName = newName;
+      else delete node.ext.customName;
+      Renderer.renderAll();
       MasterTable.render();
     });
 

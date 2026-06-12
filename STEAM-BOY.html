@@ -2712,7 +2712,7 @@ const parseSharePointUrl = (rawUrl) => {
 
 /* ━━━━━━━━ IMAGE VIEWER ━━━━━━━━ */
 const ImageViewer = {
-  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER],
+  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX],
 
   init: () => {
     // ドラッグ (Store.matrixDrag 機構を流用)
@@ -2788,8 +2788,8 @@ const ImageViewer = {
 /* ━━━━━━━━ MASTER TABLE ━━━━━━━━ */
 const MasterTable = {
   _filterText: '',
-  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER],
-  _LABELS: { valve: 'バルブ', safety: '安全弁', reducer: '減圧弁' },
+  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX],
+  _LABELS: { valve: 'バルブ', safety: '安全弁', reducer: '減圧弁', trap: 'トラップ', drain: 'ドレン', heatex: '熱交換器' },
 
   open: () => {
     document.getElementById('master-table-overlay').classList.add('open');

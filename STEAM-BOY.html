@@ -1054,6 +1054,55 @@ g.node[data-active="1"] {
 .onb-btn.ghost{background:rgba(0,0,0,0.05);color:var(--text-2);}
 .onb-btn.ghost:hover{background:rgba(0,0,0,0.09);}
 @keyframes onbPop{from{opacity:0;transform:scale(.9) translateY(10px);}to{opacity:1;transform:none;}}
+
+/* ── Phase 2: What-if 警告（ValveSelector内） ── */
+.vs-warn{padding:7px 9px;background:rgba(255,255,255,0.97);border:1px solid rgba(255,59,48,0.32);border-radius:9px;font-size:10.5px;line-height:1.45;color:var(--red);font-weight:600;display:none;box-shadow:0 8px 22px rgba(0,0,0,0.16);}
+.vs-warn.show{display:block;}
+.vs-warn strong{display:block;margin-bottom:2px;font-size:11px;}
+.vs-opt.vs-danger::after{content:'⚠';position:absolute;top:2px;right:3px;font-size:10px;}
+
+/* ── Phase 2: 隔離計画（Isolation Plan） ── */
+#iso-plan-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.12);z-index:500;display:none;}
+#iso-plan-overlay.open{display:block;}
+#iso-plan-modal{position:fixed;top:48%;left:50%;transform:translate(-50%,-50%);width:min(92vw,560px);max-height:82vh;z-index:501;border-radius:16px;display:none;flex-direction:column;}
+#iso-plan-modal.open{display:flex;}
+.iso-head{padding:16px 20px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(0,0,0,0.07);flex-shrink:0;}
+.iso-head-icon{font-size:18px;}
+.iso-head-title{font-size:15px;font-weight:700;flex:1;}
+.iso-close-x{width:26px;height:26px;border:none;background:rgba(0,0,0,0.06);border-radius:50%;font-size:12px;cursor:pointer;color:var(--text-2);display:flex;align-items:center;justify-content:center;transition:background .15s;}
+.iso-close-x:hover{background:rgba(0,0,0,0.12);}
+.iso-body{padding:16px 20px;overflow-y:auto;min-height:0;}
+.iso-summary{font-size:13px;line-height:1.6;color:var(--text-1);margin-bottom:12px;}
+.iso-summary strong{color:var(--accent);}
+.iso-warn{padding:10px 12px;background:rgba(255,149,0,0.1);border-left:3px solid var(--orange);border-radius:0 8px 8px 0;font-size:12px;font-weight:600;color:#9a5b00;margin-bottom:14px;line-height:1.5;}
+.iso-table{width:100%;border-collapse:collapse;font-size:13px;}
+.iso-table th{text-align:left;font-size:10px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.08);}
+.iso-table td{padding:8px 8px;border-bottom:1px solid rgba(0,0,0,0.05);vertical-align:middle;}
+.iso-num{font-weight:700;color:var(--text-3);width:24px;text-align:center;font-variant-numeric:tabular-nums;}
+.iso-vname{font-weight:600;}
+.iso-table tr.iso-done .iso-vname{color:var(--text-3);text-decoration:line-through;}
+.iso-live{display:inline-block;margin-left:4px;padding:1px 6px;border-radius:8px;background:rgba(255,149,0,0.15);color:var(--orange);font-size:10px;font-weight:700;}
+.iso-idle{display:inline-block;margin-left:4px;padding:1px 6px;border-radius:8px;background:rgba(0,0,0,0.05);color:var(--text-3);font-size:10px;font-weight:700;}
+.iso-check{width:16px;height:16px;cursor:pointer;}
+.iso-empty{text-align:center;padding:24px;color:var(--text-3);font-size:13px;line-height:1.7;}
+.iso-foot{padding:12px 20px 16px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid rgba(0,0,0,0.06);flex-shrink:0;flex-wrap:wrap;}
+.iso-btn{padding:9px 18px;border-radius:10px;font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;border:none;transition:all .15s;}
+.iso-btn.primary{background:var(--red);color:#fff;box-shadow:0 4px 14px rgba(255,59,48,0.28);}
+.iso-btn.primary:hover{background:#e0321f;transform:translateY(-1px);}
+.iso-btn.primary:disabled{background:rgba(0,0,0,0.12);color:var(--text-3);box-shadow:none;cursor:default;transform:none;}
+.iso-btn.ghost{background:rgba(0,0,0,0.05);color:var(--text-1);}
+.iso-btn.ghost:hover{background:rgba(0,0,0,0.09);}
+g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
+@keyframes isoBoundaryPulse{0%,100%{filter:drop-shadow(0 0 2px rgba(255,59,48,.65));}50%{filter:drop-shadow(0 0 8px rgba(255,59,48,.95));}}
+
+/* 印刷時は隔離計画チェックリストのみを出力 */
+@media print{
+  body > *:not(#iso-plan-modal){visibility:hidden!important;}
+  #iso-plan-overlay{display:none!important;}
+  #iso-plan-modal{position:absolute!important;left:0!important;top:0!important;transform:none!important;width:100%!important;max-height:none!important;box-shadow:none!important;background:#fff!important;border:none!important;}
+  #iso-plan-modal *{visibility:visible!important;}
+  .iso-no-print{display:none!important;}
+}
 </style>
 
 <script>
@@ -2129,7 +2178,31 @@ const Renderer={
 
 /* ━━━━━━━━ VALVE SELECTOR ━━━━━━━━ */
 const ValveSelector={
-  _el:null,_node:null,_ghosts:[],_outsideHandler:null,
+  _el:null,_node:null,_ghosts:[],_outsideHandler:null,_warnEl:null,_dangers:null,
+  // Phase 2: What-if — ある弁状態に変更した場合に発生する DANGER を副作用なしで算出
+  _computeDangersFor:(node,targetState)=>{
+    if(targetState===node.state.valveState)return Store.anomalies.filter(a=>a.type==='danger').map(a=>a.msg);
+    const saved=node.state.valveState;
+    const sn=new Map(Store.nodes.map(n=>[n.id,{...n._sim}]));
+    const se=new Map(Store.edges.map(e=>[e.id,{...e._sim}]));
+    const sa=Store.anomalies;
+    node.state.valveState=targetState;
+    Simulator._baseRun();
+    Anomaly.detect();
+    const ds=Store.anomalies.filter(a=>a.type==='danger').map(a=>a.msg);
+    node.state.valveState=saved;
+    Store.nodes.forEach(n=>{const s=sn.get(n.id);if(s)Object.assign(n._sim,s);});
+    Store.edges.forEach(e=>{const s=se.get(e.id);if(s)Object.assign(e._sim,s);});
+    Store.anomalies=sa;
+    return ds;
+  },
+  _showWarn:(s)=>{
+    const w=ValveSelector._warnEl;if(!w)return;
+    const ds=ValveSelector._dangers&&ValveSelector._dangers.get(s);
+    if(ds&&ds.length){w.innerHTML='<strong>⚠ 操作前の警告</strong>'+ds.map(m=>m.replace(/^DANGER:\s*/,'')).join('<br>');w.classList.add('show');}
+    else ValveSelector._hideWarn();
+  },
+  _hideWarn:()=>{if(ValveSelector._warnEl)ValveSelector._warnEl.classList.remove('show');},
   _svgIcon:(state)=>{
     const c=['#FF3B30','#FF9500','#34C759'][state];
     if(state===0)return`<svg class="vs-svg" viewBox="-22 -15 44 30"><polygon points="-10,-8 -10,8 0,0" fill="${c}"/><polygon points="10,-8 10,8 0,0" fill="${c}"/><line x1="-13" y1="0" x2="13" y2="0" stroke="${c}" stroke-width="2.8" stroke-linecap="round"/></svg>`;
@@ -2145,13 +2218,19 @@ const ValveSelector={
     el.id='valve-selector';el.className='glass vs-pop';el.setAttribute('role','menu');
     const labels = node.type===NODE_TYPE.SAFETY ? ['静止','','動作'] : ['閉止','微開','開放'];
     const options = node.type===NODE_TYPE.SAFETY ? [0,2] : [0,1,2];
+    // Phase 2: 各候補状態が新たに引き起こす危険を事前計算（現状の危険は除外）
+    const _curDanger=new Set(Store.anomalies.filter(a=>a.type==='danger').map(a=>a.msg));
+    ValveSelector._dangers=new Map();
     options.forEach(s=>{
       const opt=document.createElement('div');
       opt.className=`vs-opt vs-${s}${node.state.valveState===s?' vs-cur':''}`;
       opt.setAttribute('role','menuitem');opt.tabIndex=0;
       opt.innerHTML=`${ValveSelector._svgIcon(s)}<span class="vs-lbl">${labels[s]}</span>${node.state.valveState===s?'<span class="vs-dot">●</span>':''}`;
-      opt.addEventListener('mouseenter',()=>ValveSelector._preview(s));
-      opt.addEventListener('mouseleave',()=>ValveSelector._clearGhosts());
+      const _nd=ValveSelector._computeDangersFor(node,s).filter(m=>!_curDanger.has(m));
+      ValveSelector._dangers.set(s,_nd);
+      if(_nd.length)opt.classList.add('vs-danger');
+      opt.addEventListener('mouseenter',()=>{ValveSelector._preview(s);ValveSelector._showWarn(s);});
+      opt.addEventListener('mouseleave',()=>{ValveSelector._clearGhosts();ValveSelector._hideWarn();});
       opt.addEventListener('click',()=>ValveSelector._confirm(s));
       opt.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();ValveSelector._confirm(s);}});
       el.appendChild(opt);
@@ -2193,6 +2272,14 @@ const ValveSelector={
     checkWrap.appendChild(cb);
     checkWrap.appendChild(document.createTextNode('マトリクスに表示しない'));
     el.appendChild(checkWrap);
+
+    // Phase 2: What-if 警告バー（フロー外の絶対配置でポップアップ直下に表示）
+    const _warn=document.createElement('div');
+    _warn.className='vs-warn';
+    _warn.style.cssText='position:absolute;top:100%;left:0;right:0;margin-top:6px;';
+    el.appendChild(_warn);
+    ValveSelector._warnEl=_warn;
+
     el.style.cssText=`left:${pos.x}px;top:${pos.y+22}px;transform:translateX(-50%)`;
     document.body.appendChild(el);ValveSelector._el=el;
     requestAnimationFrame(()=>{
@@ -2235,6 +2322,8 @@ const ValveSelector={
   _clearGhosts:()=>{ValveSelector._ghosts.forEach(g=>g.remove());ValveSelector._ghosts=[];},
   _confirm:(targetState)=>{
     const node=ValveSelector._node;if(!node)return;
+    // Phase 2: 適用前に算出済みの新規危険を退避（close でメニュー状態がクリアされるため）
+    const _dz=(ValveSelector._dangers&&ValveSelector._dangers.get(targetState))||[];
     ValveSelector.close();
     if(targetState===node.state.valveState)return;
     const prevStates=new Map(Store.edges.map(e=>[e.id,{f:e._sim.f,b:e._sim.b||0}]));
@@ -2243,7 +2332,11 @@ const ValveSelector={
     Simulator.run();
     Animator.prepare(node,prevStates);
     Renderer.renderAll();
-    
+    // Phase 2: 危険を伴う操作は適用後に赤いトーストで明示（元に戻す付き）
+    if(_dz.length){
+      Toast.show('⚠ '+_dz[0].replace(/^DANGER:\s*/,'')+(_dz.length>1?` 他${_dz.length-1}件`:''),{actionLabel:'元に戻す',onAction:Controller.undo,duration:8000});
+    }
+
     // ライフサイクルの分離: 差分DOMの更新がブラウザに描画された直後にアニメーションを発火
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -2254,7 +2347,7 @@ const ValveSelector={
   close:()=>{
     ValveSelector._clearGhosts();
     if(ValveSelector._el){ValveSelector._el.remove();ValveSelector._el=null;}
-    ValveSelector._node=null;
+    ValveSelector._node=null;ValveSelector._warnEl=null;ValveSelector._dangers=null;
     if(ValveSelector._outsideHandler){document.removeEventListener('pointerdown',ValveSelector._outsideHandler,{capture:true});ValveSelector._outsideHandler=null;}
   }
 };
@@ -2515,7 +2608,7 @@ const Controller={
       if(['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;
       if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault();Controller.undo();return;}
       if(ev.key==='Tab'){ev.preventDefault();document.body.classList.toggle('zen-mode');return;}
-      if(ev.key==='Escape'){ContextMenu.close();if(Onboarding._overlay&&Onboarding._overlay.classList.contains('show')){Onboarding.close();return;}ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
+      if(ev.key==='Escape'){ContextMenu.close();if(Onboarding._overlay&&Onboarding._overlay.classList.contains('show')){Onboarding.close();return;}if(IsolationPlan._modal&&IsolationPlan._modal.classList.contains('open')){IsolationPlan.close();return;}ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
       if((ev.key==='Delete'||ev.key==='Backspace')&&Store.selection.size>0){ev.preventDefault();Controller.deleteSelected();return;}
       if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
       const toolKeys={v:'pointer',r:'rotate',s:'source',a:'valve',t:'trap',d:'drain',y:'split',m:'merge',e:'reducer',h:'heatex',q:'safety',p:'pin'};
@@ -2716,6 +2809,8 @@ const Controller={
       {icon:'◎',label:IsolationTracer.active?'ハイライトを解除':'経路をハイライト',onClick:()=>{if(IsolationTracer.active)IsolationTracer.clear();else IsolationTracer.trace(node.id);}}
     ];
     if(isValveLike)items.push({icon:'📌',label:node.ext.isPinned?'ピン留めを解除':'ピン留め',onClick:()=>{Store.pushHistory();node.ext.isPinned=!node.ext.isPinned;Renderer.renderAll();}});
+    items.push({separator:true});
+    items.push({icon:'🔒',label:'隔離計画を作成',onClick:()=>IsolationPlan.open(node.id)});
     items.push({separator:true});
     items.push({icon:'🗑',label:'削除',danger:true,onClick:()=>Controller.deleteNode(node)});
     ContextMenu.open(ev.clientX,ev.clientY,items);
@@ -3286,6 +3381,155 @@ const Onboarding = {
     Onboarding._markSeen();
     const ov = Onboarding._overlay;
     if (ov) { ov.classList.remove('show'); setTimeout(() => { ov.innerHTML = ''; }, 300); }
+  }
+};
+
+/* ━━━━━━━━ ISOLATION PLAN (Phase 2: 隔離計画 / LOTO支援) ━━━━━━━━ */
+const IsolationPlan = {
+  _overlay: null, _modal: null, _data: null,
+  // renderAll と同一カウンタロジックで全ノードの表示名を算出
+  _nameMap: () => {
+    const counters = { source:1, valve:1, trap:1, drain:1, split:1, merge:1, reducer:1, heatex:1, safety:1 };
+    const labels = { source:'Source', valve:'バルブ', trap:'Trap', drain:'Drain', split:'Split', merge:'Merge', reducer:'減圧弁', heatex:'熱交換器', safety:'安全弁' };
+    const m = new Map();
+    Store.nodes.forEach(n => { const num = counters[n.type] !== undefined ? counters[n.type]++ : 1; m.set(n.id, n.ext.customName || `${labels[n.type] || n.type} ${num}`); });
+    return m;
+  },
+  // 対象機器を隔離する「境界バルブ集合」をフラッドフィルで算出
+  compute: (targetId) => {
+    const nodeMap = Store.nodeMap();
+    const target = nodeMap.get(targetId);
+    if (!target) return null;
+    const VALVE_TYPES = [NODE_TYPE.VALVE, NODE_TYPE.SAFETY];
+    const zoneNodes = new Set([targetId]);
+    const zoneEdges = new Set();
+    const boundary = new Map(); // valveId -> { node, edges:Set }
+    const q = [targetId];
+    while (q.length) {
+      const id = q.shift();
+      Store.edgesByNode(id).forEach(e => {
+        const other = e.from === id ? e.to : e.from;
+        const on = nodeMap.get(other);
+        if (!on) return;
+        // 隣がバルブ/安全弁なら「境界」として記録し、その先へは進まない
+        if (VALVE_TYPES.includes(on.type) && other !== targetId) {
+          zoneEdges.add(e.id);
+          let b = boundary.get(other); if (!b) { b = { node: on, edges: new Set() }; boundary.set(other, b); }
+          b.edges.add(e.id);
+          return;
+        }
+        if (zoneEdges.has(e.id)) return;
+        zoneEdges.add(e.id);
+        if (!zoneNodes.has(other)) { zoneNodes.add(other); q.push(other); }
+      });
+    }
+    // 各ソースからの無向最短距離（推奨手順＝供給側から閉じる順の算出に使用）
+    const dist = new Map(); const sq = [];
+    Store.nodes.forEach(n => { if (n.type === NODE_TYPE.SOURCE) { dist.set(n.id, 0); sq.push(n.id); } });
+    while (sq.length) { const id = sq.shift(); const d = dist.get(id); Store.edgesByNode(id).forEach(e => { const o = e.from === id ? e.to : e.from; if (!dist.has(o)) { dist.set(o, d + 1); sq.push(o); } }); }
+    const nameMap = IsolationPlan._nameMap();
+    const valves = [...boundary.values()].map(b => {
+      const live = [...b.edges].some(eid => { const e = Store.getEdge(eid); return e && (e._sim.f > 0 || (e._sim.b || 0) > 0); });
+      return { id: b.node.id, name: nameMap.get(b.node.id), state: b.node.state.valveState, dist: dist.has(b.node.id) ? dist.get(b.node.id) : Infinity, live };
+    });
+    valves.sort((a, b) => {
+      if (a.dist !== b.dist) return a.dist - b.dist;        // 供給側（ソースに近い）から
+      if (a.live !== b.live) return a.live ? -1 : 1;        // 通気中を優先
+      return a.name.localeCompare(b.name, 'ja');
+    });
+    // 隔離後の蒸気密閉リスク: ゾーン内に蒸気があり、かつドレン（排出口）が無い場合
+    const zoneHasSteam = [...zoneEdges].some(eid => { const e = Store.getEdge(eid); return e && (e._sim.f === FLUID.STEAM || e._sim.b === FLUID.STEAM); })
+      || [...zoneNodes].some(nid => { const n = nodeMap.get(nid); return n && n._sim.fOut === FLUID.STEAM; });
+    const zoneHasOutlet = [...zoneNodes].some(nid => { const n = nodeMap.get(nid); return n && n.type === NODE_TYPE.DRAIN; });
+    return { targetId, targetName: nameMap.get(targetId), valves, zoneNodes, zoneEdges, steamTrapWarning: zoneHasSteam && !zoneHasOutlet };
+  },
+  _ensure: () => {
+    if (IsolationPlan._modal) return;
+    const ov = document.createElement('div'); ov.id = 'iso-plan-overlay';
+    ov.addEventListener('click', IsolationPlan.close);
+    const m = document.createElement('div'); m.id = 'iso-plan-modal'; m.className = 'glass';
+    document.body.appendChild(ov); document.body.appendChild(m);
+    IsolationPlan._overlay = ov; IsolationPlan._modal = m;
+  },
+  open: (targetId) => {
+    const data = IsolationPlan.compute(targetId);
+    if (!data) return;
+    IsolationPlan._data = data;
+    IsolationPlan._ensure();
+    IsolationPlan._render();
+    IsolationPlan._overlay.classList.add('open');
+    IsolationPlan._modal.classList.add('open');
+    IsolationPlan._highlight();
+  },
+  _render: () => {
+    const d = IsolationPlan._data, m = IsolationPlan._modal;
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const stLabels = ['閉止', '微開', '開放'], stCls = ['badge-0', 'badge-1', 'badge-2'];
+    let bodyHtml;
+    const canApply = d.valves.some(v => v.state !== VALVE_STATE.CLOSED);
+    if (!d.valves.length) {
+      bodyHtml = `<div class="iso-empty">対象の周囲に隔離用バルブが見つかりませんでした。<br>機器の上流・下流にバルブを配置してください。</div>`;
+    } else {
+      const rows = d.valves.map((v, i) => {
+        const liveBadge = v.live ? '<span class="iso-live">通気中</span>' : '<span class="iso-idle">停止</span>';
+        return `<tr class="${v.state === VALVE_STATE.CLOSED ? 'iso-done' : ''}">
+          <td class="iso-num">${i + 1}</td>
+          <td><input type="checkbox" class="iso-check" ${v.state === VALVE_STATE.CLOSED ? 'checked' : ''}></td>
+          <td class="iso-vname">${esc(v.name)}</td>
+          <td><span class="status-badge ${stCls[v.state]}">${stLabels[v.state]}</span>${liveBadge}</td>
+        </tr>`;
+      }).join('');
+      const warn = d.steamTrapWarning ? `<div class="iso-warn">⚠ 隔離後、ゾーン内に蒸気が密閉される可能性があります。ドレン・ベントの開放を検討してください。</div>` : '';
+      bodyHtml = `
+        <p class="iso-summary"><strong>${esc(d.targetName)}</strong> を隔離するには、次の <strong>${d.valves.length}</strong> 個のバルブを閉じてください。<br><span style="font-size:11px;color:var(--text-3);">推奨手順：供給側（上流）から順に閉止</span></p>
+        ${warn}
+        <table class="iso-table"><thead><tr><th>#</th><th></th><th>バルブ</th><th>現在の状態</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    m.innerHTML = `
+      <div class="iso-head">
+        <span class="iso-head-icon">🔒</span>
+        <span class="iso-head-title">隔離計画</span>
+        <button class="iso-close-x iso-no-print" id="iso-x">✕</button>
+      </div>
+      <div class="iso-body">${bodyHtml}</div>
+      <div class="iso-foot iso-no-print">
+        <button class="iso-btn ghost" id="iso-print">🖨 印刷</button>
+        <button class="iso-btn ghost" id="iso-cancel">閉じる</button>
+        <button class="iso-btn primary" id="iso-apply" ${canApply ? '' : 'disabled'}>すべて閉じる</button>
+      </div>`;
+    m.querySelector('#iso-x').onclick = IsolationPlan.close;
+    m.querySelector('#iso-cancel').onclick = IsolationPlan.close;
+    m.querySelector('#iso-print').onclick = () => window.print();
+    const ap = m.querySelector('#iso-apply'); if (ap && canApply) ap.onclick = IsolationPlan.apply;
+  },
+  apply: () => {
+    const d = IsolationPlan._data; if (!d || !d.valves.length) return;
+    const toClose = d.valves.filter(v => v.state !== VALVE_STATE.CLOSED);
+    if (!toClose.length) { Toast.show('すべてのバルブは既に閉止しています'); return; }
+    Store.pushHistory();
+    toClose.forEach(v => { const n = Store.getNode(v.id); if (n) n.state.valveState = VALVE_STATE.CLOSED; });
+    Simulator.run();
+    IsolationPlan.close();
+    Renderer.renderAll();
+    Toast.show(`${toClose.length}個のバルブを閉止し、${d.targetName} を隔離しました`, { actionLabel: '元に戻す', onAction: Controller.undo, duration: 7000 });
+  },
+  _highlight: () => {
+    const d = IsolationPlan._data; if (!d) return;
+    const valveIds = new Set(d.valves.map(v => v.id));
+    Renderer.svgLayer.classList.add('isolation-mode');
+    Store.nodes.forEach(n => { const g = document.getElementById(`node-grp-${n.id}`); if (g) { g.classList.toggle('focus', d.zoneNodes.has(n.id) || valveIds.has(n.id)); g.classList.toggle('iso-boundary', valveIds.has(n.id)); } });
+    Store.edges.forEach(e => { const eg = document.getElementById(`edge-grp-${e.id}`); if (eg) eg.classList.toggle('focus', d.zoneEdges.has(e.id)); });
+  },
+  _clearHighlight: () => {
+    document.querySelectorAll('#svg-layer .iso-boundary').forEach(el => el.classList.remove('iso-boundary'));
+    if (IsolationTracer.active) { IsolationTracer._apply(); }
+    else { Renderer.svgLayer.classList.remove('isolation-mode'); document.querySelectorAll('#svg-layer .focus').forEach(el => el.classList.remove('focus')); }
+  },
+  close: () => {
+    IsolationPlan._clearHighlight();
+    if (IsolationPlan._overlay) IsolationPlan._overlay.classList.remove('open');
+    if (IsolationPlan._modal) IsolationPlan._modal.classList.remove('open');
+    IsolationPlan._data = null;
   }
 };
 

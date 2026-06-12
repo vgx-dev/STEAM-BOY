@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#E5E5EA">
+<link rel="manifest" href="./manifest.webmanifest">
 <title>STEAM-BOY</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 <script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';</script>
@@ -1298,21 +1300,79 @@ const IsolationTracer={
   }
 };
 
+/* ━━━━━━━━ SIM WORKER (Phase 3: メインスレッド・ノンブロッキング計算) ━━━━━━━━ */
+// SimulatorCore は純関数（Epic 8）のため、関数ソースをそのまま Blob Worker に注入できる。
+// 大規模グラフ（THRESHOLD超）のときだけ Worker へオフロードし、小規模時は従来どおり同期実行。
+const SimWorker={
+  THRESHOLD:2000,        // nodes+edges がこの数を超えたら Worker を使用
+  _worker:null,_failed:false,_seq:0,_lastApplied:0,_pendingDones:[],
+  _buildSource:()=>
+    `const FLUID=${JSON.stringify(FLUID)};`+
+    `const NODE_TYPE=${JSON.stringify(NODE_TYPE)};`+
+    `const VALVE_STATE=${JSON.stringify(VALVE_STATE)};`+
+    `const SimulatorCore={compute:${SimulatorCore.compute.toString()},_backflow:${SimulatorCore._backflow.toString()}};`+
+    `onmessage=(e)=>{const{seq,nodes,edges}=e.data;const r=SimulatorCore.compute(nodes,edges);`+
+    `postMessage({seq,nodes:r.nodes.map(n=>({id:n.id,_sim:n._sim})),edges:r.edges.map(x=>({id:x.id,_sim:x._sim}))});};`,
+  ensure:()=>{
+    if(SimWorker._failed)return false;
+    if(SimWorker._worker)return true;
+    try{
+      const blob=new Blob([SimWorker._buildSource()],{type:'application/javascript'});
+      const w=new Worker(URL.createObjectURL(blob));
+      w.onmessage=SimWorker._onResult;
+      w.onerror=()=>{SimWorker._failed=true;SimWorker._worker=null;};
+      SimWorker._worker=w;
+      return true;
+    }catch(_){SimWorker._failed=true;return false;}
+  },
+  dispatch:(done)=>{
+    SimWorker._seq++;
+    if(done)SimWorker._pendingDones.push(done);
+    // ノード/エッジは純データのため構造化クローンでそのまま転送可能
+    SimWorker._worker.postMessage({
+      seq:SimWorker._seq,
+      nodes:Store.nodes.map(n=>({id:n.id,type:n.type,x:n.x,y:n.y,state:n.state,ext:n.ext,_sim:n._sim})),
+      edges:Store.edges.map(e=>({id:e.id,from:e.from,to:e.to,ext:e.ext,_sim:e._sim}))
+    });
+  },
+  _onResult:(ev)=>{
+    const{seq,nodes,edges}=ev.data;
+    // 最新リクエストの結果のみ反映（古い結果は新しい計算が上書きするため破棄）
+    if(seq===SimWorker._seq&&seq>SimWorker._lastApplied){
+      SimWorker._lastApplied=seq;
+      const nm=Store.nodeMap(),em=Store.edgeMap();
+      nodes.forEach(r=>{const n=nm.get(r.id);if(n)n._sim=r._sim;});
+      edges.forEach(r=>{const e=em.get(r.id);if(e)e._sim=r._sim;});
+      Anomaly.detect();
+      SealedDetector.compute();
+      const dones=SimWorker._pendingDones;SimWorker._pendingDones=[];
+      dones.forEach(d=>{try{d();}catch(err){console.error(err);}});
+    }
+  }
+};
+
 /* ━━━━━━━━ SIMULATOR ━━━━━━━━ */
 const Simulator={
-  // ValveSelectorのプレビュー用: Anomaly/SealedDetector を呼ばない軽量版
+  // ValveSelectorのプレビュー用: Anomaly/SealedDetector を呼ばない軽量版（常に同期）
   _baseRun:()=>{
     const result=SimulatorCore.compute(Store.nodes,Store.edges);
     Store.nodes.forEach((n,i)=>{n._sim=result.nodes[i]._sim;});
     Store.edges.forEach((e,i)=>{e._sim=result.edges[i]._sim;});
   },
-  // 通常呼び出し: 計算後に異常検知・密閉検知まで一括実行
-  run:()=>{
+  // 通常呼び出し: 計算後に異常検知・密閉検知まで一括実行。
+  // Phase 3: done コールバック対応 — 小規模時は同期実行（従来と完全同一の順序）、
+  // 大規模時（SimWorker.THRESHOLD超）は Worker にオフロードしメインスレッドをブロックしない。
+  run:(done)=>{
     // シミュレーション直前の流体状態をスナップ（SealedDetector用）
     Store.edges.forEach(e=>{e._sim._prevF=e._sim.f;e._sim._prevB=e._sim.b||0;});
+    if((Store.nodes.length+Store.edges.length)>SimWorker.THRESHOLD&&SimWorker.ensure()){
+      SimWorker.dispatch(done);
+      return;
+    }
     Simulator._baseRun();
     Anomaly.detect();
     SealedDetector.compute();
+    if(done)done();
   }
 };
 
@@ -1681,16 +1741,38 @@ const Culling={
   },
 
   // 画面外エッジに data-culled="1" を付与してアニメーションを停止
+  // Phase 3: この要素数を超えたら画面外要素を display:none で描画ツリーから除外
+  DISPLAY_THRESHOLD:800,
+  _displayCulled:false,
   apply:()=>{
+    // ドラッグ操作中はカリングしない（掴んでいる要素が消えるのを防ぐ）
+    if(Store.dragState.isDragging||Store.multiDrag.active||Store.waypointDrag.active)return;
     const bbox=Culling.getViewportBBox();
-    // 最適化1+3: nodeMapはStoreの遅延キャッシュを共用。data-culled は変化時のみ書き込み。
+    // Phase 3: ビューポートの50%をバッファとして持たせ、スクロール時のポップインを抑制
+    const mx=(bbox.x2-bbox.x1)*0.5,my=(bbox.y2-bbox.y1)*0.5;
+    const ebox={x1:bbox.x1-mx,y1:bbox.y1-my,x2:bbox.x2+mx,y2:bbox.y2+my};
+    // 最適化1+3: nodeMapはStoreの遅延キャッシュを共用。属性・styleは変化時のみ書き込み。
     const nodeMap=Store.nodeMap();
+    const displayCull=(Store.nodes.length+Store.edges.length)>Culling.DISPLAY_THRESHOLD;
     Store.edges.forEach(edge=>{
       const eg=document.getElementById(`edge-grp-${edge.id}`);
       if(!eg)return;
-      const visible=Culling.isEdgeVisible(edge,bbox,nodeMap);
+      const visible=Culling.isEdgeVisible(edge,ebox,nodeMap);
       setAttr(eg,'data-culled',visible?'0':'1');
+      const disp=(displayCull&&!visible)?'none':'';
+      if(eg.style.display!==disp)eg.style.display=disp;
     });
+    if(displayCull||Culling._displayCulled){
+      // 大規模時はノードも display カリング。閾値を下回ったら一括解除。
+      Store.nodes.forEach(n=>{
+        const g=document.getElementById(`node-grp-${n.id}`);
+        if(!g)return;
+        const visible=!displayCull||(n.x>=ebox.x1&&n.x<=ebox.x2&&n.y>=ebox.y1&&n.y<=ebox.y2);
+        const disp=visible?'':'none';
+        if(g.style.display!==disp)g.style.display=disp;
+      });
+    }
+    Culling._displayCulled=displayCull;
   },
 
   // scroll/zoom終了後のスロットル実行（200ms待機で連続発火を抑制）
@@ -1841,6 +1923,8 @@ const Renderer={
     requestAnimationFrame(()=>{Renderer._renderQueued=false;Renderer.renderAll();});
   },
   _lastEsw:null,
+  // Phase 3: 差分レンダリング — 要素ID → 前回描画時のシグネチャ
+  _edgeSig:new Map(),_nodeSig:new Map(),
   renderAll:()=>{
     if(!Renderer.edgesGroup)Renderer.init();
     // 最適化3: 直前の操作で構造が変わった可能性があるため、ここでインデックスを無効化→遅延再構築
@@ -1858,16 +1942,11 @@ const Renderer={
     /* ── Edges ── */
     // 最適化1: ループ前に O(1) 参照用マップを取得（Storeの遅延キャッシュを共用）
     const _nodeMap=Store.nodeMap();
+    // Phase 3: 差分レンダリング — 見た目を決める入力のシグネチャが前回と一致する要素はDOM更新を丸ごとスキップ
+    const _edgeSigBase=esw+'|';
     Store.edges.forEach(edge=>{
       activeEdges.add(edge.id);
       const nF=_nodeMap.get(edge.from),nT=_nodeMap.get(edge.to);if(!nF||!nT)return;
-      
-      let eg=document.getElementById(`edge-grp-${edge.id}`);
-      if(!eg){
-        // edge-grpクラスを付与して CSS のデータ属性セレクタを有効化
-        eg=createNS('g',{id:`edge-grp-${edge.id}`,'data-id':edge.id,class:'edge-grp'});
-        Renderer.edgesGroup.appendChild(eg);
-      }
 
       // 修正：同じ流体でも逆流側の圧力が強い場合は逆流として描画する
       const isBk=edge._sim.b>edge._sim.f || (edge._sim.b===edge._sim.f && (edge._sim.brate||0)>edge._sim.rate);
@@ -1876,8 +1955,23 @@ const Renderer={
       const isResidual=(dsRaw===FLUID.EMPTY)&&!!edge.ext.hasResidual;
       const ds=isResidual?edge.ext.residualType:dsRaw;
       const dRate=isBk?(edge._sim.brate||.4):edge._sim.rate;
-      const pid=`edge-path-${edge.id}`,pathStr=Renderer.buildTrimmedPath(nF,edge,nT),fCol=COLOR_MAP[ds];
       const isSealed=Store.config.showSealedAnim&&edge._anim&&edge._anim.sealed;
+
+      // Phase 3: シグネチャ算出（位置・ウェイポイント・流体状態・残留・密閉）
+      const wps=edge.ext.waypoints||[];
+      let sig=_edgeSigBase+nF.x+','+nF.y+'|'+nT.x+','+nT.y+'|'+ds+','+(isBk?1:0)+','+dRate+','+(isResidual?1:0)+','+(isSealed?1:0);
+      for(let i=0;i<wps.length;i++)sig+=';'+wps[i].x+','+wps[i].y;
+
+      let eg=document.getElementById(`edge-grp-${edge.id}`);
+      if(eg&&Renderer._edgeSig.get(edge.id)===sig)return; // 変化なし → パス再構築もDOM書込もスキップ
+      if(!eg){
+        // edge-grpクラスを付与して CSS のデータ属性セレクタを有効化
+        eg=createNS('g',{id:`edge-grp-${edge.id}`,'data-id':edge.id,class:'edge-grp'});
+        Renderer.edgesGroup.appendChild(eg);
+      }
+      Renderer._edgeSig.set(edge.id,sig);
+
+      const pid=`edge-path-${edge.id}`,pathStr=Renderer.buildTrimmedPath(nF,edge,nT),fCol=COLOR_MAP[ds];
       // Epic 6-1: 流体状態を data-fluid で投射→CSSが stroke/opacity を自動適用
       // Epic 10: 残留時は residualType を data-fluid にセット
       setAttr(eg,'data-fluid',ds);
@@ -1950,8 +2044,7 @@ const Renderer={
       // setAttribute 呼び出し数を大幅削減することでブラウザのスタイル再計算コストを削減。
       setAttr(path,'class',`edge-path${isSealed?' edge-sealed':''}`);
 
-      // Waypoints
-      const wps=edge.ext.waypoints||[];
+      // Waypoints（wps は上のシグネチャ算出で取得済み）
       const existingWps=Array.from(eg.querySelectorAll('.waypoint-handle'));
 
       wps.forEach((wp,idx)=>{
@@ -1995,13 +2088,15 @@ const Renderer={
       }
     });
 
-    Array.from(Renderer.edgesGroup.children).forEach(child=>{if(!activeEdges.has(child.getAttribute('data-id')))child.remove();});
+    Array.from(Renderer.edgesGroup.children).forEach(child=>{const _id=child.getAttribute('data-id');if(!activeEdges.has(_id)){child.remove();Renderer._edgeSig.delete(_id);}});
     // Cleanup orphaned thermal gradients
     if(Renderer.svgDefs)Array.from(Renderer.svgDefs.querySelectorAll('linearGradient[id^="tg-"]')).forEach(g=>{if(!activeEdges.has(g.id.slice(3)))g.remove();});
 
     /* ── Nodes ── */
     // 最適化1: anomalies を Set 化して O(1) 参照
     const _anomalyNodeSet=new Set(Store.anomalies.map(a=>a.nodeId));
+    // Phase 3: 差分レンダリング用のグローバル設定プレフィクス
+    const _nodeSigBase=scale+'|'+(Store.config.showValveLabels?1:0)+(Store.config.showReducerLabels?1:0)+'|';
     Store.nodes.forEach(n=>{
       activeNodes.add(n.id);
       const num=typeCounters[n.type]++;
@@ -2010,13 +2105,23 @@ const Renderer={
       if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type) && !n.ext.hideMatrix)valveMatrixData.push({id: n.id, name:dispName, state:n.state.valveState, isPinned: isPinned});
       const isSM=n.type===NODE_TYPE.SPLIT||n.type===NODE_TYPE.MERGE;
       const nodeScale=scale*(isSM?0.7:1);
+      const hasAnomaly=_anomalyNodeSet.has(n.id);
+
+      // Phase 3: シグネチャ（位置・回転・選択・流体・弁開度・ラベル・異常・名前）が一致したらスキップ
+      const sig=_nodeSigBase+n.x+','+n.y+','+(n.rotation||0)+'|'+(n.id===Store.config.selectedNodeIdForConnection?1:0)+(Store.selection.has(n.id)?1:0)+'|'+n._sim.fOut+','+((n._sim.fOut>0||n._sim.rateOut>0)?1:0)+'|'+n.state.valveState+'|'+n.labelOffset.x+','+n.labelOffset.y+'|'+(isPinned?1:0)+(hasAnomaly?1:0)+'|'+(n.ext.limitRate??'')+'|'+dispName;
 
       let g=document.getElementById(`node-grp-${n.id}`);
+      if(g&&Renderer._nodeSig.get(n.id)===sig){
+        // ドラッグ後に同位置へ戻った場合に備え、残留した style.transform のみ掃除
+        if(!g.classList.contains('node-dragging')&&g.style.transform)g.style.transform='';
+        return;
+      }
       if(!g){
         // 最適化5: contextmenu は nodesGroup へのデリゲーションに移行済み（個別リスナーなし）
         g=createNS('g',{id:`node-grp-${n.id}`,'data-id':n.id});
         Renderer.nodesGroup.appendChild(g);
       }
+      Renderer._nodeSig.set(n.id,sig);
 
       // Epic 6-2 (A案): style.transform がドラッグ中に設定されている場合、
       // CSS transform は SVG属性より優先されるため明示的にクリア（設定時のみ）。
@@ -2106,10 +2211,9 @@ const Renderer={
 
         const finalLabelName = isPinned ? dispName + ' 📌' : dispName;
         if(lbl.textContent!==finalLabelName)lbl.textContent=finalLabelName;
-        // z順維持のための再appendは、順序が崩れている時のみ実行（無条件のDOM移動を排除）
-        if(g.lastElementChild!==lbl){g.appendChild(shape);g.appendChild(lbl);}
       }else{
         if(ll)ll.remove();if(lbl)lbl.remove();
+        ll=null;lbl=null;
       }
 
       let ttl=g.querySelector('title');
@@ -2136,7 +2240,7 @@ const Renderer={
       }
       // ▲▲▲ 追加ここまで ▲▲▲
 
-      const hasAnomaly=_anomalyNodeSet.has(n.id);
+      // hasAnomaly はシグネチャ算出時に取得済み
       let aRing=g.querySelector('.anomaly-ring'),aIco=g.querySelector('.anomaly-icon');
       if(hasAnomaly){
         const r=Math.max(Store.config.nodeRadius+6,14);
@@ -2148,9 +2252,13 @@ const Renderer={
       }else{
         if(aRing)aRing.remove();if(aIco)aIco.remove();
       }
+
+      // Phase 3: z順の正規化（形状→ラベルを末尾へ）。更新パスの最後で一度だけ行うことで
+      // 差分スキップとの間でDOM順序が揺れない冪等な配置にする。
+      if(lbl&&g.lastElementChild!==lbl){g.appendChild(shape);g.appendChild(lbl);}
     });
 
-    Array.from(Renderer.nodesGroup.children).forEach(child=>{if(!activeNodes.has(child.getAttribute('data-id')))child.remove();});
+    Array.from(Renderer.nodesGroup.children).forEach(child=>{const _id=child.getAttribute('data-id');if(!activeNodes.has(_id)){child.remove();Renderer._nodeSig.delete(_id);}});
 
     /* ── Sub UI ── */
     // 最適化3: 常駐UI要素はメモ化キャッシュ ($id) で参照
@@ -2182,6 +2290,8 @@ const ValveSelector={
   // Phase 2: What-if — ある弁状態に変更した場合に発生する DANGER を副作用なしで算出
   _computeDangersFor:(node,targetState)=>{
     if(targetState===node.state.valveState)return Store.anomalies.filter(a=>a.type==='danger').map(a=>a.msg);
+    // Phase 3: 大規模グラフでは同期再計算（候補×1回）がセレクタ表示を遅らせるためスキップ
+    if(Store.nodes.length+Store.edges.length>SimWorker.THRESHOLD)return[];
     const saved=node.state.valveState;
     const sn=new Map(Store.nodes.map(n=>[n.id,{...n._sim}]));
     const se=new Map(Store.edges.map(e=>[e.id,{...e._sim}]));
@@ -2329,18 +2439,19 @@ const ValveSelector={
     const prevStates=new Map(Store.edges.map(e=>[e.id,{f:e._sim.f,b:e._sim.b||0}]));
     Store.pushHistory();
     node.state.valveState=targetState;
-    Simulator.run();
-    Animator.prepare(node,prevStates);
-    Renderer.renderAll();
-    // Phase 2: 危険を伴う操作は適用後に赤いトーストで明示（元に戻す付き）
-    if(_dz.length){
-      Toast.show('⚠ '+_dz[0].replace(/^DANGER:\s*/,'')+(_dz.length>1?` 他${_dz.length-1}件`:''),{actionLabel:'元に戻す',onAction:Controller.undo,duration:8000});
-    }
+    Simulator.run(()=>{
+      Animator.prepare(node,prevStates);
+      Renderer.renderAll();
+      // Phase 2: 危険を伴う操作は適用後に赤いトーストで明示（元に戻す付き）
+      if(_dz.length){
+        Toast.show('⚠ '+_dz[0].replace(/^DANGER:\s*/,'')+(_dz.length>1?` 他${_dz.length-1}件`:''),{actionLabel:'元に戻す',onAction:Controller.undo,duration:8000});
+      }
 
-    // ライフサイクルの分離: 差分DOMの更新がブラウザに描画された直後にアニメーションを発火
-    requestAnimationFrame(() => {
+      // ライフサイクルの分離: 差分DOMの更新がブラウザに描画された直後にアニメーションを発火
       requestAnimationFrame(() => {
-        Animator.apply();
+        requestAnimationFrame(() => {
+          Animator.apply();
+        });
       });
     });
   },
@@ -2382,8 +2493,7 @@ const ReducerSelector={
     slider.addEventListener('change', (ev) => {
       Store.pushHistory();
       node.ext.limitRate = parseInt(ev.target.value, 10) / 100;
-      Simulator.run();
-      Renderer.renderAll();
+      Simulator.run(Renderer.renderAll);
     });
 
     const renameBtn = document.createElement('div');
@@ -2629,8 +2739,8 @@ const Controller={
   },
 
   setZoom:(z)=>{Store.config.currentZoom=Math.max(.2,Math.min(z,3.0));Renderer.updateZoom();requestAnimationFrame(()=>{Minimap.draw();Culling.scheduleApply();/*Epic7*/});},
-  undo:()=>{if(!Store.history.length)return;Store.restore(Store.history.pop());Store.selection.clear();Store.config.selectedNodeIdForConnection=null;Simulator.run();Renderer.renderAll();},
-  deleteSelected:()=>{if(!Store.selection.size)return;Store.pushHistory();const _n=Store.selection.size;const del=new Set(Store.selection);Store.nodes=Store.nodes.filter(n=>!del.has(n.id));Store.edges=Store.edges.filter(e=>!del.has(e.from)&&!del.has(e.to));Store.invalidateIndex();Store.selection.clear();Simulator.run();Renderer.renderAll();Toast.show(`${_n}件を削除しました`,{actionLabel:'元に戻す',onAction:Controller.undo});},
+  undo:()=>{if(!Store.history.length)return;Store.restore(Store.history.pop());Store.selection.clear();Store.config.selectedNodeIdForConnection=null;Simulator.run(Renderer.renderAll);},
+  deleteSelected:()=>{if(!Store.selection.size)return;Store.pushHistory();const _n=Store.selection.size;const del=new Set(Store.selection);Store.nodes=Store.nodes.filter(n=>!del.has(n.id));Store.edges=Store.edges.filter(e=>!del.has(e.from)&&!del.has(e.to));Store.invalidateIndex();Store.selection.clear();Simulator.run(Renderer.renderAll);Toast.show(`${_n}件を削除しました`,{actionLabel:'元に戻す',onAction:Controller.undo});},
   applySnap:(x,y,excludeId)=>{
     if(!Store.config.snapEnabled)return{x,y,gX:null,gY:null};
     const gs=Store.config.gridSize,ox=Store.config.gridOffsetX,oy=Store.config.gridOffsetY;
@@ -2674,7 +2784,7 @@ const Controller={
         if(el)el.classList.remove('node-dragging');
       });
       Store.multiDrag={active:false,nodes:[],gEl:null,startSvgX:0,startSvgY:0,startClientX:0,startClientY:0,hasDragged:false,pointerId:null,preSnapshot:null};
-      Renderer.hideSnapGuides();Simulator.run();Renderer.renderAll();return;
+      Renderer.hideSnapGuides();Simulator.run(Renderer.renderAll);return;
     }
     if(Store.dragState.isDragging&&ev.pointerId===Store.dragState.pointerId){
       const node=Store.dragState.targetNode,dragged=Store.dragState.hasDragged,gEl=Store.dragState.gEl;
@@ -2686,7 +2796,7 @@ const Controller={
 
       else{const tool=Store.config.currentTool;if(!dragged&&node){if(tool===NODE_TYPE.ROTATE){Store.pushHistory();node.rotation=((node.rotation||0)+90)%360;mutated=true;}else if(tool===NODE_TYPE.POINTER&&[NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(node.type)){ValveSelector.open(node);Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};return;}else if(tool===NODE_TYPE.POINTER&&node.type===NODE_TYPE.REDUCER){ReducerSelector.open(node);Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};return;}}
               else if(dragged&&node){if(Store.dragState.preSnapshot)Store.pushSnapshot(Store.dragState.preSnapshot);const deltaX=node.x-Store.dragState.preNodeX,deltaY=node.y-Store.dragState.preNodeY;if(Math.abs(deltaX)>0.5||Math.abs(deltaY)>0.5){Store.edgesByNode(node.id).forEach(edge=>{if(edge.ext.waypoints?.length){edge.ext.waypoints.forEach(wp=>{wp.x+=deltaX;wp.y+=deltaY;});}});}mutated=true;}}
-            Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};if(mutated)Simulator.run();Renderer.renderAll();}
+            Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};if(mutated)Simulator.run(Renderer.renderAll);else Renderer.renderAll();}
 
       if(Store.labelDrag.isDragging&&ev.pointerId===Store.labelDrag.pointerId){try{if(Store.labelDrag.gEl?.hasPointerCapture(ev.pointerId))Store.labelDrag.gEl.releasePointerCapture(ev.pointerId);}catch(_){}if(Store.labelDrag.hasDragged&&Store.labelDrag.preSnapshot)Store.pushSnapshot(Store.labelDrag.preSnapshot);Store.labelDrag={isDragging:false,hasDragged:false,targetNode:null,gEl:null,startX:0,startY:0,startOffsetX:0,startOffsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null};Renderer.renderAll();}
     if(Store.waypointDrag.active&&ev.pointerId===Store.waypointDrag.pointerId){try{if(Store.waypointDrag.wpEl?.hasPointerCapture(ev.pointerId))Store.waypointDrag.wpEl.releasePointerCapture(ev.pointerId);}catch(_){}if(Store.waypointDrag.hasDragged&&Store.waypointDrag.preSnapshot)Store.pushSnapshot(Store.waypointDrag.preSnapshot);Store.waypointDrag={active:false,edge:null,index:-1,wpEl:null,pointerId:null,hasDragged:false,startClientX:0,startClientY:0,preSnapshot:null};Renderer.renderAll();}
@@ -2753,7 +2863,7 @@ const Controller={
     if(tool===NODE_TYPE.POINTER){const c=Renderer.getMouseSvgCoords(ev);Store.rectSelect={active:true,startSvgX:c.x,startSvgY:c.y,currentSvgX:c.x,currentSvgY:c.y,pointerId:ev.pointerId};return;}
     if(tool===NODE_TYPE.ROTATE)return;
     const raw=Renderer.getMouseSvgCoords(ev),sn=Controller.applySnap(raw.x,raw.y,null);
-    Store.pushHistory();Store.nodes.push(Store.createNode(tool,sn.x,sn.y));Store.invalidateIndex();Simulator.run();Renderer.renderAll();
+    Store.pushHistory();Store.nodes.push(Store.createNode(tool,sn.x,sn.y));Store.invalidateIndex();Simulator.run(Renderer.renderAll);
     // Feature 7: Kinetic ripple on node placement
     const _rpl=createNS('circle',{cx:sn.x,cy:sn.y,r:45,fill:'none','stroke-width':2});
     _rpl.classList.add('placement-ripple');
@@ -2846,14 +2956,14 @@ const Controller={
     Store.invalidateIndex();
     Store.selection.delete(node.id);
     if(Store.config.selectedNodeIdForConnection===node.id)Store.config.selectedNodeIdForConnection=null;
-    Simulator.run();Renderer.renderAll();
+    Simulator.run(Renderer.renderAll);
     Toast.show('機器を削除しました',{actionLabel:'元に戻す',onAction:Controller.undo});
   },
   deleteEdge:(edge)=>{
     Store.pushHistory();
     Store.edges=Store.edges.filter(e=>e.id!==edge.id);
     Store.invalidateIndex();
-    Simulator.run();Renderer.renderAll();
+    Simulator.run(Renderer.renderAll);
     Toast.show('配管を削除しました',{actionLabel:'元に戻す',onAction:Controller.undo});
   },
 
@@ -2937,7 +3047,7 @@ const Controller={
           input.click();
         },
 
-  clearData:()=>{if(!confirm('全削除しますか？'))return;Store.pushHistory();Store.nodes=[];Store.edges=[];Store.invalidateIndex();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;document.getElementById('pdf-canvas').style.display='none';document.getElementById('pdf-upload').value='';Simulator.run();Renderer.renderAll();},
+  clearData:()=>{if(!confirm('全削除しますか？'))return;Store.pushHistory();Store.nodes=[];Store.edges=[];Store.invalidateIndex();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;document.getElementById('pdf-canvas').style.display='none';document.getElementById('pdf-upload').value='';Simulator.run(Renderer.renderAll);},
   handlePdfUpload:(ev)=>{const file=ev.target.files[0];if(!file||file.type!=='application/pdf')return;const fr=new FileReader();fr.onload=function(){pdfjsLib.getDocument(new Uint8Array(this.result)).promise.then(pdf=>pdf.getPage(1)).then(page=>{const sc=parseFloat(document.getElementById('pdfScale').value)||1.5;const vp=page.getViewport({scale:sc});const canvas=document.getElementById('pdf-canvas');Store.config.baseWidth=vp.width;Store.config.baseHeight=vp.height;canvas.width=vp.width;canvas.height=vp.height;canvas.style.display='block';page.render({canvasContext:canvas.getContext('2d'),viewport:vp});Controller.setZoom(Store.config.currentZoom);}).catch(()=>alert('PDF展開エラー'));};fr.readAsArrayBuffer(file);}
 };
 
@@ -3186,8 +3296,10 @@ const Persistence = {
     Store.history = [];
     Store.selection.clear();
     Controller.setZoom(d.savedZoom || 1.0);
-    Simulator.run();
+    // Phase 3: まず図形を即時描画し、流体計算は完了次第反映
+    // （大規模グラフではWorkerの初回起動を待たずにUIが表示される）
     Renderer.renderAll();
+    Simulator.run(Renderer.renderAll);
   },
   // 起動時: 前回セッションがあれば復元（戻り値: 復元したか）
   restore: () => {
@@ -3303,8 +3415,7 @@ const SampleDiagram = {
     const E = (a, b) => Store.createEdge(a.id, b.id);
     Store.edges = [E(s,v1),E(v1,sp),E(sp,v2),E(v2,rd),E(rd,hx),E(hx,t1),E(t1,d1),E(sp,v3),E(v3,t2),E(t2,d2)];
     Store.invalidateIndex();
-    Simulator.run();
-    Renderer.renderAll();
+    Simulator.run(Renderer.renderAll);
   }
 };
 
@@ -3508,10 +3619,11 @@ const IsolationPlan = {
     if (!toClose.length) { Toast.show('すべてのバルブは既に閉止しています'); return; }
     Store.pushHistory();
     toClose.forEach(v => { const n = Store.getNode(v.id); if (n) n.state.valveState = VALVE_STATE.CLOSED; });
-    Simulator.run();
     IsolationPlan.close();
-    Renderer.renderAll();
-    Toast.show(`${toClose.length}個のバルブを閉止し、${d.targetName} を隔離しました`, { actionLabel: '元に戻す', onAction: Controller.undo, duration: 7000 });
+    Simulator.run(() => {
+      Renderer.renderAll();
+      Toast.show(`${toClose.length}個のバルブを閉止し、${d.targetName} を隔離しました`, { actionLabel: '元に戻す', onAction: Controller.undo, duration: 7000 });
+    });
   },
   _highlight: () => {
     const d = IsolationPlan._data; if (!d) return;
@@ -3548,6 +3660,13 @@ document.getElementById('sp-hints-toggle').addEventListener('click', () => {
   const isOpen = body.classList.toggle('open');
   arrow.classList.toggle('open', isOpen);
 });
+
+// Phase 3: PWA — http(s) 配信時のみ Service Worker を登録（file:// 利用には影響なし）
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
 
 </script>
 </body>

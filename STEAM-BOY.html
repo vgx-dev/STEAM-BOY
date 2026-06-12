@@ -912,6 +912,7 @@ g.node[data-active="1"] {
     </div>
     <div class="sp-buttons" style="margin-top:8px;">
       <button class="sp-btn" id="btn-renumber">連番再振</button>
+      <button class="sp-btn" id="btn-tutorial">📘 使い方</button>
     </div>
   </div>
 
@@ -928,7 +929,7 @@ g.node[data-active="1"] {
     <div class="sp-hints-body-inner">
       <p>配管ダブルクリック → 中継点追加</p>
       <p>中継点 右クリック/ダブルクリック → 削除</p>
-      <p>ノード/配管 右クリック → 個別削除</p>
+      <p>ノード/配管 右クリック → メニュー（削除・名前変更・ハイライト）</p>
       <p>空白ドラッグ → 矩形選択 ／ Del → 選択削除</p>
       <p>Alt + クリック → 経路ハイライト（再クリックで解除）</p>
       <p>Tab → ZENモード（UI非表示）トグル</p>
@@ -1015,6 +1016,45 @@ g.node[data-active="1"] {
     <div class="mt-empty" id="mt-empty" style="display:none;">対象機器がありません</div>
   </div>
 </div>
+
+<style>
+/* ── Phase 1: Toast（通知 + 元に戻す） ── */
+#toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:600;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;}
+.toast{pointer-events:auto;display:flex;align-items:center;gap:14px;padding:10px 14px 10px 16px;border-radius:12px;background:rgba(29,29,31,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#fff;font-size:13px;font-family:var(--font);box-shadow:0 8px 28px rgba(0,0,0,0.22);max-width:90vw;animation:toastIn .28s cubic-bezier(.16,1,.3,1);}
+.toast.hide{animation:toastOut .2s ease forwards;}
+.toast-action{background:rgba(255,255,255,0.16);border:none;color:#fff;font-weight:600;font-size:12px;padding:5px 12px;border-radius:8px;cursor:pointer;font-family:var(--font);white-space:nowrap;transition:background .12s;flex-shrink:0;}
+.toast-action:hover{background:rgba(255,255,255,0.28);}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px) scale(.96);}to{opacity:1;transform:none;}}
+@keyframes toastOut{to{opacity:0;transform:translateY(8px);}}
+
+/* ── Phase 1: Context Menu（右クリックメニュー） ── */
+.ctx-menu{position:fixed;z-index:400;min-width:184px;padding:6px;border-radius:12px;display:flex;flex-direction:column;gap:1px;font-family:var(--font);}
+.ctx-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-1);cursor:pointer;transition:background .12s;user-select:none;-webkit-tap-highlight-color:transparent;}
+.ctx-item:hover{background:rgba(0,0,0,0.05);}
+.ctx-item.danger{color:var(--red);}
+.ctx-item.danger:hover{background:rgba(255,59,48,0.08);}
+.ctx-icon{width:18px;text-align:center;font-size:14px;flex-shrink:0;}
+.ctx-sep{height:1px;background:rgba(0,0,0,0.08);margin:4px 2px;}
+
+/* ── Phase 1: Onboarding（オンボーディング） ── */
+#onb-overlay{position:fixed;inset:0;z-index:700;background:rgba(20,20,25,0.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;opacity:0;transition:opacity .3s;}
+#onb-overlay.show{display:flex;opacity:1;}
+.onb-card{width:min(92vw,440px);background:#fff;border-radius:20px;padding:28px 26px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.28);font-family:var(--font);text-align:center;animation:onbPop .4s cubic-bezier(.16,1,.3,1);}
+.onb-logo{width:74px;height:74px;margin:0 auto 14px;display:block;}
+.onb-illus{font-size:46px;margin-bottom:12px;line-height:1;}
+.onb-title{font-size:20px;font-weight:700;color:var(--text-1);margin-bottom:8px;}
+.onb-desc{font-size:13px;line-height:1.7;color:var(--text-2);margin-bottom:18px;}
+.onb-steps{display:flex;gap:6px;justify-content:center;margin-bottom:18px;}
+.onb-dot{width:7px;height:7px;border-radius:50%;background:rgba(0,0,0,0.14);transition:all .25s;}
+.onb-dot.active{background:var(--accent);width:20px;border-radius:4px;}
+.onb-buttons{display:flex;gap:10px;justify-content:center;}
+.onb-btn{padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;border:none;transition:all .15s;}
+.onb-btn.primary{background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(0,122,255,0.3);}
+.onb-btn.primary:hover{background:#0066d6;transform:translateY(-1px);}
+.onb-btn.ghost{background:rgba(0,0,0,0.05);color:var(--text-2);}
+.onb-btn.ghost:hover{background:rgba(0,0,0,0.09);}
+@keyframes onbPop{from{opacity:0;transform:scale(.9) translateY(10px);}to{opacity:1;transform:none;}}
+</style>
 
 <script>
 'use strict';
@@ -2081,6 +2121,9 @@ const Renderer={
     const ws=$id('workspace'),banner=$id('connect-banner');
     if(Store.config.isConnectMode){ws.classList.add('connect-mode');if(banner.style.display!=='block')banner.style.display='block';const _bt=Store.config.selectedNodeIdForConnection?'接続先ノードをクリック — Esc = キャンセル':'配管接続モード — 接続元ノードをクリック — Esc = 終了';if(banner.textContent!==_bt)banner.textContent=_bt;}
     else{ws.classList.remove('connect-mode');if(banner.style.display!=='none')banner.style.display='none';}
+
+    // Phase 1: 状態変更のたびに localStorage へ自動保存（デバウンス済み・クラッシュ復帰用）
+    Persistence.scheduleSave();
   }
 };
 
@@ -2472,7 +2515,7 @@ const Controller={
       if(['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;
       if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault();Controller.undo();return;}
       if(ev.key==='Tab'){ev.preventDefault();document.body.classList.toggle('zen-mode');return;}
-      if(ev.key==='Escape'){ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
+      if(ev.key==='Escape'){ContextMenu.close();if(Onboarding._overlay&&Onboarding._overlay.classList.contains('show')){Onboarding.close();return;}ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
       if((ev.key==='Delete'||ev.key==='Backspace')&&Store.selection.size>0){ev.preventDefault();Controller.deleteSelected();return;}
       if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
       const toolKeys={v:'pointer',r:'rotate',s:'source',a:'valve',t:'trap',d:'drain',y:'split',m:'merge',e:'reducer',h:'heatex',q:'safety',p:'pin'};
@@ -2483,12 +2526,18 @@ const Controller={
 
     ImageViewer.init();
     MasterTable.init();
+    document.getElementById('btn-tutorial').addEventListener('click',()=>Onboarding.tour(true));
+
+    // Phase 1: 前回セッションの自動復元 → 初回訪問者にはオンボーディングを表示
+    const _restored = Persistence.restore();
     Renderer.updateZoom();Renderer.renderAll();
+    Persistence.enableAutosave();
+    if(!_restored) Onboarding.maybeFirstVisit();
   },
 
   setZoom:(z)=>{Store.config.currentZoom=Math.max(.2,Math.min(z,3.0));Renderer.updateZoom();requestAnimationFrame(()=>{Minimap.draw();Culling.scheduleApply();/*Epic7*/});},
   undo:()=>{if(!Store.history.length)return;Store.restore(Store.history.pop());Store.selection.clear();Store.config.selectedNodeIdForConnection=null;Simulator.run();Renderer.renderAll();},
-  deleteSelected:()=>{if(!Store.selection.size)return;Store.pushHistory();const del=new Set(Store.selection);Store.nodes=Store.nodes.filter(n=>!del.has(n.id));Store.edges=Store.edges.filter(e=>!del.has(e.from)&&!del.has(e.to));Store.invalidateIndex();Store.selection.clear();Simulator.run();Renderer.renderAll();},
+  deleteSelected:()=>{if(!Store.selection.size)return;Store.pushHistory();const _n=Store.selection.size;const del=new Set(Store.selection);Store.nodes=Store.nodes.filter(n=>!del.has(n.id));Store.edges=Store.edges.filter(e=>!del.has(e.from)&&!del.has(e.to));Store.invalidateIndex();Store.selection.clear();Simulator.run();Renderer.renderAll();Toast.show(`${_n}件を削除しました`,{actionLabel:'元に戻す',onAction:Controller.undo});},
   applySnap:(x,y,excludeId)=>{
     if(!Store.config.snapEnabled)return{x,y,gX:null,gY:null};
     const gs=Store.config.gridSize,ox=Store.config.gridOffsetX,oy=Store.config.gridOffsetY;
@@ -2658,26 +2707,65 @@ const Controller={
 
   handleLabelPointerDown:(ev,node,lEl)=>{if(ev.button&&ev.button!==0)return;ev.stopPropagation();if(Store.config.isConnectMode)return;const c=Renderer.getMouseSvgCoords(ev);Store.labelDrag={isDragging:true,hasDragged:false,targetNode:node,gEl:lEl,startX:c.x,startY:c.y,startOffsetX:node.labelOffset.x,startOffsetY:node.labelOffset.y,startClientX:ev.clientX,startClientY:ev.clientY,pointerId:ev.pointerId,preSnapshot:null/*最適化4: ドラッグ確定時に遅延取得*/};try{lEl.setPointerCapture(ev.pointerId);}catch(_){}},
   handleWaypointPointerDown:(ev,edge,idx,wpEl)=>{if(ev.button&&ev.button!==0)return;ev.stopPropagation();Store.waypointDrag={active:true,edge,index:idx,wpEl,pointerId:ev.pointerId,hasDragged:false,startClientX:ev.clientX,startClientY:ev.clientY,preSnapshot:null/*最適化4: ドラッグ確定時に遅延取得*/};try{wpEl.setPointerCapture(ev.pointerId);}catch(_){}},
-  handleNodeContextMenu:(ev,node)=>{ev.preventDefault();ev.stopPropagation();Store.pushHistory();Store.nodes=Store.nodes.filter(n=>n.id!==node.id);Store.edges=Store.edges.filter(e=>e.from!==node.id&&e.to!==node.id);Store.invalidateIndex();Store.selection.delete(node.id);if(Store.config.selectedNodeIdForConnection===node.id)Store.config.selectedNodeIdForConnection=null;Simulator.run();Renderer.renderAll();},
-  handleEdgeContextMenu:(ev,edge)=>{ev.preventDefault();ev.stopPropagation();Store.pushHistory();Store.edges=Store.edges.filter(e=>e.id!==edge.id);Store.invalidateIndex();Simulator.run();Renderer.renderAll();},
+  // Phase 1: 右クリック即削除をやめ、コンテキストメニューを開く（誤操作防止）
+  handleNodeContextMenu:(ev,node)=>{
+    ev.preventDefault();ev.stopPropagation();
+    const isValveLike=[NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(node.type);
+    const items=[
+      {icon:'✎',label:'名前を変更',onClick:()=>Controller.renameNode(node)},
+      {icon:'◎',label:IsolationTracer.active?'ハイライトを解除':'経路をハイライト',onClick:()=>{if(IsolationTracer.active)IsolationTracer.clear();else IsolationTracer.trace(node.id);}}
+    ];
+    if(isValveLike)items.push({icon:'📌',label:node.ext.isPinned?'ピン留めを解除':'ピン留め',onClick:()=>{Store.pushHistory();node.ext.isPinned=!node.ext.isPinned;Renderer.renderAll();}});
+    items.push({separator:true});
+    items.push({icon:'🗑',label:'削除',danger:true,onClick:()=>Controller.deleteNode(node)});
+    ContextMenu.open(ev.clientX,ev.clientY,items);
+  },
+  handleEdgeContextMenu:(ev,edge)=>{
+    ev.preventDefault();ev.stopPropagation();
+    const coords=Renderer.getMouseSvgCoords(ev);
+    ContextMenu.open(ev.clientX,ev.clientY,[
+      {icon:'＋',label:'中継点を追加',onClick:()=>Controller.addWaypointAt(edge,coords)},
+      {icon:'◎',label:IsolationTracer.active?'ハイライトを解除':'経路をハイライト',onClick:()=>{if(IsolationTracer.active)IsolationTracer.clear();else IsolationTracer.trace(edge.from);}},
+      {separator:true},
+      {icon:'🗑',label:'配管を削除',danger:true,onClick:()=>Controller.deleteEdge(edge)}
+    ]);
+  },
   handleEdgeDblClick:(ev,edge)=>{ev.preventDefault();ev.stopPropagation();const coords=Renderer.getMouseSvgCoords(ev);const nF=Store.getNode(edge.from),nT=Store.getNode(edge.to);if(!nF||!nT)return;const wps=edge.ext.waypoints||[],pts=[nF,...wps,nT];let bestSeg=0,bestDist=Infinity;for(let i=0;i<pts.length-1;i++){const d=distPtSeg(coords,pts[i],pts[i+1]);if(d<bestDist){bestDist=d;bestSeg=i;}}Store.pushHistory();wps.splice(bestSeg,0,{x:coords.x,y:coords.y});edge.ext.waypoints=wps;Renderer.renderAll();},
 
+  // Phase 1: コンテキストメニューから呼ばれる軽量ヘルパー群
+  renameNode:(node)=>{
+    const cur=node.ext.customName||'';
+    const nn=prompt('新しい名前を入力してください（空でリセット）:',cur);
+    if(nn!==null){Store.pushHistory();if(nn.trim()==='')delete node.ext.customName;else node.ext.customName=nn.trim();Renderer.renderAll();}
+  },
+  addWaypointAt:(edge,coords)=>{
+    const nF=Store.getNode(edge.from),nT=Store.getNode(edge.to);if(!nF||!nT)return;
+    const wps=edge.ext.waypoints||[],pts=[nF,...wps,nT];let bestSeg=0,bestDist=Infinity;
+    for(let i=0;i<pts.length-1;i++){const d=distPtSeg(coords,pts[i],pts[i+1]);if(d<bestDist){bestDist=d;bestSeg=i;}}
+    Store.pushHistory();wps.splice(bestSeg,0,{x:coords.x,y:coords.y});edge.ext.waypoints=wps;Renderer.renderAll();
+  },
+  deleteNode:(node)=>{
+    Store.pushHistory();
+    Store.nodes=Store.nodes.filter(n=>n.id!==node.id);
+    Store.edges=Store.edges.filter(e=>e.from!==node.id&&e.to!==node.id);
+    Store.invalidateIndex();
+    Store.selection.delete(node.id);
+    if(Store.config.selectedNodeIdForConnection===node.id)Store.config.selectedNodeIdForConnection=null;
+    Simulator.run();Renderer.renderAll();
+    Toast.show('機器を削除しました',{actionLabel:'元に戻す',onAction:Controller.undo});
+  },
+  deleteEdge:(edge)=>{
+    Store.pushHistory();
+    Store.edges=Store.edges.filter(e=>e.id!==edge.id);
+    Store.invalidateIndex();
+    Simulator.run();Renderer.renderAll();
+    Toast.show('配管を削除しました',{actionLabel:'元に戻す',onAction:Controller.undo});
+  },
+
   saveData: () => {
-      // 1. 既存のロジックで保存用データオブジェクトを構築
-      const d = {
-        pdfScale: parseFloat(document.getElementById('pdfScale').value) || 1.5,
-        matrixTitle: document.getElementById('matrix-title-input').value,
-        savedZoom: Store.config.currentZoom,
-        baseWidth: Store.config.baseWidth,
-        baseHeight: Store.config.baseHeight,
-        gridSize: Store.config.gridSize,
-        gridOffsetX: Store.config.gridOffsetX,
-        gridOffsetY: Store.config.gridOffsetY,
-        alwaysShowLabels: Store.config.alwaysShowLabels,
-        nodes: Store.nodes.map(n => ({ id: n.id, type: n.type, x: n.x, y: n.y, rotation: n.rotation, state: n.state, ext: n.ext, labelOffset: n.labelOffset })),
-        edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext }))
-      };
-      
+      // Phase 1: 保存用データの構築は Persistence.snapshot() に一本化（自動保存と同一形式）
+      const d = Persistence.snapshot();
+
       // 2. Blobを作成してファイルダウンロードを発火
       const jsonStr = JSON.stringify(d, null, 2);
       const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -2720,45 +2808,9 @@ const Controller={
             reader.onload = (e) => {
               try {
                 const d = JSON.parse(e.target.result);
-                
-                // 3. 既存の復元ロジックを実行
-                if (d.pdfScale) document.getElementById('pdfScale').value = d.pdfScale;
-                if (d.matrixTitle) document.getElementById('matrix-title-input').value = d.matrixTitle;
-                if (d.baseWidth) Store.config.baseWidth = d.baseWidth;
-                if (d.baseHeight) Store.config.baseHeight = d.baseHeight;
 
-                if (d.gridSize) {
-                  Store.config.gridSize = d.gridSize;
-                  document.getElementById('gridSizeSlider').value = d.gridSize;
-                  document.getElementById('gridSizeVal').textContent = d.gridSize;
-                }
-                if (d.gridOffsetX != null) {
-                  Store.config.gridOffsetX = d.gridOffsetX;
-                  document.getElementById('gridOffsetX').value = d.gridOffsetX;
-                }
-                if (d.gridOffsetY != null) {
-                  Store.config.gridOffsetY = d.gridOffsetY;
-                  document.getElementById('gridOffsetY').value = d.gridOffsetY;
-                }
-                if (d.alwaysShowLabels !== undefined) {
-                  Store.config.alwaysShowLabels = d.alwaysShowLabels;
-                  document.getElementById('toggleValveLabelsAlways').checked = d.alwaysShowLabels;
-                  document.getElementById('svg-layer').classList.toggle('always-show-labels', d.alwaysShowLabels);
-                }
-                // 背景グリッドをロード値に同期
-                const gs2=Store.config.gridSize,ox2=Store.config.gridOffsetX,oy2=Store.config.gridOffsetY;
-                document.getElementById('workspace').style.backgroundSize=`${gs2}px ${gs2}px`;
-                document.getElementById('workspace').style.backgroundPosition=`${ox2}px ${oy2}px`;
-          
-                Store.nodes = (d.nodes || []).map(n => Store.createNode(n.type || NODE_TYPE.SOURCE, n.x || 0, n.y || 0, n));
-                Store.edges = (d.edges || []).map(e => Store.createEdge(e.from, e.to, e));
-                Store.invalidateIndex();
-
-                Store.history = [];
-                Store.selection.clear();
-                Controller.setZoom(d.savedZoom || 1.0);
-                Simulator.run();
-                Renderer.renderAll();
+                // Phase 1: 状態復元ロジックは Persistence.apply() に一本化（自動保存復元と共通化）
+                Persistence.apply(d);
 
                 // 🌟🌟🌟 追加：PDFクリア機能 🌟🌟🌟
                 const pdfCanvas = document.getElementById('pdf-canvas');
@@ -2999,6 +3051,241 @@ const MasterTable = {
         MasterTable.close();
       }
     });
+  }
+};
+
+/* ━━━━━━━━ PERSISTENCE (Phase 1: 自動保存 / クラッシュ復帰) ━━━━━━━━ */
+const Persistence = {
+  KEY: 'steamboy_session_v1',
+  _loaded: false, _timer: null,
+  // 保存形式は手動保存(saveData)のJSONと完全互換
+  snapshot: () => ({
+    pdfScale: parseFloat($id('pdfScale').value) || 1.5,
+    matrixTitle: $id('matrix-title-input').value,
+    savedZoom: Store.config.currentZoom,
+    baseWidth: Store.config.baseWidth,
+    baseHeight: Store.config.baseHeight,
+    gridSize: Store.config.gridSize,
+    gridOffsetX: Store.config.gridOffsetX,
+    gridOffsetY: Store.config.gridOffsetY,
+    alwaysShowLabels: Store.config.alwaysShowLabels,
+    nodes: Store.nodes.map(n => ({ id: n.id, type: n.type, x: n.x, y: n.y, rotation: n.rotation, state: n.state, ext: n.ext, labelOffset: n.labelOffset })),
+    edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext }))
+  }),
+  // ファイル読込・自動復元の共通復元ロジック
+  apply: (d) => {
+    if (d.pdfScale) $id('pdfScale').value = d.pdfScale;
+    if (d.matrixTitle) $id('matrix-title-input').value = d.matrixTitle;
+    if (d.baseWidth) Store.config.baseWidth = d.baseWidth;
+    if (d.baseHeight) Store.config.baseHeight = d.baseHeight;
+    if (d.gridSize) { Store.config.gridSize = d.gridSize; $id('gridSizeSlider').value = d.gridSize; $id('gridSizeVal').textContent = d.gridSize; }
+    if (d.gridOffsetX != null) { Store.config.gridOffsetX = d.gridOffsetX; $id('gridOffsetX').value = d.gridOffsetX; }
+    if (d.gridOffsetY != null) { Store.config.gridOffsetY = d.gridOffsetY; $id('gridOffsetY').value = d.gridOffsetY; }
+    if (d.alwaysShowLabels !== undefined) { Store.config.alwaysShowLabels = d.alwaysShowLabels; $id('toggleValveLabelsAlways').checked = d.alwaysShowLabels; $id('svg-layer').classList.toggle('always-show-labels', d.alwaysShowLabels); }
+    const gs2 = Store.config.gridSize, ox2 = Store.config.gridOffsetX, oy2 = Store.config.gridOffsetY;
+    $id('workspace').style.backgroundSize = `${gs2}px ${gs2}px`;
+    $id('workspace').style.backgroundPosition = `${ox2}px ${oy2}px`;
+    Store.nodes = (d.nodes || []).map(n => Store.createNode(n.type || NODE_TYPE.SOURCE, n.x || 0, n.y || 0, n));
+    Store.edges = (d.edges || []).map(e => Store.createEdge(e.from, e.to, e));
+    Store.invalidateIndex();
+    Store.history = [];
+    Store.selection.clear();
+    Controller.setZoom(d.savedZoom || 1.0);
+    Simulator.run();
+    Renderer.renderAll();
+  },
+  // 起動時: 前回セッションがあれば復元（戻り値: 復元したか）
+  restore: () => {
+    let raw = null;
+    try { raw = localStorage.getItem(Persistence.KEY); } catch (_) {}
+    if (!raw) return false;
+    try {
+      const d = JSON.parse(raw);
+      if (!d || !Array.isArray(d.nodes)) return false;
+      Persistence.apply(d);
+      return true;
+    } catch (_) { return false; }
+  },
+  enableAutosave: () => { Persistence._loaded = true; },
+  scheduleSave: () => {
+    if (!Persistence._loaded) return;
+    if (Persistence._timer) clearTimeout(Persistence._timer);
+    Persistence._timer = setTimeout(Persistence._write, 1200);
+  },
+  _write: () => {
+    Persistence._timer = null;
+    try { localStorage.setItem(Persistence.KEY, JSON.stringify(Persistence.snapshot())); } catch (_) {}
+  }
+};
+
+/* ━━━━━━━━ TOAST (Phase 1: 通知 + 元に戻す) ━━━━━━━━ */
+const Toast = {
+  _container: null,
+  _ensure: () => {
+    if (!Toast._container) {
+      const c = document.createElement('div');
+      c.id = 'toast-container';
+      document.body.appendChild(c);
+      Toast._container = c;
+    }
+    return Toast._container;
+  },
+  show: (msg, opts = {}) => {
+    const { actionLabel, onAction, duration = 5000 } = opts;
+    const c = Toast._ensure();
+    const t = document.createElement('div');
+    t.className = 'toast';
+    const span = document.createElement('span');
+    span.textContent = msg;
+    t.appendChild(span);
+    let timer = null;
+    const dismiss = () => { if (timer) clearTimeout(timer); t.classList.add('hide'); setTimeout(() => { if (t.parentNode) t.remove(); }, 220); };
+    if (actionLabel && onAction) {
+      const btn = document.createElement('button');
+      btn.className = 'toast-action';
+      btn.textContent = actionLabel;
+      btn.addEventListener('click', () => { onAction(); dismiss(); });
+      t.appendChild(btn);
+    }
+    c.appendChild(t);
+    timer = setTimeout(dismiss, duration);
+    return t;
+  }
+};
+
+/* ━━━━━━━━ CONTEXT MENU (Phase 1: 右クリックメニュー) ━━━━━━━━ */
+const ContextMenu = {
+  _el: null, _outside: null,
+  open: (clientX, clientY, items) => {
+    ContextMenu.close();
+    const el = document.createElement('div');
+    el.className = 'glass ctx-menu vs-pop';
+    items.forEach(it => {
+      if (it.separator) { const s = document.createElement('div'); s.className = 'ctx-sep'; el.appendChild(s); return; }
+      const row = document.createElement('div');
+      row.className = 'ctx-item' + (it.danger ? ' danger' : '');
+      const ic = document.createElement('span'); ic.className = 'ctx-icon'; ic.textContent = it.icon || '';
+      const lb = document.createElement('span'); lb.textContent = it.label;
+      row.appendChild(ic); row.appendChild(lb);
+      row.addEventListener('click', () => { ContextMenu.close(); if (it.onClick) it.onClick(); });
+      el.appendChild(row);
+    });
+    el.style.cssText = `left:${clientX}px;top:${clientY}px;`;
+    document.body.appendChild(el);
+    ContextMenu._el = el;
+    // 画面端での見切れ補正
+    requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect();
+      if (r.right > window.innerWidth - 8) el.style.left = Math.max(8, clientX - r.width) + 'px';
+      if (r.bottom > window.innerHeight - 8) el.style.top = Math.max(8, clientY - r.height) + 'px';
+    });
+    ContextMenu._outside = (ev) => { if (ContextMenu._el && !ContextMenu._el.contains(ev.target)) ContextMenu.close(); };
+    setTimeout(() => document.addEventListener('pointerdown', ContextMenu._outside, { capture: true }), 50);
+  },
+  close: () => {
+    if (ContextMenu._el) { ContextMenu._el.remove(); ContextMenu._el = null; }
+    if (ContextMenu._outside) { document.removeEventListener('pointerdown', ContextMenu._outside, { capture: true }); ContextMenu._outside = null; }
+  }
+};
+
+/* ━━━━━━━━ SAMPLE DIAGRAM (Phase 1: オンボーディング用サンプル配管) ━━━━━━━━ */
+const SampleDiagram = {
+  load: () => {
+    Store.pushHistory(); // サンプル投入も undo 可能にする
+    const N = (t, x, y) => Store.createNode(t, x, y);
+    const s  = N('source', 240, 330);
+    const v1 = N('valve',  380, 330);
+    const sp = N('split',  520, 330);
+    const v2 = N('valve',  640, 250);
+    const rd = N('reducer',760, 250);
+    const hx = N('heatex', 880, 250);
+    const t1 = N('trap',  1010, 250);
+    const d1 = N('drain', 1010, 400);
+    const v3 = N('valve',  640, 440);
+    const t2 = N('trap',   760, 440);
+    const d2 = N('drain',  760, 570);
+    Store.nodes = [s, v1, sp, v2, rd, hx, t1, d1, v3, t2, d2];
+    const E = (a, b) => Store.createEdge(a.id, b.id);
+    Store.edges = [E(s,v1),E(v1,sp),E(sp,v2),E(v2,rd),E(rd,hx),E(hx,t1),E(t1,d1),E(sp,v3),E(v3,t2),E(t2,d2)];
+    Store.invalidateIndex();
+    Simulator.run();
+    Renderer.renderAll();
+  }
+};
+
+/* ━━━━━━━━ ONBOARDING (Phase 1: 初回ガイド) ━━━━━━━━ */
+const Onboarding = {
+  FLAG: 'steamboy_onboarded_v1',
+  _step: 0, _overlay: null,
+  STEPS: [
+    { illus:'🧩', title:'1. 機器を配置する', desc:'上部ツールバーから機器（Source・バルブ・トラップなど）を選び、キャンバスをクリックすると配置できます。' },
+    { illus:'🔗', title:'2. 配管でつなぐ', desc:'接続ボタン（鎖アイコン / キー C）を押し、つなぎたい2つの機器を順にクリックすると配管が引かれます。' },
+    { illus:'🎚️', title:'3. バルブを操作する', desc:'バルブをクリックすると開度（閉止・微開・開放）を選べます。蒸気・ドレンの流れがリアルタイムに可視化されます。' }
+  ],
+  _ensure: () => {
+    if (Onboarding._overlay) return Onboarding._overlay;
+    const ov = document.createElement('div');
+    ov.id = 'onb-overlay';
+    document.body.appendChild(ov);
+    Onboarding._overlay = ov;
+    return ov;
+  },
+  maybeFirstVisit: () => {
+    let seen = false;
+    try { seen = !!localStorage.getItem(Onboarding.FLAG); } catch (_) {}
+    if (!seen) Onboarding.welcome();
+  },
+  _markSeen: () => { try { localStorage.setItem(Onboarding.FLAG, '1'); } catch (_) {} },
+  welcome: () => {
+    const ov = Onboarding._ensure();
+    ov.innerHTML = `
+      <div class="onb-card">
+        <svg class="onb-logo" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="100" cy="100" r="92" fill="#fff" stroke="#1D1D1F" stroke-width="8"/>
+          <circle cx="100" cy="100" r="48" fill="#fff" stroke="#1D1D1F" stroke-width="8"/>
+          <path d="M 52 100 A 48 48 0 0 1 148 100" fill="#007AFF" stroke="#1D1D1F" stroke-width="8"/>
+          <rect x="46" y="80" width="108" height="14" fill="#1D1D1F" rx="2"/>
+          <circle cx="74" cy="87" r="11" fill="#007AFF"/><circle cx="126" cy="87" r="11" fill="#007AFF"/>
+        </svg>
+        <div class="onb-title">STEAM-BOY へようこそ</div>
+        <div class="onb-desc">配管シミュレーターで、バルブ操作による蒸気・ドレンの流れを直感的に確認できます。<br>まずはサンプルで触ってみましょう。</div>
+        <div class="onb-buttons">
+          <button class="onb-btn ghost" id="onb-empty">空のキャンバス</button>
+          <button class="onb-btn primary" id="onb-sample">サンプルで始める</button>
+        </div>
+      </div>`;
+    ov.classList.add('show');
+    ov.querySelector('#onb-sample').addEventListener('click', () => { SampleDiagram.load(); Onboarding.tour(); });
+    ov.querySelector('#onb-empty').addEventListener('click', () => { Onboarding.tour(); });
+  },
+  // コーチマーク（サンプルは読み込まない。ヘルプからの再表示にも使用）
+  tour: () => { Onboarding._step = 0; Onboarding._renderStep(); },
+  _renderStep: () => {
+    const ov = Onboarding._ensure();
+    const i = Onboarding._step, st = Onboarding.STEPS[i], last = i === Onboarding.STEPS.length - 1;
+    const dots = Onboarding.STEPS.map((_, k) => `<div class="onb-dot ${k === i ? 'active' : ''}"></div>`).join('');
+    ov.innerHTML = `
+      <div class="onb-card">
+        <div class="onb-illus">${st.illus}</div>
+        <div class="onb-title">${st.title}</div>
+        <div class="onb-desc">${st.desc}</div>
+        <div class="onb-steps">${dots}</div>
+        <div class="onb-buttons">
+          <button class="onb-btn ghost" id="onb-skip">スキップ</button>
+          <button class="onb-btn primary" id="onb-next">${last ? 'はじめる' : '次へ'}</button>
+        </div>
+      </div>`;
+    ov.classList.add('show');
+    ov.querySelector('#onb-skip').addEventListener('click', Onboarding.close);
+    ov.querySelector('#onb-next').addEventListener('click', () => {
+      if (last) Onboarding.close();
+      else { Onboarding._step++; Onboarding._renderStep(); }
+    });
+  },
+  close: () => {
+    Onboarding._markSeen();
+    const ov = Onboarding._overlay;
+    if (ov) { ov.classList.remove('show'); setTimeout(() => { ov.innerHTML = ''; }, 300); }
   }
 };
 

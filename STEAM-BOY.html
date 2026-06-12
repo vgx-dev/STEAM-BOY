@@ -918,6 +918,14 @@ g.node[data-active="1"] {
     </div>
   </div>
 
+  <div class="sp-section">
+    <div class="sp-section-title">記録・共有</div>
+    <div class="sp-buttons">
+      <button class="sp-btn" id="btn-sequencer">⏺ 操作シーケンス</button>
+      <button class="sp-btn" id="btn-share">🔗 共有リンク</button>
+    </div>
+  </div>
+
   <div class="sp-section" id="anomaly-panel">
     <div class="sp-section-title">診断<span id="anomaly-badge" class="anomaly-badge" style="display:none"></span></div>
     <div id="anomaly-list" style="font-size:11px;color:var(--green);font-weight:500;">✓ 異常なし</div>
@@ -1105,6 +1113,32 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
   #iso-plan-modal *{visibility:visible!important;}
   .iso-no-print{display:none!important;}
 }
+
+/* ── Phase 4: 操作シーケンス タイムライン ── */
+#seq-bar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:195;border-radius:14px;padding:8px 12px;display:none;flex-direction:column;gap:6px;width:min(94vw,720px);}
+#seq-bar.open{display:flex;}
+.seq-row{display:flex;align-items:center;gap:8px;}
+.seq-btn{height:30px;min-width:30px;padding:0 9px;border:none;border-radius:8px;background:rgba(0,0,0,0.05);color:var(--text-1);font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;transition:background .15s,transform .1s;flex-shrink:0;}
+.seq-btn:hover{background:rgba(0,0,0,0.09);}
+.seq-btn:active{transform:scale(0.93);}
+.seq-btn:disabled{opacity:0.35;cursor:default;}
+.seq-btn.primary{background:var(--accent);color:#fff;}
+.seq-btn.primary:hover{background:#0066d6;}
+.seq-rec{background:rgba(255,59,48,0.1);color:var(--red);}
+.seq-rec:hover{background:rgba(255,59,48,0.16);}
+.seq-rec.active{background:var(--red);color:#fff;animation:seqRecPulse 1.4s ease-in-out infinite;}
+@keyframes seqRecPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,59,48,0.4);}50%{box-shadow:0 0 0 5px rgba(255,59,48,0);}}
+.seq-scrub{flex:1;min-width:60px;height:5px;-webkit-appearance:none;appearance:none;background:rgba(0,0,0,0.1);border-radius:3px;outline:none;cursor:pointer;}
+.seq-scrub::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.25),0 0 0 1px rgba(0,0,0,0.06);cursor:pointer;}
+.seq-scrub:disabled{opacity:0.4;}
+.seq-count{font-size:11px;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:38px;text-align:center;}
+.seq-speed{height:28px;border:1px solid rgba(0,0,0,0.1);border-radius:7px;background:rgba(0,0,0,0.03);font-size:11px;font-family:var(--font);color:var(--text-1);cursor:pointer;outline:none;padding:0 4px;}
+.seq-sel{height:28px;max-width:120px;border:1px solid rgba(0,0,0,0.1);border-radius:7px;background:rgba(0,0,0,0.03);font-size:11px;font-family:var(--font);color:var(--text-1);cursor:pointer;outline:none;padding:0 4px;}
+.seq-sep{width:1px;height:18px;background:rgba(0,0,0,0.1);flex-shrink:0;}
+.seq-label{font-size:11px;color:var(--text-2);min-height:15px;text-align:center;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.seq-label .seq-cur{color:var(--accent);font-weight:700;}
+.seq-label .seq-playing{color:var(--red);font-weight:700;}
+.seq-close{margin-left:2px;}
 </style>
 
 <script>
@@ -1124,10 +1158,14 @@ const FLUID={EMPTY:0,WATER:1,DRAIN:2,STEAM:3};
 const NODE_TYPE={SOURCE:'source',VALVE:'valve',TRAP:'trap',DRAIN:'drain',SPLIT:'split',MERGE:'merge',POINTER:'pointer',ROTATE:'rotate',REDUCER:'reducer',HEATEX:'heatex',SAFETY:'safety'};
 const VALVE_STATE={CLOSED:0,PARTIAL:1,OPEN:2};
 const COLOR_MAP={0:'#8E8E93',1:'#007AFF',2:'#AF52DE',3:'#FF3B30'};
+const VALVE_STATE_LABEL={0:'閉止',1:'微開',2:'開放'};
+/* 共有の表示名ロジック（renderAll と同一カウンタ順）— Master/Isolation/Sequencer で共用 */
+const NAMING_LABELS={source:'Source',valve:'バルブ',trap:'Trap',drain:'Drain',split:'Split',merge:'Merge',reducer:'減圧弁',heatex:'熱交換器',safety:'安全弁'};
+const buildNameMap=()=>{const c={source:1,valve:1,trap:1,drain:1,split:1,merge:1,reducer:1,heatex:1,safety:1};const m=new Map();Store.nodes.forEach(n=>{const num=c[n.type]!==undefined?c[n.type]++:1;m.set(n.id,n.ext.customName||`${NAMING_LABELS[n.type]||n.type} ${num}`);});return m;};
 
 /* ━━━━━━━━ STORE ━━━━━━━━ */
 const Store={
-  nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],
+  nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],sequences:[],
   config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false},  
   dragState:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
   multiDrag:{active:false,nodes:[],gEl:null,startSvgX:0,startSvgY:0,startClientX:0,startClientY:0,hasDragged:false,pointerId:null,preSnapshot:null},
@@ -2438,7 +2476,9 @@ const ValveSelector={
     if(targetState===node.state.valveState)return;
     const prevStates=new Map(Store.edges.map(e=>[e.id,{f:e._sim.f,b:e._sim.b||0}]));
     Store.pushHistory();
+    const _fromState=node.state.valveState;
     node.state.valveState=targetState;
+    Sequencer.onValveChange(node.id,_fromState,targetState); // Phase 4: 記録中なら手順に追加
     Simulator.run(()=>{
       Animator.prepare(node,prevStates);
       Renderer.renderAll();
@@ -2718,7 +2758,7 @@ const Controller={
       if(['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;
       if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault();Controller.undo();return;}
       if(ev.key==='Tab'){ev.preventDefault();document.body.classList.toggle('zen-mode');return;}
-      if(ev.key==='Escape'){ContextMenu.close();if(Onboarding._overlay&&Onboarding._overlay.classList.contains('show')){Onboarding.close();return;}if(IsolationPlan._modal&&IsolationPlan._modal.classList.contains('open')){IsolationPlan.close();return;}ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
+      if(ev.key==='Escape'){ContextMenu.close();if(Onboarding._overlay&&Onboarding._overlay.classList.contains('show')){Onboarding.close();return;}if(IsolationPlan._modal&&IsolationPlan._modal.classList.contains('open')){IsolationPlan.close();return;}if(Sequencer.playing){Sequencer.pause();return;}ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
       if((ev.key==='Delete'||ev.key==='Backspace')&&Store.selection.size>0){ev.preventDefault();Controller.deleteSelected();return;}
       if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
       const toolKeys={v:'pointer',r:'rotate',s:'source',a:'valve',t:'trap',d:'drain',y:'split',m:'merge',e:'reducer',h:'heatex',q:'safety',p:'pin'};
@@ -2729,13 +2769,22 @@ const Controller={
 
     ImageViewer.init();
     MasterTable.init();
+    Sequencer.init();
     document.getElementById('btn-tutorial').addEventListener('click',()=>Onboarding.tour(true));
+    document.getElementById('btn-sequencer').addEventListener('click',()=>Sequencer.toggle());
+    document.getElementById('btn-share').addEventListener('click',()=>Share.createLink());
 
-    // Phase 1: 前回セッションの自動復元 → 初回訪問者にはオンボーディングを表示
-    const _restored = Persistence.restore();
-    Renderer.updateZoom();Renderer.renderAll();
-    Persistence.enableAutosave();
-    if(!_restored) Onboarding.maybeFirstVisit();
+    Renderer.updateZoom();
+    // Phase 4: 共有リンク(#d=)があれば最優先で復元 → 無ければ前回セッション復元
+    //          → どちらも無ければ初回オンボーディング（共有/復元は非同期のため async で順序保証）
+    (async()=>{
+      let loaded=false;
+      if(Share.hasLink()) loaded=await Share.loadFromHash();
+      if(!loaded) loaded=Persistence.restore();
+      if(!loaded) Renderer.renderAll();
+      Persistence.enableAutosave();
+      if(loaded) Persistence.scheduleSave(); else Onboarding.maybeFirstVisit();
+    })();
   },
 
   setZoom:(z)=>{Store.config.currentZoom=Math.max(.2,Math.min(z,3.0));Renderer.updateZoom();requestAnimationFrame(()=>{Minimap.draw();Culling.scheduleApply();/*Epic7*/});},
@@ -3275,7 +3324,8 @@ const Persistence = {
     gridOffsetY: Store.config.gridOffsetY,
     alwaysShowLabels: Store.config.alwaysShowLabels,
     nodes: Store.nodes.map(n => ({ id: n.id, type: n.type, x: n.x, y: n.y, rotation: n.rotation, state: n.state, ext: n.ext, labelOffset: n.labelOffset })),
-    edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext }))
+    edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext })),
+    sequences: Store.sequences  // Phase 4: 記録済み操作シーケンス
   }),
   // ファイル読込・自動復元の共通復元ロジック
   apply: (d) => {
@@ -3292,9 +3342,11 @@ const Persistence = {
     $id('workspace').style.backgroundPosition = `${ox2}px ${oy2}px`;
     Store.nodes = (d.nodes || []).map(n => Store.createNode(n.type || NODE_TYPE.SOURCE, n.x || 0, n.y || 0, n));
     Store.edges = (d.edges || []).map(e => Store.createEdge(e.from, e.to, e));
+    Store.sequences = Array.isArray(d.sequences) ? d.sequences : [];  // Phase 4
     Store.invalidateIndex();
     Store.history = [];
     Store.selection.clear();
+    if (typeof Sequencer !== 'undefined' && Sequencer._built) Sequencer.refresh();
     Controller.setZoom(d.savedZoom || 1.0);
     // Phase 3: まず図形を即時描画し、流体計算は完了次第反映
     // （大規模グラフではWorkerの初回起動を待たずにUIが表示される）
@@ -3499,13 +3551,7 @@ const Onboarding = {
 const IsolationPlan = {
   _overlay: null, _modal: null, _data: null,
   // renderAll と同一カウンタロジックで全ノードの表示名を算出
-  _nameMap: () => {
-    const counters = { source:1, valve:1, trap:1, drain:1, split:1, merge:1, reducer:1, heatex:1, safety:1 };
-    const labels = { source:'Source', valve:'バルブ', trap:'Trap', drain:'Drain', split:'Split', merge:'Merge', reducer:'減圧弁', heatex:'熱交換器', safety:'安全弁' };
-    const m = new Map();
-    Store.nodes.forEach(n => { const num = counters[n.type] !== undefined ? counters[n.type]++ : 1; m.set(n.id, n.ext.customName || `${labels[n.type] || n.type} ${num}`); });
-    return m;
-  },
+  _nameMap: () => buildNameMap(),
   // 対象機器を隔離する「境界バルブ集合」をフラッドフィルで算出
   compute: (targetId) => {
     const nodeMap = Store.nodeMap();
@@ -3618,7 +3664,7 @@ const IsolationPlan = {
     const toClose = d.valves.filter(v => v.state !== VALVE_STATE.CLOSED);
     if (!toClose.length) { Toast.show('すべてのバルブは既に閉止しています'); return; }
     Store.pushHistory();
-    toClose.forEach(v => { const n = Store.getNode(v.id); if (n) n.state.valveState = VALVE_STATE.CLOSED; });
+    toClose.forEach(v => { const n = Store.getNode(v.id); if (n) { Sequencer.onValveChange(n.id, n.state.valveState, VALVE_STATE.CLOSED); n.state.valveState = VALVE_STATE.CLOSED; } });
     IsolationPlan.close();
     Simulator.run(() => {
       Renderer.renderAll();
@@ -3642,6 +3688,271 @@ const IsolationPlan = {
     if (IsolationPlan._overlay) IsolationPlan._overlay.classList.remove('open');
     if (IsolationPlan._modal) IsolationPlan._modal.classList.remove('open');
     IsolationPlan._data = null;
+  }
+};
+
+/* ━━━━━━━━ SEQUENCER (Phase 4: 操作シーケンス記録・再生) ━━━━━━━━ */
+// バルブ操作を「手順」として記録し、スライダー/再生でアニメーション付きスクラブ再生する。
+// 起動・停止・隔離などの手順書を共有・教育用途に活用できる。
+const Sequencer = {
+  _built: false, recording: false, playing: false,
+  _active: null,   // { name, base(snapshot), steps:[{valveId, name, from, to}] }
+  _index: 0,       // 再生位置（適用済みステップ数）
+  _speed: 1, _timer: null,
+  STEP_MS: 1500,   // 1ステップあたりの基準時間（speedで除算）
+
+  init: () => {
+    const bar = document.createElement('div');
+    bar.id = 'seq-bar'; bar.className = 'glass';
+    bar.innerHTML = `
+      <div class="seq-row">
+        <button class="seq-btn seq-rec" id="seq-rec" title="記録の開始/停止">● 記録</button>
+        <div class="seq-sep"></div>
+        <button class="seq-btn" id="seq-prev" title="先頭へ">⏮</button>
+        <button class="seq-btn primary" id="seq-play" title="再生/一時停止">▶</button>
+        <button class="seq-btn" id="seq-next" title="末尾へ">⏭</button>
+        <input type="range" class="seq-scrub" id="seq-scrub" min="0" max="0" value="0" step="1">
+        <span class="seq-count" id="seq-count">0 / 0</span>
+        <select class="seq-speed" id="seq-speed" title="再生速度">
+          <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option>
+        </select>
+        <div class="seq-sep"></div>
+        <button class="seq-btn" id="seq-save" title="名前を付けて保存">💾</button>
+        <select class="seq-sel" id="seq-load" title="保存済みシーケンス"><option value="">読込…</option></select>
+        <button class="seq-btn" id="seq-clear" title="現在のシーケンスを破棄">🗑</button>
+        <div class="seq-sep"></div>
+        <button class="seq-btn seq-close" id="seq-close" title="閉じる">✕</button>
+      </div>
+      <div class="seq-label" id="seq-label">「● 記録」で操作の記録を開始します。</div>`;
+    document.body.appendChild(bar);
+    Sequencer._bar = bar;
+    Sequencer._built = true;
+
+    bar.querySelector('#seq-rec').onclick = Sequencer.toggleRecording;
+    bar.querySelector('#seq-prev').onclick = () => Sequencer.stepTo(0);
+    bar.querySelector('#seq-next').onclick = () => { const n = Sequencer._active ? Sequencer._active.steps.length : 0; Sequencer.stepTo(n); };
+    bar.querySelector('#seq-play').onclick = Sequencer.togglePlay;
+    bar.querySelector('#seq-scrub').oninput = (ev) => Sequencer.stepTo(parseInt(ev.target.value, 10));
+    bar.querySelector('#seq-speed').onchange = (ev) => { Sequencer._speed = parseFloat(ev.target.value); };
+    bar.querySelector('#seq-save').onclick = Sequencer.saveCurrent;
+    bar.querySelector('#seq-load').onchange = (ev) => { if (ev.target.value) Sequencer.loadSaved(ev.target.value); };
+    bar.querySelector('#seq-clear').onclick = Sequencer.clearCurrent;
+    bar.querySelector('#seq-close').onclick = Sequencer.toggle;
+    Sequencer.refresh();
+  },
+
+  toggle: () => { Sequencer._bar.classList.toggle('open'); },
+  show: () => { Sequencer._bar.classList.add('open'); },
+
+  toggleRecording: () => {
+    if (Sequencer.recording) { Sequencer.recording = false; Sequencer.refresh(); return; }
+    // 記録開始: 現在状態を base とし、以降のバルブ操作を手順化
+    Sequencer.pause();
+    Sequencer._active = { name: '', base: Store.snapshot(), steps: [] };
+    Sequencer._index = 0;
+    Sequencer.recording = true;
+    Sequencer.refresh();
+  },
+
+  // バルブ状態変更時にフックされる（記録中のみ手順へ追加）
+  onValveChange: (valveId, from, to) => {
+    if (!Sequencer.recording || from === to) return;
+    const name = buildNameMap().get(valveId) || 'バルブ';
+    Sequencer._active.steps.push({ valveId, name, from, to });
+    Sequencer._index = Sequencer._active.steps.length;
+    Sequencer.refresh();
+  },
+
+  togglePlay: () => { if (Sequencer.playing) Sequencer.pause(); else Sequencer.play(); },
+
+  play: () => {
+    const a = Sequencer._active; if (!a || !a.steps.length) return;
+    if (Sequencer.recording) { Sequencer.recording = false; }
+    // 末尾なら先頭へ巻き戻してから再生
+    if (Sequencer._index >= a.steps.length) { Sequencer.stepTo(0); }
+    Sequencer.playing = true;
+    Sequencer.refresh();
+    Sequencer._advance();
+  },
+
+  _advance: () => {
+    if (!Sequencer.playing) return;
+    const a = Sequencer._active;
+    if (!a || Sequencer._index >= a.steps.length) { Sequencer.pause(); return; }
+    const step = a.steps[Sequencer._index];
+    Sequencer._index++;
+    Sequencer._applyStep(step, true, () => {
+      Sequencer.refresh();
+      if (!Sequencer.playing) return;
+      Sequencer._timer = setTimeout(Sequencer._advance, Sequencer.STEP_MS / Sequencer._speed);
+    });
+  },
+
+  pause: () => {
+    Sequencer.playing = false;
+    if (Sequencer._timer) { clearTimeout(Sequencer._timer); Sequencer._timer = null; }
+    Sequencer.refresh();
+  },
+
+  // 任意位置へジャンプ（base から k 手順を即時適用、アニメなし）
+  stepTo: (k) => {
+    const a = Sequencer._active; if (!a) return;
+    Sequencer.pause();
+    k = Math.max(0, Math.min(k, a.steps.length));
+    Store.restore(a.base);
+    for (let i = 0; i < k; i++) { const s = a.steps[i]; const n = Store.getNode(s.valveId); if (n) n.state.valveState = s.to; }
+    Sequencer._index = k;
+    Simulator.run(() => { Renderer.renderAll(); Sequencer.refresh(); });
+  },
+
+  // 1ステップをアニメーション付きで適用
+  _applyStep: (step, animate, done) => {
+    const node = Store.getNode(step.valveId);
+    if (!node) { if (done) done(); return; }
+    const prevStates = animate ? new Map(Store.edges.map(e => [e.id, { f: e._sim.f, b: e._sim.b || 0 }])) : null;
+    node.state.valveState = step.to;
+    Simulator.run(() => {
+      if (animate) Animator.prepare(node, prevStates);
+      Renderer.renderAll();
+      if (animate) requestAnimationFrame(() => requestAnimationFrame(() => Animator.apply()));
+      if (done) done();
+    });
+  },
+
+  saveCurrent: () => {
+    const a = Sequencer._active;
+    if (!a || !a.steps.length) { Toast.show('保存する手順がありません'); return; }
+    const name = prompt('シーケンス名を入力してください:', a.name || (a.steps.length ? `手順 (${a.steps.length}操作)` : '手順'));
+    if (name === null) return;
+    const seq = { id: a.id || Store.generateId(), name: name.trim() || '無題の手順', base: a.base, steps: a.steps };
+    a.id = seq.id; a.name = seq.name;
+    const idx = Store.sequences.findIndex(s => s.id === seq.id);
+    if (idx >= 0) Store.sequences[idx] = seq; else Store.sequences.push(seq);
+    Sequencer.refresh();
+    Persistence.scheduleSave();
+    Toast.show(`「${seq.name}」を保存しました`);
+  },
+
+  loadSaved: (id) => {
+    const seq = Store.sequences.find(s => s.id === id);
+    if (!seq) return;
+    Sequencer.pause();
+    Sequencer.recording = false;
+    // ディープコピーして読み込み（保存元を再生で破壊しない）
+    Sequencer._active = { id: seq.id, name: seq.name, base: seq.base, steps: seq.steps.map(s => ({ ...s })) };
+    Sequencer.stepTo(0);
+    Toast.show(`「${seq.name}」を読み込みました（▶ で再生）`);
+  },
+
+  clearCurrent: () => {
+    if (!Sequencer._active) return;
+    Sequencer.pause();
+    Sequencer.recording = false;
+    Sequencer._active = null;
+    Sequencer._index = 0;
+    Sequencer.refresh();
+  },
+
+  refresh: () => {
+    if (!Sequencer._built) return;
+    const bar = Sequencer._bar, a = Sequencer._active;
+    const steps = a ? a.steps.length : 0;
+    const recBtn = bar.querySelector('#seq-rec');
+    recBtn.classList.toggle('active', Sequencer.recording);
+    recBtn.textContent = Sequencer.recording ? '■ 停止' : '● 記録';
+    const scrub = bar.querySelector('#seq-scrub');
+    scrub.max = steps; scrub.value = Sequencer._index; scrub.disabled = steps === 0;
+    bar.querySelector('#seq-count').textContent = `${Sequencer._index} / ${steps}`;
+    const playBtn = bar.querySelector('#seq-play');
+    playBtn.textContent = Sequencer.playing ? '⏸' : '▶';
+    playBtn.disabled = steps === 0;
+    bar.querySelector('#seq-prev').disabled = steps === 0;
+    bar.querySelector('#seq-next').disabled = steps === 0;
+    bar.querySelector('#seq-save').disabled = steps === 0;
+    // 保存済みリスト
+    const sel = bar.querySelector('#seq-load');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">読込…</option>' + Store.sequences.map(s => `<option value="${s.id}">${(s.name || '無題').replace(/</g, '&lt;')}（${s.steps.length}）</option>`).join('');
+    if (a && a.id && Store.sequences.some(s => s.id === a.id)) sel.value = a.id; else sel.value = cur && [...sel.options].some(o => o.value === cur) ? cur : '';
+    // ラベル
+    const lbl = bar.querySelector('#seq-label');
+    if (Sequencer.recording) {
+      lbl.innerHTML = `<span class="seq-playing">● 記録中</span> — バルブを操作すると手順に追加されます（${steps}操作）`;
+    } else if (!a || !steps) {
+      lbl.textContent = '「● 記録」で操作の記録を開始します。';
+    } else {
+      const i = Sequencer._index;
+      if (Sequencer.playing && i > 0 && i <= steps) {
+        const s = a.steps[i - 1];
+        lbl.innerHTML = `<span class="seq-playing">▶ 再生中</span> ${i}. <span class="seq-cur">${(s.name || '').replace(/</g, '&lt;')}</span> を ${VALVE_STATE_LABEL[s.to]}`;
+      } else if (i >= steps) {
+        lbl.innerHTML = `完了（全${steps}手順）— ⏮ で先頭へ`;
+      } else {
+        const s = a.steps[i];
+        lbl.innerHTML = `次の手順 ${i + 1}. <span class="seq-cur">${(s.name || '').replace(/</g, '&lt;')}</span> を ${VALVE_STATE_LABEL[s.to]}`;
+      }
+    }
+  }
+};
+
+/* ━━━━━━━━ SHARE (Phase 4: 共有リンク — ネイティブgzip圧縮 + base64url) ━━━━━━━━ */
+const Share = {
+  hasLink: () => location.hash.startsWith('#d='),
+  _b64urlEncode: (bytes) => {
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  },
+  _b64urlDecode: (str) => {
+    str = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (str.length % 4) str += '=';
+    const bin = atob(str), a = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+    return a;
+  },
+  _gzip: async (str) => {
+    const cs = new CompressionStream('gzip'), w = cs.writable.getWriter();
+    w.write(new TextEncoder().encode(str)); w.close();
+    return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+  },
+  _gunzip: async (bytes) => {
+    const ds = new DecompressionStream('gzip'), w = ds.writable.getWriter();
+    w.write(bytes); w.close();
+    return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer());
+  },
+  encode: async (obj) => {
+    const json = JSON.stringify(obj);
+    if (typeof CompressionStream === 'function') return 'g' + Share._b64urlEncode(await Share._gzip(json));
+    return 'j' + Share._b64urlEncode(new TextEncoder().encode(json));
+  },
+  decode: async (payload) => {
+    const tag = payload[0], bytes = Share._b64urlDecode(payload.slice(1));
+    const json = tag === 'g' ? await Share._gunzip(bytes) : new TextDecoder().decode(bytes);
+    return JSON.parse(json);
+  },
+  createLink: async () => {
+    try {
+      const payload = await Share.encode(Persistence.snapshot());
+      const url = location.origin + location.pathname + '#d=' + payload;
+      if (url.length > 16000) {
+        Toast.show('⚠ 図面が大きく共有リンクが長すぎます。ファイル保存をご利用ください', { duration: 7000 });
+        return;
+      }
+      let copied = false;
+      try { await navigator.clipboard.writeText(url); copied = true; } catch (_) {}
+      if (copied) Toast.show('共有リンクをクリップボードにコピーしました');
+      else { prompt('共有リンク（コピーしてください）:', url); }
+    } catch (err) { Toast.show('共有リンクの生成に失敗しました'); console.error(err); }
+  },
+  loadFromHash: async () => {
+    try {
+      const obj = await Share.decode(location.hash.slice(3));
+      if (!obj || !Array.isArray(obj.nodes)) return false;
+      Persistence.apply(obj);
+      // 適用後はハッシュを除去（リロードで古いリンクが再適用されないように）
+      history.replaceState(null, '', location.pathname + location.search);
+      return true;
+    } catch (_) { return false; }
   }
 };
 

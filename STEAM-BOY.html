@@ -1107,12 +1107,85 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
 
 /* 印刷時は隔離計画チェックリストのみを出力 */
 @media print{
-  body > *:not(#iso-plan-modal){visibility:hidden!important;}
+  body > *:not(#iso-plan-modal):not(#op-manual-modal){visibility:hidden!important;}
   #iso-plan-overlay{display:none!important;}
   #iso-plan-modal{position:absolute!important;left:0!important;top:0!important;transform:none!important;width:100%!important;max-height:none!important;box-shadow:none!important;background:#fff!important;border:none!important;}
   #iso-plan-modal *{visibility:visible!important;}
   .iso-no-print{display:none!important;}
 }
+
+/* ── Constraint Panel (inside iso-plan-modal) ── */
+.iso-constraint-panel{border:1px solid rgba(0,0,0,0.08);border-radius:12px;background:rgba(0,0,0,0.02);margin-bottom:14px;overflow:hidden;}
+.iso-constraint-toggle{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text-1);user-select:none;transition:background .15s;}
+.iso-constraint-toggle:hover{background:rgba(0,0,0,0.03);}
+.iso-constraint-toggle .iso-arrow{transition:transform .2s;font-size:10px;}
+.iso-constraint-toggle.open .iso-arrow{transform:rotate(90deg);}
+.iso-constraint-body{display:none;padding:4px 14px 14px;}
+.iso-constraint-toggle.open+.iso-constraint-body{display:block;}
+.iso-cst-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px;color:var(--text-1);}
+.iso-cst-row label{flex:1;display:flex;align-items:center;gap:8px;cursor:pointer;}
+.iso-cst-row select,.iso-cst-row input[type=number]{height:28px;border:1px solid rgba(0,0,0,0.12);border-radius:7px;background:rgba(0,0,0,0.03);font-size:12px;font-family:var(--font);color:var(--text-1);padding:0 6px;outline:none;width:60px;}
+.iso-cst-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--accent);}
+.iso-profile-row{display:flex;gap:8px;align-items:center;margin-bottom:10px;}
+.iso-profile-row select{flex:1;height:30px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;background:rgba(0,0,0,0.03);font-size:12px;font-family:var(--font);color:var(--text-1);padding:0 8px;outline:none;}
+.iso-profile-btn{padding:4px 10px;border:none;border-radius:7px;background:rgba(0,0,0,0.06);color:var(--text-1);font-size:11px;font-weight:600;font-family:var(--font);cursor:pointer;transition:background .15s;white-space:nowrap;}
+.iso-profile-btn:hover{background:rgba(0,0,0,0.1);}
+.iso-warn-list{margin-bottom:10px;}
+.iso-warn-item{padding:8px 12px;background:rgba(255,149,0,0.08);border-left:3px solid var(--orange);border-radius:0 8px 8px 0;font-size:11px;font-weight:600;color:#9a5b00;margin-bottom:6px;line-height:1.5;}
+.iso-section-label{font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px;padding-bottom:4px;border-bottom:1px solid rgba(0,0,0,0.06);}
+#iso-plan-modal{width:min(92vw,640px);}
+
+/* ── Operation Manual Modal ── */
+#op-manual-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.18);z-index:600;display:none;}
+#op-manual-overlay.open{display:block;}
+#op-manual-modal{position:fixed;top:48%;left:50%;transform:translate(-50%,-50%);width:min(96vw,900px);max-height:88vh;z-index:601;border-radius:16px;display:none;flex-direction:column;}
+#op-manual-modal.open{display:flex;}
+.opm-head{padding:14px 20px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(0,0,0,0.07);flex-shrink:0;}
+.opm-head-icon{font-size:18px;}
+.opm-head-title{font-size:15px;font-weight:700;flex:1;}
+.opm-meta{padding:10px 20px;font-size:11px;color:var(--text-2);display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid rgba(0,0,0,0.05);}
+.opm-meta strong{color:var(--text-1);}
+.opm-body{padding:0 20px 16px;overflow-y:auto;min-height:0;}
+.opm-phase{font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 8px;padding:6px 12px;background:rgba(0,122,255,0.06);border-radius:8px;display:flex;align-items:center;gap:6px;}
+.opm-phase.restore{color:var(--green);background:rgba(52,199,89,0.06);}
+.opm-table{width:100%;border-collapse:collapse;font-size:12px;}
+.opm-table th{text-align:left;font-size:10px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;padding:6px 6px;border-bottom:2px solid rgba(0,0,0,0.1);white-space:nowrap;}
+.opm-table td{padding:7px 6px;border-bottom:1px solid rgba(0,0,0,0.05);vertical-align:middle;}
+.opm-table tr:hover{background:rgba(0,122,255,0.03);}
+.opm-num{font-weight:700;color:var(--text-3);width:32px;text-align:center;font-variant-numeric:tabular-nums;}
+.opm-target{font-weight:600;white-space:nowrap;}
+.opm-img-cell{width:36px;text-align:center;}
+.opm-img-cell svg{width:28px;height:28px;}
+.opm-op-badge{display:inline-block;padding:2px 10px;border-radius:8px;font-size:11px;font-weight:700;}
+.opm-op-badge.close{background:rgba(255,59,48,0.12);color:var(--red);}
+.opm-op-badge.open{background:rgba(52,199,89,0.12);color:var(--green);}
+.opm-op-badge.partial{background:rgba(255,149,0,0.12);color:var(--orange);}
+.opm-reason{font-size:11px;color:var(--text-2);max-width:200px;}
+.opm-reason-input{width:100%;border:none;background:transparent;font-size:11px;font-family:var(--font);color:var(--text-2);outline:none;padding:2px 4px;border-radius:4px;transition:background .15s;}
+.opm-reason-input:focus{background:rgba(0,122,255,0.06);color:var(--text-1);}
+.opm-check{width:16px;height:16px;cursor:pointer;accent-color:var(--green);}
+.opm-memo-input{width:100%;min-width:80px;border:none;background:transparent;font-size:11px;font-family:var(--font);color:var(--text-2);outline:none;padding:2px 4px;border-radius:4px;transition:background .15s;}
+.opm-memo-input:focus{background:rgba(0,122,255,0.06);color:var(--text-1);}
+.opm-steam-row{background:rgba(255,59,48,0.03);}
+.opm-steam-row .opm-reason-input{color:#b32d1e;}
+.opm-foot{padding:12px 20px 16px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid rgba(0,0,0,0.06);flex-shrink:0;flex-wrap:wrap;}
+.opm-btn{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;border:none;transition:all .15s;display:flex;align-items:center;gap:5px;}
+.opm-btn.primary{background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(0,122,255,0.25);}
+.opm-btn.primary:hover{background:#0066d6;transform:translateY(-1px);}
+.opm-btn.ghost{background:rgba(0,0,0,0.05);color:var(--text-1);}
+.opm-btn.ghost:hover{background:rgba(0,0,0,0.09);}
+@media print{
+  #op-manual-overlay{display:none!important;}
+  #op-manual-modal{position:absolute!important;left:0!important;top:0!important;transform:none!important;width:100%!important;max-height:none!important;box-shadow:none!important;background:#fff!important;border:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+  #op-manual-modal *{visibility:visible!important;}
+  .opm-no-print{display:none!important;}
+  .opm-table{font-size:11px;}
+  .opm-reason-input,.opm-memo-input{border:1px solid #ccc!important;background:#fff!important;}
+  .opm-check{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  .opm-foot{display:none!important;}
+  .opm-print-footer{display:block!important;margin-top:20px;padding-top:12px;border-top:1px solid #ccc;font-size:11px;color:#333;}
+}
+.opm-print-footer{display:none;}
 
 /* ── Phase 4: 操作シーケンス タイムライン ── */
 #seq-bar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:195;border-radius:14px;padding:8px 12px;display:none;flex-direction:column;gap:6px;width:min(94vw,720px);}
@@ -1166,6 +1239,7 @@ const buildNameMap=()=>{const c={source:1,valve:1,trap:1,drain:1,split:1,merge:1
 /* ━━━━━━━━ STORE ━━━━━━━━ */
 const Store={
   nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],sequences:[],
+  isolationProfiles:[{id:'default',name:'標準（1バルブ）',constraints:{upstreamValveCount:1,downstreamValveCount:1,branchIndependent:true,steamDrainProtection:false,drainOpenInstruction:true,ventOpenInstruction:false}},{id:'double',name:'ダブルブロック（2バルブ）',constraints:{upstreamValveCount:2,downstreamValveCount:2,branchIndependent:true,steamDrainProtection:false,drainOpenInstruction:true,ventOpenInstruction:false}}],lastProfileId:'default',
   config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false},  
   dragState:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
   multiDrag:{active:false,nodes:[],gEl:null,startSvgX:0,startSvgY:0,startClientX:0,startClientY:0,hasDragged:false,pointerId:null,preSnapshot:null},
@@ -3445,7 +3519,9 @@ const Persistence = {
     alwaysShowLabels: Store.config.alwaysShowLabels,
     nodes: Store.nodes.map(n => ({ id: n.id, type: n.type, x: n.x, y: n.y, rotation: n.rotation, state: n.state, ext: n.ext, labelOffset: n.labelOffset })),
     edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext })),
-    sequences: Store.sequences  // Phase 4: 記録済み操作シーケンス
+    sequences: Store.sequences,  // Phase 4: 記録済み操作シーケンス
+    isolationProfiles: Store.isolationProfiles,
+    lastProfileId: Store.lastProfileId
   }),
   // ファイル読込・自動復元の共通復元ロジック
   apply: (d) => {
@@ -3463,6 +3539,8 @@ const Persistence = {
     Store.nodes = (d.nodes || []).map(n => Store.createNode(n.type || NODE_TYPE.SOURCE, n.x || 0, n.y || 0, n));
     Store.edges = (d.edges || []).map(e => Store.createEdge(e.from, e.to, e));
     Store.sequences = Array.isArray(d.sequences) ? d.sequences : [];  // Phase 4
+    if(d.isolationProfiles) Store.isolationProfiles = d.isolationProfiles;
+    if(d.lastProfileId) Store.lastProfileId = d.lastProfileId;
     Store.invalidateIndex();
     Store.history = [];
     Store.selection.clear();
@@ -3667,58 +3745,289 @@ const Onboarding = {
   }
 };
 
+/* ━━━━━━━━ OPERATION MANUAL & ISOLATION UTILS ━━━━━━━━ */
+const DirectionalBFS = {
+  search: (startId, isUpstream, targetCount, branchIndependent) => {
+    const nodeMap = Store.nodeMap();
+    const resultValves = new Map();
+    const zoneNodes = new Set([startId]);
+    const zoneEdges = new Set();
+    const VALVE_TYPES = [NODE_TYPE.VALVE, NODE_TYPE.SAFETY];
+    const warnings = [];
+
+    const dfs = (currentId, vCount, visitedNodes, pathNodes) => {
+      let isEnd = true;
+      const edges = Store.edgesByNode(currentId);
+      
+      edges.forEach(e => {
+        let isFlowForward = e.from === currentId;
+        if (e._sim && e._sim.rate > 0) isFlowForward = e.from === currentId;
+        else if (e._sim && e._sim.b > 0) isFlowForward = e.to === currentId;
+        
+        if (isUpstream ? !isFlowForward : isFlowForward) {
+          const nextId = e.from === currentId ? e.to : e.from;
+          if (!visitedNodes.has(nextId)) {
+            isEnd = false;
+            zoneEdges.add(e.id);
+            zoneNodes.add(nextId);
+            
+            const nextNode = nodeMap.get(nextId);
+            if (!nextNode) return;
+            
+            let nextVCount = vCount;
+            if (VALVE_TYPES.includes(nextNode.type)) {
+              nextVCount++;
+              resultValves.set(nextId, nextNode);
+              if (branchIndependent && nextVCount >= targetCount) return;
+            }
+            if (!branchIndependent && resultValves.size >= targetCount) return;
+            
+            const nextVisited = new Set(visitedNodes);
+            nextVisited.add(nextId);
+            const nextPath = [...pathNodes, nextNode.ext.customName || nextNode.type];
+            dfs(nextId, nextVCount, nextVisited, nextPath);
+          }
+        }
+      });
+      if (isEnd && (branchIndependent ? vCount < targetCount : resultValves.size < targetCount)) {
+        if(currentId !== startId && !nodeMap.get(currentId)?.type.includes('source')) {
+          warnings.push(`経路にバルブが不足しています (現在:${vCount}個 / 目標:${targetCount}個)`);
+        }
+      }
+    };
+    
+    dfs(startId, 0, new Set([startId]), [nodeMap.get(startId)?.ext.customName || nodeMap.get(startId)?.type]);
+    return { valves: Array.from(resultValves.values()), zoneNodes, zoneEdges, warnings: [...new Set(warnings)] };
+  }
+};
+
+const SteamDrainProtector = {
+  detect: (startId, zoneNodes) => {
+    const nodeMap = Store.nodeMap();
+    const riskNodes = [];
+    const protectValves = new Map();
+    const VALVE_TYPES = [NODE_TYPE.VALVE, NODE_TYPE.SAFETY];
+    
+    const dfs = (currentId, visited) => {
+      Store.edgesByNode(currentId).forEach(e => {
+        let isFlowForward = e.from === currentId;
+        if (e._sim && e._sim.rate > 0) isFlowForward = e.from === currentId;
+        else if (e._sim && e._sim.b > 0) isFlowForward = e.to === currentId;
+        
+        if (isFlowForward) {
+          const nextId = e.from === currentId ? e.to : e.from;
+          if (!visited.has(nextId) && !zoneNodes.has(nextId)) {
+            const nextNode = nodeMap.get(nextId);
+            if (!nextNode) return;
+            
+            if (nextNode.type === NODE_TYPE.DRAIN || nextNode.type === NODE_TYPE.TRAP) {
+              riskNodes.push(nextNode);
+            } else if (VALVE_TYPES.includes(nextNode.type)) {
+              protectValves.set(nextId, nextNode);
+            } else {
+              const nextVisited = new Set(visited);
+              nextVisited.add(nextId);
+              dfs(nextId, nextVisited);
+            }
+          }
+        }
+      });
+    };
+    
+    zoneNodes.forEach(nId => dfs(nId, new Set(zoneNodes)));
+    return { riskNodes, protectValves: Array.from(protectValves.values()) };
+  }
+};
+
+const OperationManual = {
+  _modal: null, _overlay: null, _data: null,
+  open: (planData) => {
+    OperationManual._data = planData;
+    OperationManual._ensure();
+    OperationManual._render();
+    OperationManual._overlay.classList.add('open');
+    OperationManual._modal.classList.add('open');
+  },
+  _ensure: () => {
+    if (OperationManual._modal) return;
+    const ov = document.createElement('div'); ov.id = 'op-manual-overlay';
+    ov.addEventListener('click', OperationManual.close);
+    const m = document.createElement('div'); m.id = 'op-manual-modal'; m.className = 'glass';
+    document.body.appendChild(ov); document.body.appendChild(m);
+    OperationManual._overlay = ov; OperationManual._modal = m;
+  },
+  _render: () => {
+    const d = OperationManual._data, m = OperationManual._modal;
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const profile = Store.isolationProfiles.find(p=>p.id===Store.lastProfileId) || Store.isolationProfiles[0];
+    
+    // 手順の生成
+    const stepsIso = [], stepsRes = [];
+    let stepNum = 1;
+    
+    const addStep = (node, op, badgeCls, opLabel, reason, isDrain=false) => {
+      const icon = (MasterTable._nodeMap?.get(node.id)?.ext?.imageUrl) ? `<img src="${esc(MasterTable._nodeMap.get(node.id).ext.imageUrl)}" style="max-width:24px;max-height:24px">` : 
+                   (MasterTable._TARGET_TYPES.includes(node.type) && MasterTable._nodeMap?.get(node.id)) ? `<svg viewBox="-15 -15 30 30" style="stroke:var(--text-1);fill:none;stroke-width:2;stroke-linecap:round">${MasterTable._nodeMap.get(node.id).ext.imagePath || ''}</svg>` : '⊗';
+      const obj = { num: stepNum++, node, op, badgeCls, opLabel, reason, icon, isDrain };
+      stepsIso.push(obj);
+      // 復旧用（逆操作）
+      const resOp = op === VALVE_STATE.CLOSED ? VALVE_STATE.OPEN : VALVE_STATE.CLOSED;
+      const resBadgeCls = resOp === VALVE_STATE.OPEN ? 'open' : 'close';
+      const resOpLabel = resOp === VALVE_STATE.OPEN ? '開放' : '閉止';
+      let resReason = reason.replace('隔離', '復旧').replace('排出', '復旧').replace('保護', '保護解除');
+      stepsRes.unshift({ ...obj, op: resOp, badgeCls: resBadgeCls, opLabel: resOpLabel, reason: resReason });
+    };
+
+    d.upstreamValves.forEach((v, i) => addStep(v, VALVE_STATE.CLOSED, 'close', '閉止', `上流隔離 (${i+1}/${d.upstreamValves.length})`));
+    d.downstreamValves.forEach((v, i) => addStep(v, VALVE_STATE.CLOSED, 'close', '閉止', `下流隔離 (${i+1}/${d.downstreamValves.length})`));
+    d.protectValves.forEach((v) => addStep(v, VALVE_STATE.CLOSED, 'close', '閉止', `🔥 蒸気ドレン吹上げ保護`, true));
+    d.drainValves.forEach((v) => addStep(v, VALVE_STATE.OPEN, 'open', '開放', `残留蒸気排出`));
+
+    // 復旧フェーズの番号振り直し
+    stepsRes.forEach(s => s.num = stepNum++);
+
+    const renderRows = (steps) => steps.map(s => `
+      <tr class="${s.isDrain ? 'opm-steam-row' : ''}">
+        <td class="opm-num">${s.num}</td>
+        <td class="opm-target">${esc(s.node.name)}</td>
+        <td class="opm-img-cell">${s.icon}</td>
+        <td><span class="opm-op-badge ${s.badgeCls}">${s.opLabel}</span></td>
+        <td><input type="text" class="opm-reason-input" value="${esc(s.reason)}"></td>
+        <td style="text-align:center"><input type="checkbox" class="opm-check"></td>
+        <td><input type="text" class="opm-memo-input" placeholder="メモ..."></td>
+      </tr>
+    `).join('');
+
+    m.innerHTML = `
+      <div class="opm-head opm-no-print">
+        <span class="opm-head-icon">📋</span>
+        <span class="opm-head-title">操作マニュアル — ${esc(d.targetName)} 修理</span>
+        <button class="iso-close-x" id="opm-x">✕</button>
+      </div>
+      <div class="opm-meta">
+        <div>対象: <strong>${esc(d.targetName)}</strong></div>
+        <div>プロファイル: <strong>${esc(profile.name)}</strong></div>
+        <div>作成日時: <strong>${new Date().toLocaleString()}</strong></div>
+        <div class="opm-print-footer">作成者: ____________________ &nbsp;&nbsp;&nbsp; 承認者: ____________________</div>
+      </div>
+      <div class="opm-body">
+        <div class="opm-phase">🔒 【隔離フェーズ】（修理前の準備）</div>
+        <table class="opm-table">
+          <thead><tr><th>#</th><th>操作対象</th><th>画像</th><th>操作</th><th>操作理由</th><th style="width:30px;text-align:center">確認</th><th>備考</th></tr></thead>
+          <tbody>${renderRows(stepsIso)}</tbody>
+        </table>
+        
+        <div class="opm-phase restore">🔓 【復旧フェーズ】（修理後の復旧）</div>
+        <table class="opm-table">
+          <thead><tr><th>#</th><th>操作対象</th><th>画像</th><th>操作</th><th>操作理由</th><th style="width:30px;text-align:center">確認</th><th>備考</th></tr></thead>
+          <tbody>${renderRows(stepsRes)}</tbody>
+        </table>
+      </div>
+      <div class="opm-foot">
+        <button class="opm-btn ghost" id="opm-csv">📥 CSVエクスポート</button>
+        <button class="opm-btn ghost" id="opm-print">🖨 印刷</button>
+        <button class="opm-btn ghost" id="opm-cancel">閉じる</button>
+        <button class="opm-btn primary" id="opm-seq">▶ シーケンサ連携</button>
+      </div>
+      <div class="opm-print-footer" style="margin:20px 20px 0; padding-bottom:20px; display:none;">
+        <p>確認事項：隔離作業完了後、圧力ゲージ等で圧力が抜けていることを必ず確認してください。</p>
+      </div>
+    `;
+    
+    m.querySelector('#opm-x').onclick = OperationManual.close;
+    m.querySelector('#opm-cancel').onclick = OperationManual.close;
+    m.querySelector('#opm-print').onclick = () => window.print();
+    m.querySelector('#opm-csv').onclick = () => OperationManual.exportCsv(stepsIso, stepsRes);
+    m.querySelector('#opm-seq').onclick = () => {
+      OperationManual.exportToSequencer(stepsIso, stepsRes, d.targetName);
+      OperationManual.close();
+      IsolationPlan.close();
+      Sequencer.show();
+    };
+  },
+  exportCsv: (stepsIso, stepsRes) => {
+    const rows = ['フェーズ,手順番号,操作対象,操作,操作理由,確認,備考'];
+    const add = (p, s) => rows.push(`"${p}",${s.num},"${s.node.name}","${s.opLabel}","${s.reason}","",`);
+    stepsIso.forEach(s => add('隔離', s));
+    stepsRes.forEach(s => add('復旧', s));
+    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+    const blob = new Blob([bom, rows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'operation_manual.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+  exportToSequencer: (stepsIso, stepsRes, targetName) => {
+    const steps = [...stepsIso, ...stepsRes].map(s => ({
+      valveId: s.node.id, name: s.node.name, 
+      from: s.op === VALVE_STATE.CLOSED ? VALVE_STATE.OPEN : VALVE_STATE.CLOSED,
+      to: s.op
+    }));
+    Sequencer.pause();
+    Sequencer._active = { id: Store.generateId(), name: `${targetName} 修理マニュアル`, base: Store.snapshot(), steps };
+    Sequencer.recording = false;
+    Sequencer.stepTo(0);
+    Toast.show(`操作マニュアルをシーケンサにインポートしました`);
+  },
+  close: () => {
+    if (OperationManual._overlay) OperationManual._overlay.classList.remove('open');
+    if (OperationManual._modal) OperationManual._modal.classList.remove('open');
+    OperationManual._data = null;
+  }
+};
+
 /* ━━━━━━━━ ISOLATION PLAN (Phase 2: 隔離計画 / LOTO支援) ━━━━━━━━ */
 const IsolationPlan = {
   _overlay: null, _modal: null, _data: null,
-  // renderAll と同一カウンタロジックで全ノードの表示名を算出
   _nameMap: () => buildNameMap(),
-  // 対象機器を隔離する「境界バルブ集合」をフラッドフィルで算出
   compute: (targetId) => {
     const nodeMap = Store.nodeMap();
     const target = nodeMap.get(targetId);
     if (!target) return null;
-    const VALVE_TYPES = [NODE_TYPE.VALVE, NODE_TYPE.SAFETY];
-    const zoneNodes = new Set([targetId]);
-    const zoneEdges = new Set();
-    const boundary = new Map(); // valveId -> { node, edges:Set }
-    const q = [targetId];
-    while (q.length) {
-      const id = q.shift();
-      Store.edgesByNode(id).forEach(e => {
-        const other = e.from === id ? e.to : e.from;
-        const on = nodeMap.get(other);
-        if (!on) return;
-        // 隣がバルブ/安全弁なら「境界」として記録し、その先へは進まない
-        if (VALVE_TYPES.includes(on.type) && other !== targetId) {
-          zoneEdges.add(e.id);
-          let b = boundary.get(other); if (!b) { b = { node: on, edges: new Set() }; boundary.set(other, b); }
-          b.edges.add(e.id);
-          return;
-        }
-        if (zoneEdges.has(e.id)) return;
-        zoneEdges.add(e.id);
-        if (!zoneNodes.has(other)) { zoneNodes.add(other); q.push(other); }
+    
+    if(!Store.isolationProfiles) Store.isolationProfiles = [{id:'default',name:'標準（1バルブ）',constraints:{upstreamValveCount:1,downstreamValveCount:1,branchIndependent:true,steamDrainProtection:false,drainOpenInstruction:true,ventOpenInstruction:false}}];
+    const profile = Store.isolationProfiles.find(p=>p.id===Store.lastProfileId) || Store.isolationProfiles[0];
+    const c = profile.constraints;
+
+    const upRes = DirectionalBFS.search(targetId, true, c.upstreamValveCount, c.branchIndependent);
+    const downRes = DirectionalBFS.search(targetId, false, c.downstreamValveCount, c.branchIndependent);
+    
+    const zoneNodes = new Set([...upRes.zoneNodes, ...downRes.zoneNodes]);
+    const zoneEdges = new Set([...upRes.zoneEdges, ...downRes.zoneEdges]);
+    
+    let protectValves = [], riskNodes = [];
+    if (c.steamDrainProtection) {
+      const sp = SteamDrainProtector.detect(targetId, zoneNodes);
+      protectValves = sp.protectValves;
+      riskNodes = sp.riskNodes;
+    }
+    
+    const drainValves = [];
+    if (c.drainOpenInstruction) {
+      zoneNodes.forEach(nid => {
+        const n = nodeMap.get(nid);
+        if (n && n.type === NODE_TYPE.DRAIN) drainValves.push(n);
       });
     }
-    // 各ソースからの無向最短距離（推奨手順＝供給側から閉じる順の算出に使用）
-    const dist = new Map(); const sq = [];
-    Store.nodes.forEach(n => { if (n.type === NODE_TYPE.SOURCE) { dist.set(n.id, 0); sq.push(n.id); } });
-    while (sq.length) { const id = sq.shift(); const d = dist.get(id); Store.edgesByNode(id).forEach(e => { const o = e.from === id ? e.to : e.from; if (!dist.has(o)) { dist.set(o, d + 1); sq.push(o); } }); }
+
     const nameMap = IsolationPlan._nameMap();
-    const valves = [...boundary.values()].map(b => {
-      const live = [...b.edges].some(eid => { const e = Store.getEdge(eid); return e && (e._sim.f > 0 || (e._sim.b || 0) > 0); });
-      return { id: b.node.id, name: nameMap.get(b.node.id), state: b.node.state.valveState, dist: dist.has(b.node.id) ? dist.get(b.node.id) : Infinity, live };
-    });
-    valves.sort((a, b) => {
-      if (a.dist !== b.dist) return a.dist - b.dist;        // 供給側（ソースに近い）から
-      if (a.live !== b.live) return a.live ? -1 : 1;        // 通気中を優先
-      return a.name.localeCompare(b.name, 'ja');
-    });
-    // 隔離後の蒸気密閉リスク: ゾーン内に蒸気があり、かつドレン（排出口）が無い場合
-    const zoneHasSteam = [...zoneEdges].some(eid => { const e = Store.getEdge(eid); return e && (e._sim.f === FLUID.STEAM || e._sim.b === FLUID.STEAM); })
-      || [...zoneNodes].some(nid => { const n = nodeMap.get(nid); return n && n._sim.fOut === FLUID.STEAM; });
-    const zoneHasOutlet = [...zoneNodes].some(nid => { const n = nodeMap.get(nid); return n && n.type === NODE_TYPE.DRAIN; });
-    return { targetId, targetName: nameMap.get(targetId), valves, zoneNodes, zoneEdges, steamTrapWarning: zoneHasSteam && !zoneHasOutlet };
+    const mapValve = v => {
+      const live = [...Store.edgesByNode(v.id)].some(e => e._sim.f > 0 || e._sim.b > 0);
+      return { id: v.id, name: nameMap.get(v.id) || v.type, state: v.state.valveState, live, type: v.type };
+    };
+
+    const upV = upRes.valves.map(mapValve);
+    const downV = downRes.valves.map(mapValve);
+    const protV = protectValves.map(mapValve);
+    const drnV = drainValves.map(mapValve);
+
+    const allValvesMap = new Map();
+    [...upV, ...downV, ...protV].forEach(v => allValvesMap.set(v.id, v));
+    const allValves = Array.from(allValvesMap.values());
+    
+    const zoneHasSteam = [...zoneEdges].some(eid => { const e = Store.getEdge(eid); return e && (e._sim.f === FLUID.STEAM || e._sim.b === FLUID.STEAM); });
+    
+    return { targetId, targetName: nameMap.get(targetId), valves: allValves, upstreamValves: upV, downstreamValves: downV, protectValves: protV, drainValves: drnV, zoneNodes, zoneEdges, steamTrapWarning: zoneHasSteam && !drnV.length, warnings: [...upRes.warnings, ...downRes.warnings] };
   },
   _ensure: () => {
     if (IsolationPlan._modal) return;
@@ -3742,26 +4051,67 @@ const IsolationPlan = {
     const d = IsolationPlan._data, m = IsolationPlan._modal;
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const stLabels = ['閉止', '微開', '開放'], stCls = ['badge-0', 'badge-1', 'badge-2'];
+    const profile = Store.isolationProfiles.find(p=>p.id===Store.lastProfileId) || Store.isolationProfiles[0];
+    
     let bodyHtml;
     const canApply = d.valves.some(v => v.state !== VALVE_STATE.CLOSED);
+    
+    const profOpts = Store.isolationProfiles.map(p => `<option value="${p.id}" ${p.id===profile.id?'selected':''}>${esc(p.name)}</option>`).join('');
+    
+    const cstPanel = `
+      <div class="iso-constraint-panel iso-no-print">
+        <div class="iso-constraint-toggle" id="iso-cst-toggle">
+          <span class="iso-arrow">▶</span> 隔離要件設定: <span>${esc(profile.name)}</span>
+        </div>
+        <div class="iso-constraint-body">
+          <div class="iso-profile-row">
+            <select id="iso-prof-sel">${profOpts}</select>
+            <button class="iso-profile-btn" id="iso-prof-save">上書き保存</button>
+            <button class="iso-profile-btn" id="iso-prof-new">新規</button>
+          </div>
+          <div class="iso-section-label">バルブ閉止制約</div>
+          <div class="iso-cst-row">
+            <label>上流閉止バルブ数 <input type="number" id="iso-up-c" min="1" max="5" value="${profile.constraints.upstreamValveCount}"></label>
+            <label>下流閉止バルブ数 <input type="number" id="iso-dn-c" min="1" max="5" value="${profile.constraints.downstreamValveCount}"></label>
+          </div>
+          <div class="iso-cst-row">
+            <label><input type="checkbox" id="iso-br-ind" ${profile.constraints.branchIndependent?'checked':''}> 分岐ごとに独立でカウント</label>
+          </div>
+          <div class="iso-section-label">追加保護・指示</div>
+          <div class="iso-cst-row">
+            <label><input type="checkbox" id="iso-stm-prt" ${profile.constraints.steamDrainProtection?'checked':''}> 🔥蒸気ドレン吹上げ保護を含める</label>
+            <label><input type="checkbox" id="iso-drn-opn" ${profile.constraints.drainOpenInstruction?'checked':''}> 残留蒸気排出指示を含める</label>
+          </div>
+        </div>
+      </div>
+    `;
+
     if (!d.valves.length) {
-      bodyHtml = `<div class="iso-empty">対象の周囲に隔離用バルブが見つかりませんでした。<br>機器の上流・下流にバルブを配置してください。</div>`;
+      bodyHtml = `${cstPanel}<div class="iso-empty">対象の周囲に隔離用バルブが見つかりませんでした。</div>`;
     } else {
       const rows = d.valves.map((v, i) => {
         const liveBadge = v.live ? '<span class="iso-live">通気中</span>' : '<span class="iso-idle">停止</span>';
+        const isProt = d.protectValves.some(pv=>pv.id===v.id);
+        const namePrefix = isProt ? '🔥 ' : '';
         return `<tr class="${v.state === VALVE_STATE.CLOSED ? 'iso-done' : ''}">
           <td class="iso-num">${i + 1}</td>
           <td><input type="checkbox" class="iso-check" ${v.state === VALVE_STATE.CLOSED ? 'checked' : ''}></td>
-          <td class="iso-vname">${esc(v.name)}</td>
+          <td class="iso-vname">${namePrefix}${esc(v.name)}</td>
           <td><span class="status-badge ${stCls[v.state]}">${stLabels[v.state]}</span>${liveBadge}</td>
         </tr>`;
       }).join('');
-      const warn = d.steamTrapWarning ? `<div class="iso-warn">⚠ 隔離後、ゾーン内に蒸気が密閉される可能性があります。ドレン・ベントの開放を検討してください。</div>` : '';
+      
+      const warnItems = d.warnings.map(w => `<div class="iso-warn-item">⚠ ${esc(w)}</div>`).join('');
+      const warns = warnItems ? `<div class="iso-warn-list">${warnItems}</div>` : '';
+      const trapWarn = d.steamTrapWarning ? `<div class="iso-warn-item">⚠ 隔離後、ゾーン内に蒸気が密閉される可能性があります。ドレン開放を検討してください。</div>` : '';
+      
       bodyHtml = `
-        <p class="iso-summary"><strong>${esc(d.targetName)}</strong> を隔離するには、次の <strong>${d.valves.length}</strong> 個のバルブを閉じてください。<br><span style="font-size:11px;color:var(--text-3);">推奨手順：供給側（上流）から順に閉止</span></p>
-        ${warn}
+        ${cstPanel}
+        <p class="iso-summary"><strong>${esc(d.targetName)}</strong> を隔離するには、次の <strong>${d.valves.length}</strong> 個のバルブを閉じてください。</p>
+        ${warns}${trapWarn}
         <table class="iso-table"><thead><tr><th>#</th><th></th><th>バルブ</th><th>現在の状態</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
+    
     m.innerHTML = `
       <div class="iso-head">
         <span class="iso-head-icon">🔒</span>
@@ -3771,13 +4121,62 @@ const IsolationPlan = {
       <div class="iso-body">${bodyHtml}</div>
       <div class="iso-foot iso-no-print">
         <button class="iso-btn ghost" id="iso-print">🖨 印刷</button>
+        <button class="iso-btn primary" id="iso-manual" style="background:var(--green)">📋 マニュアル作成</button>
+        <div style="flex:1"></div>
         <button class="iso-btn ghost" id="iso-cancel">閉じる</button>
         <button class="iso-btn primary" id="iso-apply" ${canApply ? '' : 'disabled'}>すべて閉じる</button>
       </div>`;
+      
     m.querySelector('#iso-x').onclick = IsolationPlan.close;
     m.querySelector('#iso-cancel').onclick = IsolationPlan.close;
     m.querySelector('#iso-print').onclick = () => window.print();
+    if(d.valves.length) m.querySelector('#iso-manual').onclick = () => OperationManual.open(d);
+    
     const ap = m.querySelector('#iso-apply'); if (ap && canApply) ap.onclick = IsolationPlan.apply;
+    
+    // UI Events for constraints
+    const tgl = m.querySelector('#iso-cst-toggle');
+    if(tgl) {
+      tgl.onclick = () => { tgl.classList.toggle('open'); };
+      const updateCst = () => {
+        const p = Store.isolationProfiles.find(pf=>pf.id===Store.lastProfileId);
+        if(!p) return;
+        p.constraints.upstreamValveCount = parseInt(m.querySelector('#iso-up-c').value)||1;
+        p.constraints.downstreamValveCount = parseInt(m.querySelector('#iso-dn-c').value)||1;
+        p.constraints.branchIndependent = m.querySelector('#iso-br-ind').checked;
+        p.constraints.steamDrainProtection = m.querySelector('#iso-stm-prt').checked;
+        p.constraints.drainOpenInstruction = m.querySelector('#iso-drn-opn').checked;
+        Persistence.scheduleSave();
+        IsolationPlan.open(d.targetId); // Recompute & render
+        setTimeout(()=>document.querySelector('#iso-cst-toggle').classList.add('open'), 10);
+      };
+      m.querySelector('#iso-up-c').onchange = updateCst;
+      m.querySelector('#iso-dn-c').onchange = updateCst;
+      m.querySelector('#iso-br-ind').onchange = updateCst;
+      m.querySelector('#iso-stm-prt').onchange = updateCst;
+      m.querySelector('#iso-drn-opn').onchange = updateCst;
+      
+      m.querySelector('#iso-prof-sel').onchange = (e) => {
+        Store.lastProfileId = e.target.value;
+        Persistence.scheduleSave();
+        IsolationPlan.open(d.targetId);
+        setTimeout(()=>document.querySelector('#iso-cst-toggle').classList.add('open'), 10);
+      };
+      m.querySelector('#iso-prof-save').onclick = () => {
+        Toast.show('プロファイルを保存しました');
+      };
+      m.querySelector('#iso-prof-new').onclick = () => {
+        const n = prompt('新しいプロファイル名:');
+        if(n) {
+          const np = {id:Store.generateId(), name:n, constraints:{...profile.constraints}};
+          Store.isolationProfiles.push(np);
+          Store.lastProfileId = np.id;
+          Persistence.scheduleSave();
+          IsolationPlan.open(d.targetId);
+          setTimeout(()=>document.querySelector('#iso-cst-toggle').classList.add('open'), 10);
+        }
+      };
+    }
   },
   apply: () => {
     const d = IsolationPlan._data; if (!d || !d.valves.length) return;

@@ -1136,6 +1136,7 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
 #iso-plan-modal{width:min(92vw,640px);}
 
 /* ── Operation Manual Modal ── */
+#iso-plan-modal.opm-suppressed{display:none!important;}
 #op-manual-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.18);z-index:600;display:none;}
 #op-manual-overlay.open{display:block;}
 #op-manual-modal{position:fixed;top:48%;left:50%;transform:translate(-50%,-50%);width:min(96vw,900px);max-height:88vh;z-index:601;border-radius:16px;display:none;flex-direction:column;}
@@ -1168,6 +1169,27 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
 .opm-memo-input:focus{background:rgba(0,122,255,0.06);color:var(--text-1);}
 .opm-steam-row{background:rgba(255,59,48,0.03);}
 .opm-steam-row .opm-reason-input{color:#b32d1e;}
+.opm-op-badge.check{background:rgba(0,0,0,0.06);color:var(--text-2);}
+.opm-warmup-row{background:rgba(255,149,0,0.05);}
+.opm-warmup-row .opm-reason-input{color:#b3650a;}
+.opm-check-row{background:rgba(0,0,0,0.025);}
+.opm-check-row .opm-target{color:var(--text-3);font-style:italic;}
+.opm-check-tgt{color:var(--text-3);}
+.opm-check-ico{color:var(--text-3);}
+.opm-glyph{font-size:16px;color:var(--text-2);}
+.opm-state-cell{font-size:11px;color:var(--text-2);white-space:nowrap;text-align:center;}
+.opm-tag-input{width:100%;min-width:64px;border:none;background:transparent;font-size:11px;font-family:var(--font);color:var(--text-1);outline:none;padding:2px 4px;border-radius:4px;transition:background .15s;}
+.opm-tag-input:focus{background:rgba(0,122,255,0.06);}
+.opm-tag-input:disabled{opacity:.4;}
+.opm-col-opts{padding:8px 20px;display:flex;align-items:center;gap:14px;font-size:11px;color:var(--text-2);border-bottom:1px solid rgba(0,0,0,0.05);flex-wrap:wrap;}
+.opm-col-opts label{display:flex;align-items:center;gap:5px;cursor:pointer;}
+.opm-col-opts input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;}
+.opm-col-opts .opm-hint{margin-left:auto;color:var(--text-3);}
+.opm-dnd-col{width:24px;text-align:center;}
+.opm-drag{cursor:grab;color:var(--text-3);font-size:14px;user-select:none;}
+.opm-drag:active{cursor:grabbing;}
+.opm-table tbody tr.opm-dragging{opacity:.4;}
+.opm-table tbody tr.opm-drag-over td{box-shadow:inset 0 2px 0 var(--accent);}
 .opm-foot{padding:12px 20px 16px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid rgba(0,0,0,0.06);flex-shrink:0;flex-wrap:wrap;}
 .opm-btn{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;border:none;transition:all .15s;display:flex;align-items:center;gap:5px;}
 .opm-btn.primary{background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(0,122,255,0.25);}
@@ -1179,7 +1201,10 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
   #op-manual-modal{position:absolute!important;left:0!important;top:0!important;transform:none!important;width:100%!important;max-height:none!important;box-shadow:none!important;background:#fff!important;border:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
   #op-manual-modal *{visibility:visible!important;}
   .opm-no-print{display:none!important;}
+  .opm-dnd-col{display:none!important;}
   .opm-table{font-size:11px;}
+  .opm-warmup-row{background:#fff7ec!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  .opm-steam-row{background:#fdeceb!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
   .opm-reason-input,.opm-memo-input{border:1px solid #ccc!important;background:#fff!important;}
   .opm-check{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
   .opm-foot{display:none!important;}
@@ -3521,7 +3546,8 @@ const Persistence = {
     edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext })),
     sequences: Store.sequences,  // Phase 4: 記録済み操作シーケンス
     isolationProfiles: Store.isolationProfiles,
-    lastProfileId: Store.lastProfileId
+    lastProfileId: Store.lastProfileId,
+    manualColumnOpts: OperationManual._opts
   }),
   // ファイル読込・自動復元の共通復元ロジック
   apply: (d) => {
@@ -3541,6 +3567,7 @@ const Persistence = {
     Store.sequences = Array.isArray(d.sequences) ? d.sequences : [];  // Phase 4
     if(d.isolationProfiles) Store.isolationProfiles = d.isolationProfiles;
     if(d.lastProfileId) Store.lastProfileId = d.lastProfileId;
+    if(d.manualColumnOpts && typeof OperationManual !== 'undefined') OperationManual._opts = { showState: true, showTag: true, ...d.manualColumnOpts };
     Store.invalidateIndex();
     Store.history = [];
     Store.selection.clear();
@@ -3746,9 +3773,37 @@ const Onboarding = {
 };
 
 /* ━━━━━━━━ OPERATION MANUAL & ISOLATION UTILS ━━━━━━━━ */
+// 方向判定（決定事項#1: 案A=シミュレーション結果ベース／停止区間は案B=ソース距離ベースにフォールバック）
+const SourceDist = {
+  // 全ソースノードからの無向BFS距離。ソースに近い側＝上流。
+  compute: () => {
+    const dist = new Map(), q = [];
+    Store.nodes.forEach(n => { if (n.type === NODE_TYPE.SOURCE) { dist.set(n.id, 0); q.push(n.id); } });
+    let head = 0;
+    while (head < q.length) {
+      const cur = q[head++], dc = dist.get(cur);
+      Store.edgesByNode(cur).forEach(e => {
+        const nb = e.from === cur ? e.to : e.from;
+        if (!dist.has(nb)) { dist.set(nb, dc + 1); q.push(nb); }
+      });
+    }
+    return dist;
+  }
+};
+// currentId から edge e を渡る向きが「下流（流れ方向）」なら true を返す
+const flowDir = (e, currentId, distMap) => {
+  if (e._sim && e._sim.rate > 0) return e.from === currentId;   // 案A: 順流
+  if (e._sim && e._sim.b > 0) return e.to === currentId;        // 案A: 逆流方向が下流
+  const other = e.from === currentId ? e.to : e.from;           // 案B フォールバック: ソース距離
+  const dc = distMap && distMap.get(currentId), dn = distMap && distMap.get(other);
+  if (dc != null && dn != null && dc !== dn) return dn > dc;    // 距離が増える向き＝下流
+  return e.from === currentId;                                  // 最終フォールバック: 接続順
+};
+
 const DirectionalBFS = {
   search: (startId, isUpstream, targetCount, branchIndependent) => {
     const nodeMap = Store.nodeMap();
+    const distMap = SourceDist.compute();
     const resultValves = new Map();
     const zoneNodes = new Set([startId]);
     const zoneEdges = new Set();
@@ -3758,12 +3813,10 @@ const DirectionalBFS = {
     const dfs = (currentId, vCount, visitedNodes, pathNodes) => {
       let isEnd = true;
       const edges = Store.edgesByNode(currentId);
-      
+
       edges.forEach(e => {
-        let isFlowForward = e.from === currentId;
-        if (e._sim && e._sim.rate > 0) isFlowForward = e.from === currentId;
-        else if (e._sim && e._sim.b > 0) isFlowForward = e.to === currentId;
-        
+        const isFlowForward = flowDir(e, currentId, distMap);
+
         if (isUpstream ? !isFlowForward : isFlowForward) {
           const nextId = e.from === currentId ? e.to : e.from;
           if (!visitedNodes.has(nextId)) {
@@ -3804,16 +3857,15 @@ const DirectionalBFS = {
 const SteamDrainProtector = {
   detect: (startId, zoneNodes) => {
     const nodeMap = Store.nodeMap();
+    const distMap = SourceDist.compute();
     const riskNodes = [];
     const protectValves = new Map();
     const VALVE_TYPES = [NODE_TYPE.VALVE, NODE_TYPE.SAFETY];
-    
+
     const dfs = (currentId, visited) => {
       Store.edgesByNode(currentId).forEach(e => {
-        let isFlowForward = e.from === currentId;
-        if (e._sim && e._sim.rate > 0) isFlowForward = e.from === currentId;
-        else if (e._sim && e._sim.b > 0) isFlowForward = e.to === currentId;
-        
+        const isFlowForward = flowDir(e, currentId, distMap);
+
         if (isFlowForward) {
           const nextId = e.from === currentId ? e.to : e.from;
           if (!visited.has(nextId) && !zoneNodes.has(nextId)) {
@@ -3841,12 +3893,28 @@ const SteamDrainProtector = {
 
 const OperationManual = {
   _modal: null, _overlay: null, _data: null,
+  _steps: { iso: [], res: [] },
+  _opts: { showState: true, showTag: true },   // 決定事項#2: 列8(現在の状態)・列9(タグ番号)を採用、既定で表示
+  _uid: 0,
+  _esc: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+  _opMeta: op => op === VALVE_STATE.CLOSED ? { label: '閉止', cls: 'close' }
+              : op === VALVE_STATE.PARTIAL ? { label: '微開', cls: 'partial' }
+              : { label: '開放', cls: 'open' },
+  _iconFor: (node) => {
+    if (!node) return '<span class="opm-check-ico">✔</span>';
+    const live = Store.getNode(node.id);
+    if (live && live.ext && live.ext.imageUrl) return `<img src="${OperationManual._esc(live.ext.imageUrl)}" style="max-width:24px;max-height:24px">`;
+    const g = { valve: '⊗', safety: '⊕', drain: '⊘', trap: '◇' };
+    return `<span class="opm-glyph">${g[node.type] || '⊗'}</span>`;
+  },
   open: (planData) => {
     OperationManual._data = planData;
+    OperationManual._build();
     OperationManual._ensure();
     OperationManual._render();
     OperationManual._overlay.classList.add('open');
     OperationManual._modal.classList.add('open');
+    if (IsolationPlan._modal) IsolationPlan._modal.classList.add('opm-suppressed'); // 背面の隔離計画を一時的に隠す（重なり・印刷対策）
   },
   _ensure: () => {
     if (OperationManual._modal) return;
@@ -3856,47 +3924,87 @@ const OperationManual = {
     document.body.appendChild(ov); document.body.appendChild(m);
     OperationManual._overlay = ov; OperationManual._modal = m;
   },
+  // 手順データの生成（隔離フェーズ＋暖管復旧フェーズ）
+  _build: () => {
+    const d = OperationManual._data;
+    const dist = SourceDist.compute();
+    const byDistAsc = arr => [...arr].sort((a, b) => (dist.get(a.id) ?? 0) - (dist.get(b.id) ?? 0));
+    const byDistDesc = arr => [...arr].sort((a, b) => (dist.get(b.id) ?? 0) - (dist.get(a.id) ?? 0));
+    const mk = (o) => ({
+      id: 's' + (OperationManual._uid++), memo: '', checked: false,
+      tag: (o.node && Store.getNode(o.node.id) && Store.getNode(o.node.id).ext.tagNo) || '',
+      isDrain: false, isWarmup: false, isCheck: false, ...o
+    });
+
+    /* 【隔離フェーズ】 */
+    const iso = [];
+    const up = d.upstreamValves || [], down = d.downstreamValves || [], prot = d.protectValves || [], drn = d.drainValves || [];
+    up.forEach((v, i) => iso.push(mk({ node: v, op: VALVE_STATE.CLOSED, fromState: v.state, reason: `上流隔離 (${i + 1}/${up.length})` })));
+    down.forEach((v, i) => iso.push(mk({ node: v, op: VALVE_STATE.CLOSED, fromState: v.state, reason: `下流隔離 (${i + 1}/${down.length})` })));
+    prot.forEach((v) => iso.push(mk({ node: v, op: VALVE_STATE.CLOSED, fromState: v.state, reason: `🔥 蒸気ドレン吹上げ保護`, isDrain: true })));
+    drn.forEach((v) => iso.push(mk({ node: v, op: VALVE_STATE.OPEN, fromState: VALVE_STATE.CLOSED, reason: `残留蒸気/ドレン排出` })));
+
+    /* 【復旧フェーズ】 決定事項#3: 一次側蒸気の微開圧入 → 各バイパス微開 → Drain管へドレンを押し流して暖管 → 通常バルブセット */
+    const res = [];
+    drn.forEach((v) => res.push(mk({ node: v, op: VALVE_STATE.OPEN, fromState: VALVE_STATE.OPEN, reason: `暖管準備：ドレン排出口を確保（開放維持）`, isWarmup: true, isDrain: true })));
+    byDistAsc(up).forEach((v) => res.push(mk({ node: v, op: VALVE_STATE.PARTIAL, fromState: VALVE_STATE.CLOSED, reason: `一次側蒸気 微開圧入（暖管開始）`, isWarmup: true })));
+    [...prot, ...down].forEach((v) => res.push(mk({ node: v, op: VALVE_STATE.PARTIAL, fromState: VALVE_STATE.CLOSED, reason: `バイパス微開・ドレンをDrain管へ押し流して暖管`, isWarmup: true })));
+    res.push(mk({ node: null, op: null, opLabel: '確認', reason: `暖管完了確認（配管昇温・ドレン排出完了）`, isCheck: true }));
+    drn.forEach((v) => res.push(mk({ node: v, op: VALVE_STATE.CLOSED, fromState: VALVE_STATE.OPEN, reason: `ドレン弁 閉止（通常バルブセット）` })));
+    [...down, ...prot, ...byDistDesc(up)].forEach((v) => res.push(mk({ node: v, op: VALVE_STATE.OPEN, fromState: VALVE_STATE.PARTIAL, reason: `通常バルブセット 全開（復旧）` })));
+
+    OperationManual._steps = { iso, res };
+  },
+  // 編集中の入力値を手順データへ反映（再描画前に呼ぶ）
+  _syncInputs: () => {
+    const m = OperationManual._modal; if (!m) return;
+    const all = [...OperationManual._steps.iso, ...OperationManual._steps.res];
+    const map = new Map(all.map(s => [s.id, s]));
+    m.querySelectorAll('.opm-reason-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.reason = i.value; });
+    m.querySelectorAll('.opm-memo-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.memo = i.value; });
+    m.querySelectorAll('.opm-check').forEach(i => { const s = map.get(i.dataset.id); if (s) s.checked = i.checked; });
+    m.querySelectorAll('.opm-tag-input').forEach(i => {
+      const s = map.get(i.dataset.id); if (!s) return;
+      s.tag = i.value;
+      if (s.node) { const n = Store.getNode(s.node.id); if (n) { if (i.value.trim()) n.ext.tagNo = i.value.trim(); else delete n.ext.tagNo; } }
+    });
+  },
   _render: () => {
-    const d = OperationManual._data, m = OperationManual._modal;
-    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const profile = Store.isolationProfiles.find(p=>p.id===Store.lastProfileId) || Store.isolationProfiles[0];
-    
-    // 手順の生成
-    const stepsIso = [], stepsRes = [];
-    let stepNum = 1;
-    
-    const addStep = (node, op, badgeCls, opLabel, reason, isDrain=false) => {
-      const icon = (MasterTable._nodeMap?.get(node.id)?.ext?.imageUrl) ? `<img src="${esc(MasterTable._nodeMap.get(node.id).ext.imageUrl)}" style="max-width:24px;max-height:24px">` : 
-                   (MasterTable._TARGET_TYPES.includes(node.type) && MasterTable._nodeMap?.get(node.id)) ? `<svg viewBox="-15 -15 30 30" style="stroke:var(--text-1);fill:none;stroke-width:2;stroke-linecap:round">${MasterTable._nodeMap.get(node.id).ext.imagePath || ''}</svg>` : '⊗';
-      const obj = { num: stepNum++, node, op, badgeCls, opLabel, reason, icon, isDrain };
-      stepsIso.push(obj);
-      // 復旧用（逆操作）
-      const resOp = op === VALVE_STATE.CLOSED ? VALVE_STATE.OPEN : VALVE_STATE.CLOSED;
-      const resBadgeCls = resOp === VALVE_STATE.OPEN ? 'open' : 'close';
-      const resOpLabel = resOp === VALVE_STATE.OPEN ? '開放' : '閉止';
-      let resReason = reason.replace('隔離', '復旧').replace('排出', '復旧').replace('保護', '保護解除');
-      stepsRes.unshift({ ...obj, op: resOp, badgeCls: resBadgeCls, opLabel: resOpLabel, reason: resReason });
-    };
+    const d = OperationManual._data, m = OperationManual._modal, o = OperationManual._opts, esc = OperationManual._esc;
+    const profile = Store.isolationProfiles.find(p => p.id === Store.lastProfileId) || Store.isolationProfiles[0];
 
-    d.upstreamValves.forEach((v, i) => addStep(v, VALVE_STATE.CLOSED, 'close', '閉止', `上流隔離 (${i+1}/${d.upstreamValves.length})`));
-    d.downstreamValves.forEach((v, i) => addStep(v, VALVE_STATE.CLOSED, 'close', '閉止', `下流隔離 (${i+1}/${d.downstreamValves.length})`));
-    d.protectValves.forEach((v) => addStep(v, VALVE_STATE.CLOSED, 'close', '閉止', `🔥 蒸気ドレン吹上げ保護`, true));
-    d.drainValves.forEach((v) => addStep(v, VALVE_STATE.OPEN, 'open', '開放', `残留蒸気排出`));
+    const thead = `<tr>
+      <th>#</th>
+      <th class="opm-dnd-col opm-no-print"></th>
+      <th>操作対象</th>
+      ${o.showTag ? '<th>タグ番号</th>' : ''}
+      <th>画像</th>
+      <th>操作</th>
+      ${o.showState ? '<th>現在の状態</th>' : ''}
+      <th>操作理由</th>
+      <th style="width:30px;text-align:center">確認</th>
+      <th>備考</th>
+    </tr>`;
 
-    // 復旧フェーズの番号振り直し
-    stepsRes.forEach(s => s.num = stepNum++);
+    const renderRows = (steps, phase, startNum) => steps.map((s, idx) => {
+      const meta = s.isCheck ? { label: s.opLabel, cls: 'check' } : OperationManual._opMeta(s.op);
+      const rowCls = [s.isDrain ? 'opm-steam-row' : '', s.isWarmup ? 'opm-warmup-row' : '', s.isCheck ? 'opm-check-row' : ''].filter(Boolean).join(' ');
+      const stateLbl = s.fromState != null ? VALVE_STATE_LABEL[s.fromState] : '—';
+      return `<tr class="${rowCls}" draggable="true" data-phase="${phase}" data-id="${s.id}">
+        <td class="opm-num">${startNum + idx}</td>
+        <td class="opm-dnd-col opm-no-print"><span class="opm-drag" title="ドラッグで並べ替え">⠿</span></td>
+        <td class="opm-target">${s.node ? esc(s.node.name) : '<span class="opm-check-tgt">全系統</span>'}</td>
+        ${o.showTag ? `<td><input type="text" class="opm-tag-input" data-id="${s.id}" value="${esc(s.tag || '')}" placeholder="—" ${s.node ? '' : 'disabled'}></td>` : ''}
+        <td class="opm-img-cell">${OperationManual._iconFor(s.node)}</td>
+        <td><span class="opm-op-badge ${meta.cls}">${meta.label}</span></td>
+        ${o.showState ? `<td class="opm-state-cell">${stateLbl}</td>` : ''}
+        <td><input type="text" class="opm-reason-input" data-id="${s.id}" value="${esc(s.reason)}"></td>
+        <td style="text-align:center"><input type="checkbox" class="opm-check" data-id="${s.id}" ${s.checked ? 'checked' : ''}></td>
+        <td><input type="text" class="opm-memo-input" data-id="${s.id}" value="${esc(s.memo || '')}" placeholder="メモ..."></td>
+      </tr>`;
+    }).join('');
 
-    const renderRows = (steps) => steps.map(s => `
-      <tr class="${s.isDrain ? 'opm-steam-row' : ''}">
-        <td class="opm-num">${s.num}</td>
-        <td class="opm-target">${esc(s.node.name)}</td>
-        <td class="opm-img-cell">${s.icon}</td>
-        <td><span class="opm-op-badge ${s.badgeCls}">${s.opLabel}</span></td>
-        <td><input type="text" class="opm-reason-input" value="${esc(s.reason)}"></td>
-        <td style="text-align:center"><input type="checkbox" class="opm-check"></td>
-        <td><input type="text" class="opm-memo-input" placeholder="メモ..."></td>
-      </tr>
-    `).join('');
+    const isoCount = OperationManual._steps.iso.length;
 
     m.innerHTML = `
       <div class="opm-head opm-no-print">
@@ -3908,19 +4016,25 @@ const OperationManual = {
         <div>対象: <strong>${esc(d.targetName)}</strong></div>
         <div>プロファイル: <strong>${esc(profile.name)}</strong></div>
         <div>作成日時: <strong>${new Date().toLocaleString()}</strong></div>
-        <div class="opm-print-footer">作成者: ____________________ &nbsp;&nbsp;&nbsp; 承認者: ____________________</div>
+        <div class="opm-print-footer">作成者: ____________________</div>
+      </div>
+      <div class="opm-col-opts opm-no-print">
+        <span>表示列:</span>
+        <label><input type="checkbox" id="opm-opt-state" ${o.showState ? 'checked' : ''}> 現在の状態</label>
+        <label><input type="checkbox" id="opm-opt-tag" ${o.showTag ? 'checked' : ''}> タグ番号</label>
+        <span class="opm-hint">行を <strong>⠿</strong> でドラッグすると手順を並べ替えできます</span>
       </div>
       <div class="opm-body">
-        <div class="opm-phase">🔒 【隔離フェーズ】（修理前の準備）</div>
+        <div class="opm-phase">🔒 【隔離フェーズ】（安全対策・隔離）</div>
         <table class="opm-table">
-          <thead><tr><th>#</th><th>操作対象</th><th>画像</th><th>操作</th><th>操作理由</th><th style="width:30px;text-align:center">確認</th><th>備考</th></tr></thead>
-          <tbody>${renderRows(stepsIso)}</tbody>
+          <thead>${thead}</thead>
+          <tbody>${renderRows(OperationManual._steps.iso, 'iso', 1)}</tbody>
         </table>
-        
-        <div class="opm-phase restore">🔓 【復旧フェーズ】（修理後の復旧）</div>
+
+        <div class="opm-phase restore">🔓 【復旧フェーズ】（暖管 → 通常バルブセット）</div>
         <table class="opm-table">
-          <thead><tr><th>#</th><th>操作対象</th><th>画像</th><th>操作</th><th>操作理由</th><th style="width:30px;text-align:center">確認</th><th>備考</th></tr></thead>
-          <tbody>${renderRows(stepsRes)}</tbody>
+          <thead>${thead}</thead>
+          <tbody>${renderRows(OperationManual._steps.res, 'res', isoCount + 1)}</tbody>
         </table>
       </div>
       <div class="opm-foot">
@@ -3930,48 +4044,87 @@ const OperationManual = {
         <button class="opm-btn primary" id="opm-seq">▶ シーケンサ連携</button>
       </div>
       <div class="opm-print-footer" style="margin:20px 20px 0; padding-bottom:20px; display:none;">
-        <p>確認事項：隔離作業完了後、圧力ゲージ等で圧力が抜けていることを必ず確認してください。</p>
+        <p>確認事項：隔離作業完了後、圧力ゲージ等で圧力が抜けていることを必ず確認してください。復旧時は暖管が完了するまで通常バルブセット（全開）を行わないでください。</p>
       </div>
     `;
-    
+
     m.querySelector('#opm-x').onclick = OperationManual.close;
     m.querySelector('#opm-cancel').onclick = OperationManual.close;
-    m.querySelector('#opm-print').onclick = () => window.print();
-    m.querySelector('#opm-csv').onclick = () => OperationManual.exportCsv(stepsIso, stepsRes);
+    m.querySelector('#opm-print').onclick = () => { OperationManual._syncInputs(); window.print(); };
+    m.querySelector('#opm-csv').onclick = () => { OperationManual._syncInputs(); OperationManual.exportCsv(); };
     m.querySelector('#opm-seq').onclick = () => {
-      OperationManual.exportToSequencer(stepsIso, stepsRes, d.targetName);
+      OperationManual._syncInputs();
+      OperationManual.exportToSequencer(d.targetName);
       OperationManual.close();
       IsolationPlan.close();
       Sequencer.show();
     };
+    const toggle = (key) => () => { OperationManual._syncInputs(); OperationManual._opts[key] = !OperationManual._opts[key]; OperationManual._render(); Persistence.scheduleSave(); };
+    m.querySelector('#opm-opt-state').onchange = toggle('showState');
+    m.querySelector('#opm-opt-tag').onchange = toggle('showTag');
+
+    OperationManual._attachDnD();
   },
-  exportCsv: (stepsIso, stepsRes) => {
-    const rows = ['フェーズ,手順番号,操作対象,操作,操作理由,確認,備考'];
-    const add = (p, s) => rows.push(`"${p}",${s.num},"${s.node.name}","${s.opLabel}","${s.reason}","",`);
-    stepsIso.forEach(s => add('隔離', s));
-    stepsRes.forEach(s => add('復旧', s));
+  _attachDnD: () => {
+    const m = OperationManual._modal;
+    let dragId = null, dragPhase = null;
+    m.querySelectorAll('.opm-table tbody tr').forEach(tr => {
+      tr.addEventListener('dragstart', e => { dragId = tr.dataset.id; dragPhase = tr.dataset.phase; tr.classList.add('opm-dragging'); e.dataTransfer.effectAllowed = 'move'; });
+      tr.addEventListener('dragend', () => { tr.classList.remove('opm-dragging'); m.querySelectorAll('.opm-drag-over').forEach(x => x.classList.remove('opm-drag-over')); });
+      tr.addEventListener('dragover', e => { if (tr.dataset.phase !== dragPhase) return; e.preventDefault(); tr.classList.add('opm-drag-over'); });
+      tr.addEventListener('dragleave', () => tr.classList.remove('opm-drag-over'));
+      tr.addEventListener('drop', e => {
+        e.preventDefault(); tr.classList.remove('opm-drag-over');
+        if (tr.dataset.phase !== dragPhase || tr.dataset.id === dragId) return;
+        OperationManual._reorder(dragPhase, dragId, tr.dataset.id);
+      });
+    });
+  },
+  _reorder: (phase, fromId, toId) => {
+    OperationManual._syncInputs();
+    const arr = OperationManual._steps[phase];
+    const fi = arr.findIndex(s => s.id === fromId), ti = arr.findIndex(s => s.id === toId);
+    if (fi < 0 || ti < 0) return;
+    const [moved] = arr.splice(fi, 1);
+    arr.splice(ti, 0, moved);
+    OperationManual._render();
+  },
+  _allSteps: () => {
+    const i = OperationManual._steps.iso.map(s => ({ ...s, phase: '隔離' }));
+    const r = OperationManual._steps.res.map(s => ({ ...s, phase: '復旧' }));
+    return [...i, ...r];
+  },
+  exportCsv: () => {
+    const q = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+    const rows = ['フェーズ,手順番号,操作対象,タグ番号,操作,現在の状態,操作理由,確認,備考'];
+    let n = 1;
+    OperationManual._allSteps().forEach(s => {
+      const meta = s.isCheck ? { label: s.opLabel } : OperationManual._opMeta(s.op);
+      const state = s.fromState != null ? VALVE_STATE_LABEL[s.fromState] : '';
+      rows.push([q(s.phase), n++, q(s.node ? s.node.name : '全系統'), q(s.tag || ''), q(meta.label), q(state), q(s.reason), q(s.checked ? '✓' : ''), q(s.memo || '')].join(','));
+    });
     const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-    const blob = new Blob([bom, rows.join('\n')], { type: 'text/csv' });
+    const blob = new Blob([bom, rows.join('\r\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'operation_manual.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   },
-  exportToSequencer: (stepsIso, stepsRes, targetName) => {
-    const steps = [...stepsIso, ...stepsRes].map(s => ({
-      valveId: s.node.id, name: s.node.name, 
-      from: s.op === VALVE_STATE.CLOSED ? VALVE_STATE.OPEN : VALVE_STATE.CLOSED,
-      to: s.op
-    }));
+  exportToSequencer: (targetName) => {
+    // 確認ステップ・対象なし・状態変化なしの手順は除外（バルブ操作のみ再生可能）
+    const steps = OperationManual._allSteps()
+      .filter(s => s.node && s.op != null && [NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(s.node.type) && s.fromState !== s.op)
+      .map(s => ({ valveId: s.node.id, name: s.node.name, from: s.fromState != null ? s.fromState : VALVE_STATE.OPEN, to: s.op }));
     Sequencer.pause();
     Sequencer._active = { id: Store.generateId(), name: `${targetName} 修理マニュアル`, base: Store.snapshot(), steps };
     Sequencer.recording = false;
     Sequencer.stepTo(0);
-    Toast.show(`操作マニュアルをシーケンサにインポートしました`);
+    Toast.show(`操作マニュアルをシーケンサにインポートしました（${steps.length}手順）`);
   },
   close: () => {
     if (OperationManual._overlay) OperationManual._overlay.classList.remove('open');
     if (OperationManual._modal) OperationManual._modal.classList.remove('open');
+    if (IsolationPlan._modal) IsolationPlan._modal.classList.remove('opm-suppressed');
     OperationManual._data = null;
   }
 };

@@ -1190,6 +1190,15 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
 .opm-drag:active{cursor:grabbing;}
 .opm-table tbody tr.opm-dragging{opacity:.4;}
 .opm-table tbody tr.opm-drag-over td{box-shadow:inset 0 2px 0 var(--accent);}
+.opm-act-col{width:26px;text-align:center;}
+.opm-del{width:20px;height:20px;border:none;border-radius:6px;background:rgba(255,59,48,0.08);color:var(--red);font-size:11px;cursor:pointer;line-height:1;padding:0;transition:background .15s;}
+.opm-del:hover{background:rgba(255,59,48,0.18);}
+.opm-edit-row{background:rgba(0,122,255,0.04);}
+.opm-target-sel,.opm-op-sel{height:26px;max-width:140px;border:1px solid rgba(0,0,0,0.12);border-radius:7px;background:rgba(0,0,0,0.03);font-size:12px;font-family:var(--font);color:var(--text-1);padding:0 6px;outline:none;cursor:pointer;}
+.opm-op-sel{max-width:80px;}
+.opm-add-row{padding:6px 0 2px;}
+.opm-add-btn{padding:6px 14px;border:1px dashed rgba(0,0,0,0.18);border-radius:9px;background:transparent;color:var(--text-2);font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;transition:all .15s;}
+.opm-add-btn:hover{background:rgba(0,122,255,0.06);border-color:var(--accent);color:var(--accent);}
 .opm-foot{padding:12px 20px 16px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid rgba(0,0,0,0.06);flex-shrink:0;flex-wrap:wrap;}
 .opm-btn{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;border:none;transition:all .15s;display:flex;align-items:center;gap:5px;}
 .opm-btn.primary{background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(0,122,255,0.25);}
@@ -1202,6 +1211,7 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
   #op-manual-modal *{visibility:visible!important;}
   .opm-no-print{display:none!important;}
   .opm-dnd-col{display:none!important;}
+  .opm-act-col{display:none!important;}
   .opm-table{font-size:11px;}
   .opm-warmup-row{background:#fff7ec!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
   .opm-steam-row{background:#fdeceb!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
@@ -3968,6 +3978,19 @@ const OperationManual = {
       s.tag = i.value;
       if (s.node) { const n = Store.getNode(s.node.id); if (n) { if (i.value.trim()) n.ext.tagNo = i.value.trim(); else delete n.ext.tagNo; } }
     });
+    // 追加手順: 操作対象・操作の選択を反映
+    const nm = buildNameMap();
+    m.querySelectorAll('.opm-target-sel').forEach(sel => {
+      const s = map.get(sel.dataset.id); if (!s) return;
+      if (sel.value) { const n = Store.getNode(sel.value); s.node = n ? { id: n.id, name: nm.get(n.id) || n.type, type: n.type, state: n.state.valveState } : null; }
+      else s.node = null;
+      s.fromState = s.node ? s.node.state : null;
+    });
+    m.querySelectorAll('.opm-op-sel').forEach(sel => {
+      const s = map.get(sel.dataset.id); if (!s) return;
+      if (sel.value === 'check') { s.isCheck = true; s.op = null; s.opLabel = '確認'; }
+      else { s.isCheck = false; s.op = parseInt(sel.value, 10); }
+    });
   },
   _render: () => {
     const d = OperationManual._data, m = OperationManual._modal, o = OperationManual._opts, esc = OperationManual._esc;
@@ -3984,23 +4007,45 @@ const OperationManual = {
       <th>操作理由</th>
       <th style="width:30px;text-align:center">確認</th>
       <th>備考</th>
+      <th class="opm-act-col opm-no-print"></th>
     </tr>`;
 
+    // 操作対象セレクト（追加手順用）— 操作可能なノードを列挙
+    const targetOptions = (selId) => {
+      const nm = buildNameMap();
+      const types = [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.DRAIN];
+      let opts = `<option value="" ${!selId ? 'selected' : ''}>（確認のみ）</option>`;
+      Store.nodes.filter(n => types.includes(n.type)).forEach(n => {
+        opts += `<option value="${n.id}" ${n.id === selId ? 'selected' : ''}>${esc(nm.get(n.id) || n.type)}</option>`;
+      });
+      return opts;
+    };
+    const opOptions = (s) => {
+      const cur = s.isCheck ? 'check' : String(s.op);
+      const o2 = (v, l) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`;
+      return `<select class="opm-op-sel" data-id="${s.id}">${o2('0', '閉止')}${o2('1', '微開')}${o2('2', '開放')}${o2('check', '確認')}</select>`;
+    };
+
     const renderRows = (steps, phase, startNum) => steps.map((s, idx) => {
-      const meta = s.isCheck ? { label: s.opLabel, cls: 'check' } : OperationManual._opMeta(s.op);
-      const rowCls = [s.isDrain ? 'opm-steam-row' : '', s.isWarmup ? 'opm-warmup-row' : '', s.isCheck ? 'opm-check-row' : ''].filter(Boolean).join(' ');
+      const meta = s.isCheck ? { label: s.opLabel || '確認', cls: 'check' } : OperationManual._opMeta(s.op);
+      const rowCls = [s.isDrain ? 'opm-steam-row' : '', s.isWarmup ? 'opm-warmup-row' : '', s.isCheck ? 'opm-check-row' : '', s.editable ? 'opm-edit-row' : ''].filter(Boolean).join(' ');
       const stateLbl = s.fromState != null ? VALVE_STATE_LABEL[s.fromState] : '—';
+      const targetCell = s.editable
+        ? `<select class="opm-target-sel" data-id="${s.id}">${targetOptions(s.node ? s.node.id : '')}</select>`
+        : (s.node ? esc(s.node.name) : '<span class="opm-check-tgt">全系統</span>');
+      const opCell = s.editable ? opOptions(s) : `<span class="opm-op-badge ${meta.cls}">${meta.label}</span>`;
       return `<tr class="${rowCls}" draggable="true" data-phase="${phase}" data-id="${s.id}">
         <td class="opm-num">${startNum + idx}</td>
         <td class="opm-dnd-col opm-no-print"><span class="opm-drag" title="ドラッグで並べ替え">⠿</span></td>
-        <td class="opm-target">${s.node ? esc(s.node.name) : '<span class="opm-check-tgt">全系統</span>'}</td>
+        <td class="opm-target">${targetCell}</td>
         ${o.showTag ? `<td><input type="text" class="opm-tag-input" data-id="${s.id}" value="${esc(s.tag || '')}" placeholder="—" ${s.node ? '' : 'disabled'}></td>` : ''}
         <td class="opm-img-cell">${OperationManual._iconFor(s.node)}</td>
-        <td><span class="opm-op-badge ${meta.cls}">${meta.label}</span></td>
+        <td>${opCell}</td>
         ${o.showState ? `<td class="opm-state-cell">${stateLbl}</td>` : ''}
-        <td><input type="text" class="opm-reason-input" data-id="${s.id}" value="${esc(s.reason)}"></td>
+        <td><input type="text" class="opm-reason-input" data-id="${s.id}" value="${esc(s.reason)}" placeholder="操作理由..."></td>
         <td style="text-align:center"><input type="checkbox" class="opm-check" data-id="${s.id}" ${s.checked ? 'checked' : ''}></td>
         <td><input type="text" class="opm-memo-input" data-id="${s.id}" value="${esc(s.memo || '')}" placeholder="メモ..."></td>
+        <td class="opm-act-col opm-no-print"><button class="opm-del" data-id="${s.id}" data-phase="${phase}" title="この手順を削除">✕</button></td>
       </tr>`;
     }).join('');
 
@@ -4030,12 +4075,14 @@ const OperationManual = {
           <thead>${thead}</thead>
           <tbody>${renderRows(OperationManual._steps.iso, 'iso', 1)}</tbody>
         </table>
+        <div class="opm-add-row opm-no-print"><button class="opm-add-btn" data-phase="iso">＋ 手順を追加</button></div>
 
         <div class="opm-phase restore">🔓 【復旧フェーズ】（暖管 → 通常バルブセット）</div>
         <table class="opm-table">
           <thead>${thead}</thead>
           <tbody>${renderRows(OperationManual._steps.res, 'res', isoCount + 1)}</tbody>
         </table>
+        <div class="opm-add-row opm-no-print"><button class="opm-add-btn" data-phase="res">＋ 手順を追加</button></div>
       </div>
       <div class="opm-foot">
         <button class="opm-btn ghost" id="opm-csv">📥 CSVエクスポート</button>
@@ -4063,7 +4110,34 @@ const OperationManual = {
     m.querySelector('#opm-opt-state').onchange = toggle('showState');
     m.querySelector('#opm-opt-tag').onchange = toggle('showTag');
 
+    // 手順の追加・削除（決定事項#4）
+    m.querySelectorAll('.opm-add-btn').forEach(b => b.onclick = () => OperationManual._addStep(b.dataset.phase));
+    m.querySelectorAll('.opm-del').forEach(b => b.onclick = () => OperationManual._deleteStep(b.dataset.phase, b.dataset.id));
+    // 追加手順の対象・操作セレクトは変更時に再描画（画像・現在の状態を更新）
+    m.querySelectorAll('.opm-target-sel, .opm-op-sel').forEach(sel => sel.onchange = () => { OperationManual._syncInputs(); OperationManual._render(); });
+    // ドラッグ開始を妨げないよう、入力/セレクト操作中は行ドラッグを無効化
+    m.querySelectorAll('.opm-table input, .opm-table select').forEach(el => {
+      el.addEventListener('mousedown', e => e.stopPropagation());
+      el.closest('tr') && el.addEventListener('focus', () => { const tr = el.closest('tr'); if (tr) tr.draggable = false; });
+      el.addEventListener('blur', () => { const tr = el.closest('tr'); if (tr) tr.draggable = true; });
+    });
+
     OperationManual._attachDnD();
+  },
+  _addStep: (phase) => {
+    OperationManual._syncInputs();
+    OperationManual._steps[phase].push({
+      id: 's' + (OperationManual._uid++), node: null, op: VALVE_STATE.CLOSED, fromState: null,
+      reason: '', memo: '', checked: false, tag: '', isDrain: false, isWarmup: false, isCheck: false, editable: true
+    });
+    OperationManual._render();
+  },
+  _deleteStep: (phase, id) => {
+    OperationManual._syncInputs();
+    const arr = OperationManual._steps[phase];
+    const i = arr.findIndex(s => s.id === id);
+    if (i >= 0) arr.splice(i, 1);
+    OperationManual._render();
   },
   _attachDnD: () => {
     const m = OperationManual._modal;

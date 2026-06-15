@@ -30,6 +30,7 @@
   --p-shadow-raised:0 16px 46px rgba(0,0,0,0.20), 0 2px 8px rgba(0,0,0,0.10);
   --p-hover:rgba(0,0,0,0.05);
   --p-track:rgba(0,0,0,0.10);
+  --p-header-bg:rgba(255,255,255,0.92);
   --p-ease:cubic-bezier(.16,1,.3,1);
 }
 /* ── ダークモード（チロム/パレットのみにスコープ。白背景のモーダル・図面キャンバスは明色を維持） ── */
@@ -51,6 +52,7 @@
   --p-shadow-raised:0 16px 46px rgba(0,0,0,0.62), 0 2px 8px rgba(0,0,0,0.45);
   --p-hover:rgba(255,255,255,0.09);
   --p-track:rgba(255,255,255,0.16);
+  --p-header-bg:rgba(44,44,52,0.96);
 }
 /* ダーク時の内側コントロール（ハードコード色をパネル内だけ上書き。light は不変） */
 [data-theme="dark"] .sp-btn{background:#34343c;border-color:var(--p-border);color:var(--text-1);}
@@ -145,7 +147,9 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 .tool-btn .shortcut-hint{position:absolute;bottom:-1px;right:2px;font-size:8px;font-weight:600;color:inherit;opacity:.5;line-height:1;pointer-events:none;}
 
 /* ── Settings Panel ── */
-#settings-panel{position:fixed;top:60px;left:16px;width:256px;max-height:calc(100vh - 250px);overflow-y:auto;z-index:190;border-radius:var(--p-radius);opacity:0;transform:translateY(-6px) scale(.98);pointer-events:none;}
+#settings-panel{position:fixed;top:60px;left:16px;width:256px;max-height:calc(100vh - 360px);overflow-y:auto;z-index:190;border-radius:var(--p-radius);opacity:0;transform:translateY(-6px) scale(.98);pointer-events:none;}
+/* ① ヘッダーを固定して、つまみ・最小化・×が常に見えるようにする */
+.sp-header{position:sticky;top:0;z-index:3;background:var(--p-header-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:var(--p-radius) var(--p-radius) 0 0;}
 #settings-panel::-webkit-scrollbar{width:3px;}
 #settings-panel::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:2px;}
 .sp-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 6px;}
@@ -648,6 +652,19 @@ g.node[data-active="1"] {
   flex-direction: column;
 }
 #master-table-modal.open { display: flex; }
+/* ④ マスター管理を画面split（左=マスター管理 / 右=P&ID）。図を見ながら画像を割り当てられる。 */
+body.master-workspace #master-table-overlay{display:none!important;}
+body.master-workspace #master-table-modal{top:0;left:0;right:auto;bottom:0;width:var(--mt-w,42vw);min-width:320px;max-width:none;max-height:none;height:100vh;transform:none!important;border-radius:0;box-shadow:8px 0 28px rgba(0,0,0,0.16);}
+body.master-workspace #workspace{left:var(--mt-w,42vw);}
+body.master-workspace #toolbar{left:calc(var(--mt-w,42vw) + (100vw - var(--mt-w,42vw)) / 2);}
+body.master-workspace #btn-master-table{display:none;}
+#mt-resize-handle{display:none;position:fixed;top:0;left:var(--mt-w,42vw);width:7px;height:100vh;z-index:502;cursor:col-resize;background:transparent;transition:background .15s;}
+#mt-resize-handle::after{content:"";position:absolute;top:50%;right:2px;width:3px;height:42px;margin-top:-21px;border-radius:3px;background:rgba(0,0,0,0.18);}
+#mt-resize-handle:hover{background:rgba(0,122,255,0.15);}
+body.master-workspace #mt-resize-handle{display:block;}
+/* split時、表の行をホバー/選択で図と連動 */
+.mt-table tbody tr.mt-row-hl{background:rgba(0,122,255,0.10);}
+.mt-table tbody tr{cursor:default;}
 .mt-header {
   padding: 14px 18px 10px;
   display: flex;
@@ -1187,18 +1204,31 @@ g.node[data-active="1"] {
 .opm-head{padding:14px 20px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(0,0,0,0.07);flex-shrink:0;}
 .opm-head-icon{font-size:18px;}
 .opm-head-title{font-size:15px;font-weight:700;flex:1;}
-.opm-meta{padding:10px 20px;font-size:11px;color:var(--text-2);display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid rgba(0,0,0,0.05);}
+.opm-meta{padding:12px 20px;font-size:11px;color:var(--text-2);display:flex;gap:10px 18px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid rgba(0,0,0,0.06);}
 .opm-meta strong{color:var(--text-1);}
+/* ② ラベル＋入力をひと組にして視線を整理 */
+.opm-field{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.opm-field-grow{flex:1 1 200px;}
+.opm-field-static{justify-content:flex-end;}
+.opm-field-lbl{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);}
+.opm-field .opm-name-input{width:100%;}
 .opm-pdf-row{display:flex;align-items:center;gap:6px;}
-.opm-pdf-row .opm-name-input{min-width:200px;}
-.opm-pdf-row .opm-pdf-open{padding:5px 12px;font-size:12px;}
+.opm-pdf-row .opm-name-input{min-width:160px;flex:1;}
+.opm-pdf-row .opm-pdf-open{padding:5px 12px;font-size:12px;white-space:nowrap;}
+/* 印刷設定パネル: 文書情報・レイアウト・フッターをグループ化 */
+.opm-po-group{padding:8px 0;border-top:1px dashed rgba(0,0,0,0.1);}
+.opm-po-group:first-child{border-top:none;padding-top:2px;}
+.opm-po-gtitle{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);margin-bottom:6px;}
+.opm-po-grid{display:flex;flex-wrap:wrap;gap:8px 14px;}
+.opm-po-grid .opm-field{min-width:96px;}
+.opm-po-controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
 .opm-body{padding:0 20px 16px;overflow-y:auto;min-height:0;}
 .opm-phase{font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 8px;padding:6px 12px;background:rgba(0,122,255,0.06);border-radius:8px;display:flex;align-items:center;gap:6px;}
 .opm-phase.restore{color:var(--green);background:rgba(52,199,89,0.06);}
 .opm-table{width:100%;border-collapse:collapse;font-size:12px;}
-.opm-table th{text-align:left;font-size:10px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;padding:6px 6px;border-bottom:2px solid rgba(0,0,0,0.1);white-space:nowrap;}
-.opm-table td{padding:7px 6px;border-bottom:1px solid rgba(0,0,0,0.05);vertical-align:middle;}
-.opm-table tr:hover{background:rgba(0,122,255,0.03);}
+.opm-table th{text-align:left;font-size:10px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;padding:7px 7px;border-bottom:1.5px solid rgba(0,0,0,0.12);white-space:nowrap;position:sticky;top:0;z-index:1;background:var(--p-header-bg);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+.opm-table td{padding:8px 7px;border-bottom:1px solid rgba(0,0,0,0.05);vertical-align:middle;}
+.opm-table tr:hover td{background:rgba(0,122,255,0.04);}
 .opm-num{font-weight:700;color:var(--text-3);width:32px;text-align:center;font-variant-numeric:tabular-nums;}
 .opm-target{font-weight:600;white-space:nowrap;}
 .opm-op-badge{display:inline-block;padding:2px 10px;border-radius:8px;font-size:11px;font-weight:700;}
@@ -1256,12 +1286,11 @@ g.node[data-active="1"] {
 .opm-op-tg.active.partial{background:rgba(255,149,0,0.16);color:var(--orange);}
 .opm-op-tg.active.open{background:rgba(52,199,89,0.16);color:var(--green);}
 /* 印刷設定パネル */
-.opm-printopts{padding:8px 20px 10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--text-2);border-bottom:1px solid rgba(0,0,0,0.05);background:rgba(0,0,0,0.015);}
+.opm-printopts{padding:8px 20px 12px;display:flex;flex-direction:column;font-size:11px;color:var(--text-2);border-bottom:1px solid rgba(0,0,0,0.06);background:rgba(0,0,0,0.015);}
 .opm-printopts label{display:flex;align-items:center;gap:5px;}
 .opm-printopts select{font-family:var(--font);font-size:12px;padding:3px 6px;border-radius:7px;border:1px solid rgba(0,0,0,0.14);background:#fff;}
 .opm-printopts input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;}
-.opm-po-footer{display:flex;align-items:flex-start;gap:6px;flex:1;min-width:260px;}
-.opm-po-footer textarea{flex:1;font-family:var(--font);font-size:11px;line-height:1.5;padding:5px 8px;border:1px solid rgba(0,0,0,0.14);border-radius:7px;resize:vertical;background:#fff;color:var(--text-1);}
+.opm-po-footer textarea{width:100%;font-family:var(--font);font-size:11px;line-height:1.5;padding:6px 8px;border:1px solid rgba(0,0,0,0.14);border-radius:7px;resize:vertical;background:#fff;color:var(--text-1);}
 .opm-btn.ghost.active{background:rgba(0,122,255,0.16);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(0,122,255,0.3);}
 /* 縞模様（画面プレビュー） */
 #op-manual-modal.opm-zebra .opm-table tbody tr:nth-child(even) td{background:rgba(0,0,0,0.028);}
@@ -1398,7 +1427,7 @@ body.manual-workspace.manual-split-v #opm-resize-handle::after{top:2px;left:50%;
   .opm-table thead{display:table-header-group;}
   .opm-table tfoot{display:table-footer-group;}
   .opm-table tr{page-break-inside:avoid;break-inside:avoid;}
-  .opm-table th{border-bottom:1.5px solid #333!important;background:#f2f2f2!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  .opm-table th{position:static!important;border-bottom:1.5px solid #333!important;background:#f2f2f2!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
   /* フェーズ見出しは直後の表と必ず同ページ */
   .opm-phase{break-after:avoid;page-break-after:avoid;break-inside:avoid;margin-top:10px!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
   .opm-warmup-row{background:#fff7ec!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
@@ -3282,7 +3311,7 @@ const Controller={
       if(['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;
       if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault();Controller.undo();return;}
       if(ev.key==='Tab'){ev.preventDefault();document.body.classList.toggle('zen-mode');return;}
-      if(ev.key==='Escape'){ContextMenu.close();if(ManualPicker.active){ManualPicker.finish();return;}if(Onboarding._overlay&&Onboarding._overlay.classList.contains('show')){Onboarding.close();return;}if(Sequencer.playing){Sequencer.pause();return;}ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
+      if(ev.key==='Escape'){ContextMenu.close();if(document.body.classList.contains('master-workspace')){MasterTable.close();return;}if(ManualPicker.active){ManualPicker.finish();return;}if(Onboarding._overlay&&Onboarding._overlay.classList.contains('show')){Onboarding.close();return;}if(Sequencer.playing){Sequencer.pause();return;}ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
       if((ev.key==='Delete'||ev.key==='Backspace')&&Store.selection.size>0){ev.preventDefault();Controller.deleteSelected();return;}
       if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
       const toolKeys={v:'pointer',r:'rotate',s:'source',a:'valve',t:'trap',d:'drain',y:'split',m:'merge',e:'reducer',h:'heatex',q:'safety',p:'pin'};
@@ -3775,16 +3804,51 @@ const MasterTable = {
 
   open: () => {
     MasterTable._nodeMap = new Map(Store.nodes.map(n => [n.id, n]));
-    document.getElementById('master-table-overlay').classList.add('open');
+    MasterTable._ensureResizeHandle();
+    // ④ 画面split（左=マスター管理／右=P&ID）。オーバーレイは出さず、図を見ながら作業できる。
+    document.body.classList.add('master-workspace');
     document.getElementById('master-table-modal').classList.add('open');
     document.getElementById('mt-search').value = '';
     MasterTable.render();
+    if (typeof Renderer !== 'undefined' && Renderer.updateZoom) Renderer.updateZoom();
+    requestAnimationFrame(() => { if (typeof Minimap !== 'undefined') Minimap.draw(); if (typeof Culling !== 'undefined') Culling.scheduleApply(); });
     document.getElementById('mt-search').focus();
   },
 
   close: () => {
-    document.getElementById('master-table-overlay').classList.remove('open');
+    document.body.classList.remove('master-workspace');
     document.getElementById('master-table-modal').classList.remove('open');
+    document.getElementById('master-table-overlay').classList.remove('open');
+    MasterTable._clearHl();
+    if (typeof Renderer !== 'undefined' && Renderer.updateZoom) Renderer.updateZoom();
+    requestAnimationFrame(() => { if (typeof Minimap !== 'undefined') Minimap.draw(); if (typeof Culling !== 'undefined') Culling.scheduleApply(); });
+  },
+
+  // 右ドラッグで幅調整するハンドル（操作マニュアルのsplitと同様）
+  _ensureResizeHandle: () => {
+    if (document.getElementById('mt-resize-handle')) return;
+    const h = document.createElement('div'); h.id = 'mt-resize-handle'; document.body.appendChild(h);
+    let dragging = false;
+    const onMove = (e) => { if (!dragging) return; const w = Math.min(window.innerWidth * 0.7, Math.max(320, e.clientX)); document.body.style.setProperty('--mt-w', w + 'px'); };
+    const onUp = () => { dragging = false; document.body.classList.remove('opm-resizing'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); if (Renderer && Renderer.updateZoom) Renderer.updateZoom(); if (typeof Minimap !== 'undefined') Minimap.draw(); };
+    h.addEventListener('pointerdown', (e) => { e.preventDefault(); dragging = true; document.body.classList.add('opm-resizing'); window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); });
+  },
+
+  // ───── 図⇄表リンク（split時のみ作用） ─────
+  _clearHl: () => {
+    document.querySelectorAll('#mt-tbody tr.mt-row-hl').forEach(tr => tr.classList.remove('mt-row-hl'));
+    document.querySelectorAll('#svg-layer .manual-link-hl').forEach(e => e.classList.remove('manual-link-hl'));
+  },
+  _hlRow: (id) => {
+    document.querySelectorAll('#mt-tbody tr.mt-row-hl').forEach(tr => tr.classList.remove('mt-row-hl'));
+    const tr = document.querySelector(`#mt-tbody tr[data-id="${id}"]`);
+    if (tr) tr.classList.add('mt-row-hl');
+    return tr;
+  },
+  _hlNode: (id) => {
+    document.querySelectorAll('#svg-layer .manual-link-hl').forEach(e => e.classList.remove('manual-link-hl'));
+    const g = document.getElementById('node-grp-' + id);
+    if (g) g.classList.add('manual-link-hl');
   },
 
   // renderAll と同一の typeCounters ロジックで表示名を算出
@@ -3830,6 +3894,16 @@ const MasterTable = {
     document.getElementById('btn-master-table').addEventListener('click', MasterTable.open);
     document.getElementById('mt-close').addEventListener('click', MasterTable.close);
     document.getElementById('master-table-overlay').addEventListener('click', MasterTable.close);
+
+    // ④ 図⇄表の双方向ハイライト（split時のみ。常時登録でも master-workspace でガード）
+    const _inSplit = () => document.body.classList.contains('master-workspace');
+    const tbodyEl = document.getElementById('mt-tbody');
+    tbodyEl.addEventListener('mouseover', (ev) => { if (!_inSplit()) return; const tr = ev.target.closest('tr[data-id]'); if (tr) MasterTable._hlNode(tr.dataset.id); });
+    tbodyEl.addEventListener('mouseleave', () => { if (_inSplit()) MasterTable._clearHl(); });
+    tbodyEl.addEventListener('click', (ev) => { if (!_inSplit() || ev.target.closest('input,button')) return; const tr = ev.target.closest('tr[data-id]'); if (!tr) return; const n = MasterTable._nodeMap && MasterTable._nodeMap.get(tr.dataset.id); if (n && Renderer.centerOnSvg) { Renderer.centerOnSvg(n.x, n.y); MasterTable._hlNode(tr.dataset.id); } });
+    // 図のノードをクリック→該当行へスクロール＆URL入力にフォーカス、ホバー→行ハイライト
+    Renderer.svgLayer.addEventListener('mouseover', (ev) => { if (!_inSplit()) return; const g = ev.target.closest('g.node'); if (g) MasterTable._hlRow(g.getAttribute('data-id')); });
+    Renderer.svgLayer.addEventListener('click', (ev) => { if (!_inSplit()) return; const g = ev.target.closest('g.node'); if (!g) return; const tr = MasterTable._hlRow(g.getAttribute('data-id')); if (tr) { tr.scrollIntoView({ block: 'center', behavior: 'smooth' }); const u = tr.querySelector('.mt-url-input'); if (u) u.focus(); } });
 
     // CSSベースリアルタイムフィルター（DOM再構築なし）
     document.getElementById('mt-search').addEventListener('input', (ev) => {
@@ -4533,22 +4607,10 @@ const OperationManual = {
         <button class="iso-close-x" id="opm-x">✕</button>
       </div>
       <div class="opm-meta opm-no-print">
-        <div>マニュアル名: <input type="text" id="opm-name-input" class="opm-name-input" value="${esc(OperationManual._meta.name || '')}" placeholder="マニュアル名"></div>
-        <div>対象: <input type="text" id="opm-target-input" class="opm-name-input" value="${esc(OperationManual._meta.targetName || '')}" placeholder="対象機器名"></div>
-        <div>文書番号: <input type="text" id="opm-docno" class="opm-name-input" style="min-width:120px" value="${esc(OperationManual._meta.docNo || '')}" placeholder="例: SOP-001"></div>
-        <div>版数: <input type="text" id="opm-rev" class="opm-name-input" style="min-width:70px" value="${esc(OperationManual._meta.rev || '')}" placeholder="例: 1.0"></div>
-        <div>改訂日: <input type="date" id="opm-revdate" class="opm-name-input" style="min-width:140px" value="${OperationManual._toDateInput(OperationManual._meta.revisedAt)}"></div>
-        <div>制定日: <strong>${new Date(OperationManual._meta.createdAt || Date.now()).toLocaleDateString()}</strong></div>
-        <div class="opm-pdf-row" title="プロジェクト全体で共通の関連PDF。保存時に大元のJSONへ一緒に記録されます。">📄 関連PDF:
-          <input type="url" id="opm-pdf-url" class="opm-name-input" value="${esc(Store.config.pdfUrl || '')}" placeholder="https://… のPDF URL">
-          <button class="opm-btn info opm-pdf-open" id="opm-pdf-open" ${Store.config.pdfUrl ? '' : 'disabled'} title="関連PDFを新しいタブで開く">開く</button>
-        </div>
-        <div class="opm-pdf-row" title="帳票ヘッダーに表示するロゴ画像。URL指定か画像ファイルを選択（dataURLで大元JSONに保存）。">🏷 ロゴ:
-          <input type="url" id="opm-logo-url" class="opm-name-input" value="${logo.startsWith('data:') ? '' : esc(logo)}" placeholder="${logo.startsWith('data:') ? '画像設定済み（選択ファイル）' : 'URL または画像を選択'}">
-          <button class="opm-btn ghost" id="opm-logo-file" style="padding:5px 10px;font-size:12px">画像…</button>
-          <input type="file" id="opm-logo-input" accept="image/*" style="display:none">
-          ${logo ? '<button class="opm-btn quiet" id="opm-logo-clear" style="padding:5px 10px;font-size:12px">消去</button>' : ''}
-        </div>
+        <label class="opm-field opm-field-grow"><span class="opm-field-lbl">マニュアル名</span><input type="text" id="opm-name-input" class="opm-name-input" value="${esc(OperationManual._meta.name || '')}" placeholder="マニュアル名"></label>
+        <label class="opm-field opm-field-grow"><span class="opm-field-lbl">対象機器</span><input type="text" id="opm-target-input" class="opm-name-input" value="${esc(OperationManual._meta.targetName || '')}" placeholder="対象機器名"></label>
+        <label class="opm-field"><span class="opm-field-lbl">関連PDF</span><span class="opm-pdf-row"><input type="url" id="opm-pdf-url" class="opm-name-input" value="${esc(Store.config.pdfUrl || '')}" placeholder="https://… のPDF URL"><button class="opm-btn info opm-pdf-open" id="opm-pdf-open" ${Store.config.pdfUrl ? '' : 'disabled'} title="関連PDFを新しいタブで開く">開く</button></span></label>
+        <span class="opm-field opm-field-static"><span class="opm-field-lbl">制定日</span><strong>${new Date(OperationManual._meta.createdAt || Date.now()).toLocaleDateString()}</strong></span>
       </div>
       <div class="opm-col-opts opm-no-print">
         <span>表示列:</span>
@@ -4556,16 +4618,31 @@ const OperationManual = {
         <label><input type="checkbox" id="opm-opt-tag" ${o.showTag ? 'checked' : ''}> タグ番号</label>
         <label><input type="checkbox" id="opm-opt-gauge" ${o.showGauge ? 'checked' : ''}> 計器値（目標/実測）</label>
         <button class="opm-btn ghost${OperationManual._printPanelOpen ? ' active' : ''}" id="opm-printopts-toggle" style="padding:5px 12px;font-size:12px" title="印刷・帳票の体裁を設定">🖨 印刷設定</button>
-        <span class="opm-hint">行末で <strong>Enter</strong> で同種の手順を直下に追加／<strong>Ctrl+↑↓</strong>で行移動／<strong>⠿</strong>ドラッグ並べ替え／<strong>🖱図から追加</strong>でまとめてピック</span>
+        <span class="opm-hint" title="行末でEnter→同種手順を直下に追加／Ctrl+↑↓で行移動／⠿ドラッグで並べ替え">⌨ Enter＝行追加・Ctrl+↑↓＝移動</span>
       </div>
       <div class="opm-printopts opm-no-print" id="opm-printopts" style="${OperationManual._printPanelOpen ? '' : 'display:none'}">
-        <label>向き <select id="opm-po-orient"><option value="portrait">縦</option><option value="landscape">横</option></select></label>
-        <label>文字サイズ <select id="opm-po-font"><option value="0.9">小</option><option value="1">標準</option><option value="1.1">大</option></select></label>
-        <label>余白 <select id="opm-po-margin"><option value="narrow">狭</option><option value="normal">標準</option><option value="wide">広</option></select></label>
-        <label><input type="checkbox" id="opm-po-zebra"> 縞模様</label>
-        <label><input type="checkbox" id="opm-po-mono"> モノクロ印刷</label>
-        <label title="作成・確認・承認の署名欄を帳票に表示します"><input type="checkbox" id="opm-po-approval"> 承認欄</label>
-        <div class="opm-po-footer">フッター注記:
+        <div class="opm-po-group">
+          <div class="opm-po-gtitle">文書情報（帳票ヘッダー）</div>
+          <div class="opm-po-grid">
+            <label class="opm-field"><span class="opm-field-lbl">文書番号</span><input type="text" id="opm-docno" class="opm-name-input" value="${esc(OperationManual._meta.docNo || '')}" placeholder="例: SOP-001"></label>
+            <label class="opm-field"><span class="opm-field-lbl">版数</span><input type="text" id="opm-rev" class="opm-name-input" value="${esc(OperationManual._meta.rev || '')}" placeholder="例: 1.0"></label>
+            <label class="opm-field"><span class="opm-field-lbl">改訂日</span><input type="date" id="opm-revdate" class="opm-name-input" value="${OperationManual._toDateInput(OperationManual._meta.revisedAt)}"></label>
+            <label class="opm-field opm-field-grow"><span class="opm-field-lbl">ロゴ</span><span class="opm-pdf-row"><input type="url" id="opm-logo-url" class="opm-name-input" value="${logo.startsWith('data:') ? '' : esc(logo)}" placeholder="${logo.startsWith('data:') ? '画像設定済み' : 'URL または画像を選択'}"><button class="opm-btn ghost" id="opm-logo-file" style="padding:5px 10px;font-size:12px">画像…</button><input type="file" id="opm-logo-input" accept="image/*" style="display:none">${logo ? '<button class="opm-btn quiet" id="opm-logo-clear" style="padding:5px 10px;font-size:12px">消去</button>' : ''}</span></label>
+          </div>
+        </div>
+        <div class="opm-po-group">
+          <div class="opm-po-gtitle">レイアウト</div>
+          <div class="opm-po-controls">
+            <label>向き <select id="opm-po-orient"><option value="portrait">縦</option><option value="landscape">横</option></select></label>
+            <label>文字サイズ <select id="opm-po-font"><option value="0.9">小</option><option value="1">標準</option><option value="1.1">大</option></select></label>
+            <label>余白 <select id="opm-po-margin"><option value="narrow">狭</option><option value="normal">標準</option><option value="wide">広</option></select></label>
+            <label><input type="checkbox" id="opm-po-zebra"> 縞模様</label>
+            <label><input type="checkbox" id="opm-po-mono"> モノクロ</label>
+            <label title="作成・確認・承認の署名欄を帳票に表示します"><input type="checkbox" id="opm-po-approval"> 承認欄</label>
+          </div>
+        </div>
+        <div class="opm-po-group opm-po-footer">
+          <div class="opm-po-gtitle">フッター注記</div>
           <textarea id="opm-footer-note" rows="2" placeholder="印刷時に末尾へ表示する注意文">${esc(footerNote)}</textarea>
         </div>
       </div>

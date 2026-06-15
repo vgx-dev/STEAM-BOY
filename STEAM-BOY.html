@@ -3762,11 +3762,21 @@ const Onboarding = {
     ov.innerHTML = `
       <div class="onb-card">
         <svg class="onb-logo" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="100" cy="100" r="92" fill="#fff" stroke="#1D1D1F" stroke-width="8"/>
-          <circle cx="100" cy="100" r="48" fill="#fff" stroke="#1D1D1F" stroke-width="8"/>
+          <circle cx="100" cy="100" r="92" fill="#ffffff" stroke="#1D1D1F" stroke-width="8"/>
+          <circle cx="100" cy="100" r="80" fill="none" stroke="#007AFF" stroke-width="12" stroke-dasharray="16 15" opacity="0.15"/>
+          <circle cx="100" cy="100" r="74" fill="none" stroke="#1D1D1F" stroke-width="4"/>
+          <circle cx="100" cy="100" r="48" fill="#ffffff" stroke="#1D1D1F" stroke-width="8"/>
           <path d="M 52 100 A 48 48 0 0 1 148 100" fill="#007AFF" stroke="#1D1D1F" stroke-width="8"/>
+          <path d="M 52 100 L 52 115 Q 60 125 68 115 L 68 100 Z" fill="#007AFF" stroke="#1D1D1F" stroke-width="8" stroke-linejoin="round"/>
+          <path d="M 148 100 L 148 115 Q 140 125 132 115 L 132 100 Z" fill="#007AFF" stroke="#1D1D1F" stroke-width="8" stroke-linejoin="round"/>
           <rect x="46" y="80" width="108" height="14" fill="#1D1D1F" rx="2"/>
-          <circle cx="74" cy="87" r="11" fill="#007AFF"/><circle cx="126" cy="87" r="11" fill="#007AFF"/>
+          <circle cx="74" cy="87" r="22" fill="#ffffff" stroke="#1D1D1F" stroke-width="8"/>
+          <circle cx="126" cy="87" r="22" fill="#ffffff" stroke="#1D1D1F" stroke-width="8"/>
+          <circle cx="74" cy="87" r="11" fill="#007AFF"/>
+          <circle cx="126" cy="87" r="11" fill="#007AFF"/>
+          <circle cx="69" cy="82" r="4" fill="#ffffff"/>
+          <circle cx="121" cy="82" r="4" fill="#ffffff"/>
+          <path d="M 88 127 Q 100 137 112 127" fill="none" stroke="#1D1D1F" stroke-width="6" stroke-linecap="round"/>
         </svg>
         <div class="onb-title">STEAM-BOY へようこそ</div>
         <div class="onb-desc">配管シミュレーターで、バルブ操作による蒸気・ドレンの流れを直感的に確認できます。<br>まずはサンプルで触ってみましょう。</div>

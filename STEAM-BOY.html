@@ -4492,9 +4492,9 @@ const OperationManual = {
       <th class="opm-act-col opm-no-print"></th>
     </tr>`;
 
-    // 操作対象セレクト（バルブ操作の追加手順用）— 操作可能なノードを列挙
+    // 操作対象セレクト（バルブ操作の追加手順用）— 操作可能なノードは Valve のみ（Drain/安全弁は自動作動機器のため非操作）
     const targetOptions = (selId) => {
-      const types = [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.DRAIN];
+      const types = [NODE_TYPE.VALVE];
       let opts = `<option value="" ${!selId ? 'selected' : ''}>（未選択）</option>`;
       Store.nodes.filter(n => types.includes(n.type)).forEach(n => {
         opts += `<option value="${n.id}" ${n.id === selId ? 'selected' : ''}>${esc(nameMap.get(n.id) || n.type)}</option>`;
@@ -5196,7 +5196,7 @@ const ManualLibrary = {
 /* ━━━━━━━━ MANUAL PICKER (キャンバスから直接バルブ/機器を手順に追加) ━━━━━━━━ */
 const ManualPicker = {
   active: false, _phase: 'iso', _count: 0, _banner: null, _assignStepId: null,
-  _opTypes: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.DRAIN],
+  _opTypes: [NODE_TYPE.VALVE],
   // 選択中の手順の対象を図から指定するモード
   startAssign: (stepId) => {
     if (!OperationManual._modal) return;
@@ -5208,7 +5208,7 @@ const ManualPicker = {
     Renderer.svgLayer.classList.add('manual-picking');
   },
   assign: (node) => {
-    if (!ManualPicker._opTypes.includes(node.type)) { Toast.show('対象はバルブ・安全弁・ドレンから選んでください'); return; }
+    if (!ManualPicker._opTypes.includes(node.type)) { Toast.show('操作対象は Valve のみ指定できます'); return; }
     const s = OperationManual._stepById(ManualPicker._assignStepId);
     if (s) {
       const nm = buildNameMap();

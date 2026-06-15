@@ -1146,6 +1146,29 @@ g.node[data-active="1"] {
 .opm-edit-row{background:rgba(0,122,255,0.04);}
 .opm-target-sel,.opm-op-sel{height:26px;max-width:140px;border:1px solid rgba(0,0,0,0.12);border-radius:7px;background:rgba(0,0,0,0.03);font-size:12px;font-family:var(--font);color:var(--text-1);padding:0 6px;outline:none;cursor:pointer;}
 .opm-op-sel{max-width:80px;}
+/* 操作ワンタップトグル（閉/微/開） */
+.opm-op-toggle{display:inline-flex;border:1px solid rgba(0,0,0,0.14);border-radius:8px;overflow:hidden;background:rgba(0,0,0,0.03);}
+.opm-op-tg{border:none;background:transparent;font-family:var(--font);font-size:12px;font-weight:700;color:var(--text-3);padding:4px 9px;cursor:pointer;border-left:1px solid rgba(0,0,0,0.08);transition:background .12s,color .12s;}
+.opm-op-tg:first-child{border-left:none;}
+.opm-op-tg:hover{background:rgba(0,0,0,0.07);}
+.opm-op-tg.active.close{background:rgba(255,59,48,0.16);color:var(--red);}
+.opm-op-tg.active.partial{background:rgba(255,149,0,0.16);color:var(--orange);}
+.opm-op-tg.active.open{background:rgba(52,199,89,0.16);color:var(--green);}
+/* 印刷設定パネル */
+.opm-printopts{padding:8px 20px 10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--text-2);border-bottom:1px solid rgba(0,0,0,0.05);background:rgba(0,0,0,0.015);}
+.opm-printopts label{display:flex;align-items:center;gap:5px;}
+.opm-printopts select{font-family:var(--font);font-size:12px;padding:3px 6px;border-radius:7px;border:1px solid rgba(0,0,0,0.14);background:#fff;}
+.opm-printopts input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;}
+.opm-po-footer{display:flex;align-items:flex-start;gap:6px;flex:1;min-width:260px;}
+.opm-po-footer textarea{flex:1;font-family:var(--font);font-size:11px;line-height:1.5;padding:5px 8px;border:1px solid rgba(0,0,0,0.14);border-radius:7px;resize:vertical;background:#fff;color:var(--text-1);}
+.opm-btn.ghost.active{background:rgba(0,122,255,0.16);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(0,122,255,0.3);}
+/* 縞模様（画面プレビュー） */
+#op-manual-modal.opm-zebra .opm-table tbody tr:nth-child(even) td{background:rgba(0,0,0,0.028);}
+/* 文字サイズ（画面プレビュー） */
+#op-manual-modal.opm-fs-s .opm-table{font-size:11px;}
+#op-manual-modal.opm-fs-l .opm-table{font-size:13px;}
+/* タイトルブロックは印刷時のみ表示 */
+.opm-titleblock{display:none;}
 /* インライン・クイック手順追加バー（1クリックで種別ごとに追加） */
 .opm-quickadd{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 0 4px;}
 .opm-qa-label{font-size:11px;font-weight:700;color:var(--text-2);margin-right:2px;}
@@ -1285,7 +1308,33 @@ body.manual-workspace.manual-split-v #opm-resize-handle::after{top:2px;left:50%;
   .opm-reason-input,.opm-memo-input,.opm-tag-input,.opm-goal-input,.opm-measured-input{border:none!important;border-bottom:1px solid #ccc!important;background:#fff!important;color:#000!important;-webkit-text-fill-color:#000;opacity:1!important;}
   .opm-check{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
   .opm-foot{display:none!important;}
+  .opm-printopts{display:none!important;}
   .opm-print-footer{display:block!important;margin-top:18px;padding-top:10px;border-top:1px solid #ccc;font-size:10.5px;color:#333;}
+  /* タイトルブロック（正式な管理文書ヘッダー） */
+  .opm-titleblock{display:block!important;border:1.5px solid #333;padding:8px 10px;margin-bottom:10px;break-inside:avoid;}
+  .opm-tb-main{display:flex;align-items:flex-start;gap:14px;}
+  .opm-tb-logo{max-height:48px;max-width:150px;object-fit:contain;}
+  .opm-tb-titles{flex:1;min-width:0;}
+  .opm-tb-title{font-size:16px;font-weight:800;color:#000;line-height:1.25;}
+  .opm-tb-sub{font-size:11px;color:#333;margin-top:3px;}
+  .opm-tb-meta{border-collapse:collapse;font-size:10px;}
+  .opm-tb-meta th,.opm-tb-meta td{border:1px solid #999;padding:2px 8px;white-space:nowrap;color:#000;}
+  .opm-tb-meta th{background:#f2f2f2;print-color-adjust:exact;-webkit-print-color-adjust:exact;font-weight:700;}
+  .opm-tb-meta td{min-width:54px;}
+  /* 承認欄（署名/押印ボックス） */
+  .opm-approval{border-collapse:collapse;font-size:10px;margin:8px 0 0 auto;}
+  .opm-approval th{border:1px solid #999;background:#f2f2f2;print-color-adjust:exact;-webkit-print-color-adjust:exact;padding:2px 18px;color:#000;font-weight:700;}
+  .opm-approval td{border:1px solid #999;height:42px;min-width:64px;}
+  /* 縞模様（印刷） */
+  #op-manual-modal.opm-zebra .opm-table tbody tr:nth-child(even) td{background:#f4f4f4!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  /* モノクロ印刷：色付き背景・バッジを白黒化 */
+  #op-manual-modal.opm-mono .opm-phase,#op-manual-modal.opm-mono .opm-warmup-row,#op-manual-modal.opm-mono .opm-steam-row,#op-manual-modal.opm-mono .opm-task-row,#op-manual-modal.opm-mono .opm-check-row{background:#fff!important;color:#000!important;}
+  #op-manual-modal.opm-mono .opm-phase{border:1px solid #333;}
+  #op-manual-modal.opm-mono .opm-op-badge{background:#fff!important;color:#000!important;border:1px solid #000!important;}
+  #op-manual-modal.opm-mono.opm-zebra .opm-table tbody tr:nth-child(even) td{background:#ededed!important;}
+  /* 文字サイズ（印刷） */
+  #op-manual-modal.opm-fs-s .opm-table{font-size:9.5px!important;}
+  #op-manual-modal.opm-fs-l .opm-table{font-size:12px!important;}
 }
 .opm-print-footer{display:none;}
 
@@ -1341,7 +1390,7 @@ const buildNameMap=()=>{const c={source:1,valve:1,trap:1,drain:1,split:1,merge:1
 /* ━━━━━━━━ STORE ━━━━━━━━ */
 const Store={
   nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],sequences:[],manuals:[],
-  config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false, autosaveEnabled:true, pdfUrl:''},
+  config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false, autosaveEnabled:true, pdfUrl:'', logoUrl:''},
   dragState:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
   multiDrag:{active:false,nodes:[],gEl:null,startSvgX:0,startSvgY:0,startClientX:0,startClientY:0,hasDragged:false,pointerId:null,preSnapshot:null},
   labelDrag:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,startX:0,startY:0,startOffsetX:0,startOffsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
@@ -3656,7 +3705,8 @@ const Persistence = {
     sequences: Store.sequences,  // Phase 4: 記録済み操作シーケンス
     manuals: Store.manuals,      // 手動作成・保存された操作マニュアル群（図JSONに内包）
     manualColumnOpts: OperationManual._opts,
-    pdfUrl: Store.config.pdfUrl || ''   // プロジェクト共通の関連PDF URL（大元JSONに紐付け）
+    pdfUrl: Store.config.pdfUrl || '',   // プロジェクト共通の関連PDF URL（大元JSONに紐付け）
+    logoUrl: Store.config.logoUrl || ''  // 帳票ヘッダーのロゴ（URL または dataURL）
   }),
   // ファイル読込・自動復元の共通復元ロジック
   apply: (d) => {
@@ -3675,8 +3725,9 @@ const Persistence = {
     Store.edges = (d.edges || []).map(e => Store.createEdge(e.from, e.to, e));
     Store.sequences = Array.isArray(d.sequences) ? d.sequences : [];  // Phase 4
     Store.manuals = Array.isArray(d.manuals) ? d.manuals : [];        // 保存済み操作マニュアル
-    if(d.manualColumnOpts && typeof OperationManual !== 'undefined') OperationManual._opts = { showState: true, showTag: true, ...d.manualColumnOpts };
+    if(d.manualColumnOpts && typeof OperationManual !== 'undefined') OperationManual._opts = { ...OperationManual._optDefaults, ...d.manualColumnOpts };
     Store.config.pdfUrl = (typeof d.pdfUrl === 'string') ? d.pdfUrl : '';
+    Store.config.logoUrl = (typeof d.logoUrl === 'string') ? d.logoUrl : '';
     Store.invalidateIndex();
     Store.history = [];
     Store.selection.clear();
@@ -3915,7 +3966,15 @@ const OperationManual = {
   _savedAt: null,                  // 最終保存時刻（ステータス表示用）
   _meta: null,                     // { name, targetName, createdAt }
   _steps: { iso: [], res: [] },
-  _opts: { showState: true, showTag: true, showGauge: true },   // 列8(現在の状態)/列9(タグ番号)/計器値列。既定で表示
+  // 列表示＋帳票/印刷の設定（per-manual。columnOpts として保存され、プロジェクト既定は manualColumnOpts）
+  _opts: { showState: true, showTag: true, showGauge: true, showApproval: false, zebra: true, orientation: 'portrait', fontScale: 1, margin: 'normal', mono: false },
+  // 既定値（保存データとマージしてキー欠落を補完）
+  _optDefaults: { showState: true, showTag: true, showGauge: true, showApproval: false, zebra: true, orientation: 'portrait', fontScale: 1, margin: 'normal', mono: false },
+  // 印刷フッターの既定の安全注意文（メタ未設定時のフォールバック）
+  DEFAULT_FOOTER: '確認事項：隔離作業完了後、圧力ゲージ等で圧力が抜けていることを必ず確認してください。復旧時は暖管が完了するまで通常バルブセット（全開）を行わないでください。',
+  // 操作理由のサジェスト（よく使う定型句＋学習履歴。datalist で補完）
+  REASON_BUILTIN: ['残圧確認のため', '逆流防止のため', '安全確保のため', '系統隔離のため', '暖管のため', 'ドレン排出のため', '漏れ確認のため', '通常運転へ復帰のため', '圧力上昇防止のため', '計器確認のため'],
+  REASON_KEY: 'steamboy_reason_history',
   _uid: 0,
   _history: [],                    // undo/redo スナップショット列
   _historyIndex: -1,               // 現在位置（-1 = 空）
@@ -3943,7 +4002,7 @@ const OperationManual = {
     OperationManual._manualId = null;
     OperationManual._savedAt = null;
     OperationManual._targetId = nodeId;
-    OperationManual._meta = { name: `${name} 操作マニュアル`.trim(), targetName: name, createdAt: Date.now() };
+    OperationManual._meta = { name: `${name} 操作マニュアル`.trim(), targetName: name, createdAt: Date.now(), docNo: '', rev: '', revisedAt: null, footerNote: OperationManual.DEFAULT_FOOTER };
     OperationManual._steps = { iso: [], res: [] };
     OperationManual._history = []; OperationManual._historyIndex = -1;
     OperationManual._show();
@@ -3953,8 +4012,8 @@ const OperationManual = {
     OperationManual._manualId = manual.id;
     OperationManual._savedAt = manual.updatedAt || null;
     OperationManual._targetId = manual.targetId || null;
-    OperationManual._meta = { name: manual.name || '', targetName: manual.targetName || '', createdAt: manual.createdAt || Date.now() };
-    if (manual.columnOpts) OperationManual._opts = { showState: true, showTag: true, showGauge: true, ...manual.columnOpts };
+    OperationManual._meta = { name: manual.name || '', targetName: manual.targetName || '', createdAt: manual.createdAt || Date.now(), docNo: manual.docNo || '', rev: manual.rev || '', revisedAt: manual.revisedAt || null, footerNote: (manual.footerNote != null ? manual.footerNote : OperationManual.DEFAULT_FOOTER) };
+    if (manual.columnOpts) OperationManual._opts = { ...OperationManual._optDefaults, ...manual.columnOpts };
     const clone = JSON.parse(JSON.stringify(manual.steps || { iso: [], res: [] }));
     OperationManual._steps = { iso: clone.iso || [], res: clone.res || [] };
     OperationManual._history = []; OperationManual._historyIndex = -1;
@@ -3970,7 +4029,7 @@ const OperationManual = {
     OperationManual._manualId = null;
     OperationManual._savedAt = null;
     OperationManual._targetId = null;
-    OperationManual._meta = { name: '新規マニュアル', targetName: '', createdAt: Date.now() };
+    OperationManual._meta = { name: '新規マニュアル', targetName: '', createdAt: Date.now(), docNo: '', rev: '', revisedAt: null, footerNote: OperationManual.DEFAULT_FOOTER };
     OperationManual._steps = { iso: [], res: [] };
     OperationManual._history = []; OperationManual._historyIndex = -1;
     OperationManual._show();
@@ -4031,6 +4090,10 @@ const OperationManual = {
         const tr = (e.target.closest && e.target.closest('tr[data-id][data-phase]'))
           || (OperationManual._selectedStepId && m.querySelector(`tr[data-id="${OperationManual._selectedStepId}"]`));
         if (tr) { e.preventDefault(); e.stopPropagation(); OperationManual._duplicateStep(tr.dataset.phase, tr.dataset.id); }
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        // Ctrl+↑/↓: フォーカス中の行を上下に移動（再描画でフォーカスは同欄に復元される）
+        const tr = e.target.closest && e.target.closest('tr[data-id][data-phase]');
+        if (tr) { e.preventDefault(); e.stopPropagation(); OperationManual._moveStep(tr.dataset.phase, tr.dataset.id, e.key === 'ArrowUp' ? -1 : 1); }
       }
     });
     // 離脱・リロード時に未保存の編集を即フラッシュ（クラッシュ耐性）
@@ -4046,6 +4109,16 @@ const OperationManual = {
     const el = e.target; if (!el) return;
     if (el.id === 'opm-name-input') { if (OperationManual._meta) OperationManual._meta.name = el.value; }
     else if (el.id === 'opm-target-input') { if (OperationManual._meta) OperationManual._meta.targetName = el.value; }
+    else if (el.id === 'opm-docno') { if (OperationManual._meta) OperationManual._meta.docNo = el.value; }
+    else if (el.id === 'opm-rev') { if (OperationManual._meta) OperationManual._meta.rev = el.value; }
+    else if (el.id === 'opm-revdate') { if (OperationManual._meta) OperationManual._meta.revisedAt = el.value ? new Date(el.value).getTime() : null; }
+    else if (el.id === 'opm-footer-note') { if (OperationManual._meta) OperationManual._meta.footerNote = el.value; }
+    else if (el.id === 'opm-logo-url') {
+      // 帳票ロゴ（プロジェクト共通。大元JSONに保存）。
+      Store.config.logoUrl = el.value.trim();
+      Persistence.scheduleSave();
+      return;
+    }
     else if (el.id === 'opm-pdf-url') {
       // プロジェクト共通の関連PDF URL（大元JSONに保存）。開くボタンの有効/無効を即時更新。
       Store.config.pdfUrl = el.value.trim();
@@ -4121,10 +4194,15 @@ const OperationManual = {
       // fromState は「作業開始前の実際の弁状態」を記録する。一度捕捉したら上書きしない。
       if (s.fromState == null) s.fromState = s.node ? s.node.state : null;
     });
-    m.querySelectorAll('.opm-op-sel').forEach(sel => { const s = map.get(sel.dataset.id); if (s) s.op = parseInt(sel.value, 10); });
+    m.querySelectorAll('.opm-op-toggle').forEach(tg => { const s = map.get(tg.dataset.id); if (!s) return; const act = tg.querySelector('.opm-op-tg.active'); if (act) s.op = parseInt(act.dataset.op, 10); });
     m.querySelectorAll('.opm-targettext-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.targetText = i.value; });
     m.querySelectorAll('.opm-goal-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.goal = i.value; });
     m.querySelectorAll('.opm-measured-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.measured = i.value; });
+    // タイトルブロック（文書番号・版数・改訂日）とフッター注記を同期
+    const dn = m.querySelector('#opm-docno'); if (dn && OperationManual._meta) OperationManual._meta.docNo = dn.value;
+    const rv = m.querySelector('#opm-rev'); if (rv && OperationManual._meta) OperationManual._meta.rev = rv.value;
+    const rd = m.querySelector('#opm-revdate'); if (rd && OperationManual._meta) OperationManual._meta.revisedAt = rd.value ? new Date(rd.value).getTime() : null;
+    const fn = m.querySelector('#opm-footer-note'); if (fn && OperationManual._meta) OperationManual._meta.footerNote = fn.value;
   },
   _render: () => {
     const m = OperationManual._modal, o = OperationManual._opts, esc = OperationManual._esc;
@@ -4153,10 +4231,11 @@ const OperationManual = {
       });
       return opts;
     };
+    // 操作の切替はワンタップのセグメントトグル（閉/微/開）。マウス往復を減らす。
     const opOptions = (s) => {
       const cur = String(s.op);
-      const o2 = (v, l) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`;
-      return `<select class="opm-op-sel" data-id="${s.id}">${o2('0', '閉止')}${o2('1', '微開')}${o2('2', '開放')}</select>`;
+      const b = (v, l, cls) => `<button type="button" class="opm-op-tg ${cls}${cur === v ? ' active' : ''}" data-id="${s.id}" data-op="${v}" title="${cls === 'close' ? '閉止' : cls === 'partial' ? '微開' : '開放'}">${l}</button>`;
+      return `<div class="opm-op-toggle" data-id="${s.id}">${b('0', '閉', 'close')}${b('1', '微', 'partial')}${b('2', '開', 'open')}</div>`;
     };
     // インライン・クイック手順追加バー（種別ボタンは1クリックで追加／🖱でその場から図ピック）
     const quickAdd = (phase) => `<div class="opm-quickadd opm-no-print" data-phase="${phase}">
@@ -4196,7 +4275,7 @@ const OperationManual = {
         <td>${opCell}</td>
         ${o.showState ? `<td class="opm-state-cell">${stateLbl}</td>` : ''}
         ${gaugeCells}
-        <td><input type="text" class="opm-reason-input" data-id="${s.id}" value="${esc(s.reason)}" placeholder="${isValve ? '操作理由...' : K.label + 'の内容...'}"></td>
+        <td><input type="text" class="opm-reason-input" data-id="${s.id}" list="opm-reason-suggest" value="${esc(s.reason)}" placeholder="${isValve ? '操作理由...' : K.label + 'の内容...'}"></td>
         <td style="text-align:center"><input type="checkbox" class="opm-check" data-id="${s.id}" ${s.checked ? 'checked' : ''}></td>
         <td><input type="text" class="opm-memo-input" data-id="${s.id}" value="${esc(s.memo || '')}" placeholder="メモ..."></td>
         <td class="opm-act-col opm-no-print">
@@ -4211,6 +4290,35 @@ const OperationManual = {
     const isoCount = OperationManual._steps.iso.length;
     // 図連携: 対象未設定のバルブ手順（シーケンサ連携できない＝要修正）の件数
     const untargetedCount = [...OperationManual._steps.iso, ...OperationManual._steps.res].filter(s => s.kind === 'valve' && !s.node).length;
+
+    // ── 帳票（印刷）用の組み立て ──
+    const dDate = ms => ms ? new Date(ms).toLocaleDateString() : '—';
+    const logo = (Store.config.logoUrl || '').trim();
+    const meta = OperationManual._meta;
+    const footerNote = (meta && meta.footerNote != null) ? meta.footerNote : OperationManual.DEFAULT_FOOTER;
+    // 操作理由サジェスト（定型句＋学習履歴）
+    const reasonDatalist = OperationManual._reasonDatalist();
+    // 印刷時のタイトルブロック（文書番号・版数・制定/改訂日・対象設備＋任意でロゴ・承認欄）
+    const approvalBlock = o.showApproval ? `
+        <table class="opm-approval">
+          <tr><th>作成</th><th>確認</th><th>承認</th></tr>
+          <tr><td></td><td></td><td></td></tr>
+        </table>` : '';
+    const titleBlock = `
+      <div class="opm-titleblock opm-print-only">
+        <div class="opm-tb-main">
+          ${logo ? `<img class="opm-tb-logo" src="${esc(logo)}" alt="">` : ''}
+          <div class="opm-tb-titles">
+            <div class="opm-tb-title">${esc(meta.name || '操作マニュアル')}</div>
+            <div class="opm-tb-sub">対象設備: <strong>${esc(meta.targetName || '—')}</strong></div>
+          </div>
+          <table class="opm-tb-meta">
+            <tr><th>文書番号</th><td>${esc(meta.docNo || '—')}</td><th>版数</th><td>${esc(meta.rev || '—')}</td></tr>
+            <tr><th>制定日</th><td>${dDate(meta.createdAt)}</td><th>改訂日</th><td>${dDate(meta.revisedAt)}</td></tr>
+          </table>
+        </div>
+        ${approvalBlock}
+      </div>`;
 
     // 再描画でフォーカス/キャレット/スクロールが飛ばないよう退避
     const _ae = document.activeElement;
@@ -4228,26 +4336,46 @@ const OperationManual = {
         <button class="opm-btn ghost" id="opm-library" style="padding:6px 12px">📚 ライブラリ</button>
         <button class="iso-close-x" id="opm-x">✕</button>
       </div>
-      <div class="opm-meta">
-        <div class="opm-no-print">マニュアル名: <input type="text" id="opm-name-input" class="opm-name-input" value="${esc(OperationManual._meta.name || '')}" placeholder="マニュアル名"></div>
-        <div class="opm-print-only opm-name-print"><strong>${esc(OperationManual._meta.name || '')}</strong></div>
-        <div class="opm-no-print">対象: <input type="text" id="opm-target-input" class="opm-name-input" value="${esc(OperationManual._meta.targetName || '')}" placeholder="対象機器名"></div>
-        <div class="opm-print-only">対象: <strong>${esc(OperationManual._meta.targetName || '')}</strong></div>
-        <div>作成日時: <strong>${new Date(OperationManual._meta.createdAt || Date.now()).toLocaleString()}</strong></div>
-        <div class="opm-no-print opm-pdf-row" title="プロジェクト全体で共通の関連PDF。保存時に大元のJSONへ一緒に記録されます。">📄 関連PDF:
+      <div class="opm-meta opm-no-print">
+        <div>マニュアル名: <input type="text" id="opm-name-input" class="opm-name-input" value="${esc(OperationManual._meta.name || '')}" placeholder="マニュアル名"></div>
+        <div>対象: <input type="text" id="opm-target-input" class="opm-name-input" value="${esc(OperationManual._meta.targetName || '')}" placeholder="対象機器名"></div>
+        <div>文書番号: <input type="text" id="opm-docno" class="opm-name-input" style="min-width:120px" value="${esc(OperationManual._meta.docNo || '')}" placeholder="例: SOP-001"></div>
+        <div>版数: <input type="text" id="opm-rev" class="opm-name-input" style="min-width:70px" value="${esc(OperationManual._meta.rev || '')}" placeholder="例: 1.0"></div>
+        <div>改訂日: <input type="date" id="opm-revdate" class="opm-name-input" style="min-width:140px" value="${OperationManual._toDateInput(OperationManual._meta.revisedAt)}"></div>
+        <div>制定日: <strong>${new Date(OperationManual._meta.createdAt || Date.now()).toLocaleDateString()}</strong></div>
+        <div class="opm-pdf-row" title="プロジェクト全体で共通の関連PDF。保存時に大元のJSONへ一緒に記録されます。">📄 関連PDF:
           <input type="url" id="opm-pdf-url" class="opm-name-input" value="${esc(Store.config.pdfUrl || '')}" placeholder="https://… のPDF URL">
           <button class="opm-btn info opm-pdf-open" id="opm-pdf-open" ${Store.config.pdfUrl ? '' : 'disabled'} title="関連PDFを新しいタブで開く">開く</button>
         </div>
-        <div class="opm-print-footer">作成者: ____________________</div>
+        <div class="opm-pdf-row" title="帳票ヘッダーに表示するロゴ画像。URL指定か画像ファイルを選択（dataURLで大元JSONに保存）。">🏷 ロゴ:
+          <input type="url" id="opm-logo-url" class="opm-name-input" value="${logo.startsWith('data:') ? '' : esc(logo)}" placeholder="${logo.startsWith('data:') ? '画像設定済み（選択ファイル）' : 'URL または画像を選択'}">
+          <button class="opm-btn ghost" id="opm-logo-file" style="padding:5px 10px;font-size:12px">画像…</button>
+          <input type="file" id="opm-logo-input" accept="image/*" style="display:none">
+          ${logo ? '<button class="opm-btn quiet" id="opm-logo-clear" style="padding:5px 10px;font-size:12px">消去</button>' : ''}
+        </div>
       </div>
       <div class="opm-col-opts opm-no-print">
         <span>表示列:</span>
         <label><input type="checkbox" id="opm-opt-state" ${o.showState ? 'checked' : ''}> 現在の状態</label>
         <label><input type="checkbox" id="opm-opt-tag" ${o.showTag ? 'checked' : ''}> タグ番号</label>
         <label><input type="checkbox" id="opm-opt-gauge" ${o.showGauge ? 'checked' : ''}> 計器値（目標/実測）</label>
-        <span class="opm-hint">行を <strong>⠿</strong> でドラッグして並べ替え／<strong>＋手順</strong>のボタンで1クリック追加／<strong>⧉</strong>(Ctrl+D)で複製／<strong>🖱図から追加</strong>で図からまとめてピック</span>
+        <button class="opm-btn ghost${OperationManual._printPanelOpen ? ' active' : ''}" id="opm-printopts-toggle" style="padding:5px 12px;font-size:12px" title="印刷・帳票の体裁を設定">🖨 印刷設定</button>
+        <span class="opm-hint">行末で <strong>Enter</strong> で同種の手順を直下に追加／<strong>Ctrl+↑↓</strong>で行移動／<strong>⠿</strong>ドラッグ並べ替え／<strong>🖱図から追加</strong>でまとめてピック</span>
       </div>
+      <div class="opm-printopts opm-no-print" id="opm-printopts" style="${OperationManual._printPanelOpen ? '' : 'display:none'}">
+        <label>向き <select id="opm-po-orient"><option value="portrait">縦</option><option value="landscape">横</option></select></label>
+        <label>文字サイズ <select id="opm-po-font"><option value="0.9">小</option><option value="1">標準</option><option value="1.1">大</option></select></label>
+        <label>余白 <select id="opm-po-margin"><option value="narrow">狭</option><option value="normal">標準</option><option value="wide">広</option></select></label>
+        <label><input type="checkbox" id="opm-po-zebra"> 縞模様</label>
+        <label><input type="checkbox" id="opm-po-mono"> モノクロ印刷</label>
+        <label title="作成・確認・承認の署名欄を帳票に表示します"><input type="checkbox" id="opm-po-approval"> 承認欄</label>
+        <div class="opm-po-footer">フッター注記:
+          <textarea id="opm-footer-note" rows="2" placeholder="印刷時に末尾へ表示する注意文">${esc(footerNote)}</textarea>
+        </div>
+      </div>
+      ${reasonDatalist}
       <div class="opm-body">
+        ${titleBlock}
         <div class="opm-phase">🔒 【隔離フェーズ】（安全対策・隔離）</div>
         <table class="opm-table">
           <thead>${thead}</thead>
@@ -4258,7 +4386,7 @@ const OperationManual = {
         <div class="opm-phase restore">🔓 【復旧フェーズ】（暖管 → 通常バルブセット）</div>
         <table class="opm-table">
           <thead>${thead}</thead>
-          <tbody>${renderRows(OperationManual._steps.res, 'res', isoCount + 1)}</tbody>
+          <tbody>${renderRows(OperationManual._steps.res, 'res', 1)}</tbody>
         </table>
         ${quickAdd('res')}
       </div>
@@ -4281,7 +4409,7 @@ const OperationManual = {
         <button class="opm-btn primary" id="opm-seq">▶ シーケンサ連携</button>
       </div>
       <div class="opm-print-footer" style="margin:20px 20px 0; padding-bottom:20px; display:none;">
-        <p>確認事項：隔離作業完了後、圧力ゲージ等で圧力が抜けていることを必ず確認してください。復旧時は暖管が完了するまで通常バルブセット（全開）を行わないでください。</p>
+        ${footerNote ? `<p>${esc(footerNote).replace(/\n/g, '<br>')}</p>` : ''}
       </div>
     `;
 
@@ -4294,9 +4422,10 @@ const OperationManual = {
     m.querySelector('#opm-redo').onclick = OperationManual._redo;
     m.querySelector('#opm-pick').onclick = () => ManualPicker.start(ManualPicker._phase || 'iso');
     m.querySelector('#opm-library').onclick = () => { OperationManual._syncInputs(); OperationManual._autosaveIfContent(); OperationManual.close(); ManualLibrary.open(); };
-    m.querySelector('#opm-print').onclick = () => { OperationManual._syncInputs(); window.print(); };
+    // 印刷前に再描画：タイトルブロック/承認欄/フッター注記など印刷専用要素へ最新の入力を反映
+    m.querySelector('#opm-print').onclick = () => { OperationManual._syncInputs(); OperationManual._render(); window.print(); };
     m.querySelector('#opm-pdf').onclick = () => {
-      OperationManual._syncInputs();
+      OperationManual._syncInputs(); OperationManual._render();
       Toast.show('印刷ダイアログで「送信先 / プリンター」を「PDFに保存」に設定してください');
       setTimeout(() => window.print(), 350);
     };
@@ -4312,6 +4441,41 @@ const OperationManual = {
     m.querySelector('#opm-opt-tag').onchange = toggle('showTag');
     m.querySelector('#opm-opt-gauge').onchange = toggle('showGauge');
 
+    // 印刷設定パネルの開閉
+    const poToggle = m.querySelector('#opm-printopts-toggle');
+    if (poToggle) poToggle.onclick = () => {
+      OperationManual._printPanelOpen = !OperationManual._printPanelOpen;
+      const p = m.querySelector('#opm-printopts');
+      if (p) p.style.display = OperationManual._printPanelOpen ? '' : 'none';
+      poToggle.classList.toggle('active', OperationManual._printPanelOpen);
+    };
+    // 印刷設定（向き・文字サイズ・余白・縞・モノクロは即時反映。承認欄は帳票構成が変わるため再描画）
+    const wirePO = (id, key, parse) => { const el = m.querySelector(id); if (!el) return; el.value = String(OperationManual._opts[key]); el.onchange = () => { OperationManual._opts[key] = parse ? parse(el.value) : el.value; OperationManual._applyPrintOpts(); Persistence.scheduleSave(); }; };
+    wirePO('#opm-po-orient', 'orientation');
+    wirePO('#opm-po-font', 'fontScale', parseFloat);
+    wirePO('#opm-po-margin', 'margin');
+    const wirePOChk = (id, key) => { const el = m.querySelector(id); if (!el) return; el.checked = !!OperationManual._opts[key]; el.onchange = () => { OperationManual._opts[key] = el.checked; OperationManual._applyPrintOpts(); Persistence.scheduleSave(); }; };
+    wirePOChk('#opm-po-zebra', 'zebra');
+    wirePOChk('#opm-po-mono', 'mono');
+    const apprChk = m.querySelector('#opm-po-approval');
+    if (apprChk) { apprChk.checked = !!OperationManual._opts.showApproval; apprChk.onchange = () => { OperationManual._syncInputs(); OperationManual._opts.showApproval = apprChk.checked; OperationManual._render(); Persistence.scheduleSave(); }; }
+
+    // ロゴ：URL入力は _onInput でライブ反映。ファイル選択は dataURL 化して保存。
+    const logoFileBtn = m.querySelector('#opm-logo-file');
+    const logoInput = m.querySelector('#opm-logo-input');
+    if (logoFileBtn && logoInput) {
+      logoFileBtn.onclick = () => logoInput.click();
+      logoInput.onchange = () => {
+        const f = logoInput.files && logoInput.files[0]; if (!f) return;
+        if (f.size > 1024 * 1024) { Toast.show('ロゴ画像は1MB以下にしてください'); return; }
+        const reader = new FileReader();
+        reader.onload = () => { Store.config.logoUrl = reader.result; Persistence.scheduleSave(); OperationManual._render(); Toast.show('ロゴを設定しました'); };
+        reader.readAsDataURL(f);
+      };
+    }
+    const logoClear = m.querySelector('#opm-logo-clear');
+    if (logoClear) logoClear.onclick = () => { Store.config.logoUrl = ''; Persistence.scheduleSave(); OperationManual._render(); };
+
     // 手順の追加（インライン・クイック追加：1クリックで種別ごとに追加）・削除・複製
     m.querySelectorAll('.opm-qa-btn').forEach(b => b.onclick = () => OperationManual._addStep(b.dataset.phase, b.dataset.kind));
     m.querySelectorAll('.opm-qa-pick').forEach(b => b.onclick = () => ManualPicker.start(b.dataset.phase));
@@ -4325,12 +4489,29 @@ const OperationManual = {
     // 追加手順の対象・操作セレクトは変更時に再描画（画像・現在の状態を更新）
     // 対象変更は画像/状態/タグ欄に波及するため再描画。操作(開閉)変更は値だけ更新（再描画なし）。
     m.querySelectorAll('.opm-target-sel').forEach(sel => sel.onchange = () => { OperationManual._syncInputs(); OperationManual._render(); });
-    m.querySelectorAll('.opm-op-sel').forEach(sel => sel.onchange = () => { const s = OperationManual._stepById(sel.dataset.id); if (s) s.op = parseInt(sel.value, 10); OperationManual._scheduleAutosave(); });
+    // 操作トグル（閉/微/開）はワンタップで即反映（再描画なし）
+    m.querySelectorAll('.opm-op-tg').forEach(btn => btn.onclick = () => {
+      const s = OperationManual._stepById(btn.dataset.id); if (!s) return;
+      s.op = parseInt(btn.dataset.op, 10);
+      const grp = btn.closest('.opm-op-toggle');
+      if (grp) grp.querySelectorAll('.opm-op-tg').forEach(b => b.classList.toggle('active', b === btn));
+      OperationManual._scheduleAutosave();
+    });
     // ドラッグ開始を妨げないよう、入力/セレクト操作中は行ドラッグを無効化
     m.querySelectorAll('.opm-table input, .opm-table select').forEach(el => {
       el.addEventListener('mousedown', e => e.stopPropagation());
       el.closest('tr') && el.addEventListener('focus', () => { const tr = el.closest('tr'); if (tr) tr.draggable = false; });
       el.addEventListener('blur', () => { const tr = el.closest('tr'); if (tr) tr.draggable = true; });
+    });
+    // キーボード連続入力：行内テキスト欄で Enter → 同種の手順を直下に追加（IME変換中は無視）
+    m.querySelectorAll('.opm-reason-input, .opm-memo-input, .opm-targettext-input, .opm-goal-input, .opm-measured-input, .opm-tag-input').forEach(inp => {
+      inp.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.isComposing || e.keyCode === 229) return;
+        const tr = inp.closest('tr[data-id][data-phase]'); if (!tr) return;
+        e.preventDefault();
+        const s = OperationManual._stepById(tr.dataset.id);
+        OperationManual._addStep(tr.dataset.phase, s ? s.kind : 'valve', tr.dataset.id);
+      });
     });
 
     OperationManual._attachDnD();
@@ -4354,6 +4535,36 @@ const OperationManual = {
         : (_foc.did && _foc.cls0 ? m.querySelector(`.${_foc.cls0}[data-id="${_foc.did}"]`) : null);
       if (el) { try { el.focus(); if (_foc.ss != null && el.setSelectionRange) el.setSelectionRange(_foc.ss, _foc.se); } catch (_) {} }
     }
+    OperationManual._applyPrintOpts();   // 帳票の体裁（向き/余白/縞/モノクロ/文字サイズ）を反映
+  },
+  // 帳票/印刷の体裁をモーダルのクラス＋動的@pageに反映
+  _applyPrintOpts: () => {
+    const m = OperationManual._modal, o = OperationManual._opts; if (!m) return;
+    m.classList.toggle('opm-mono', !!o.mono);
+    m.classList.toggle('opm-zebra', !!o.zebra);
+    m.classList.remove('opm-fs-s', 'opm-fs-l');
+    if (o.fontScale < 1) m.classList.add('opm-fs-s'); else if (o.fontScale > 1) m.classList.add('opm-fs-l');
+    let st = document.getElementById('opm-print-dynamic');
+    if (!st) { st = document.createElement('style'); st.id = 'opm-print-dynamic'; document.head.appendChild(st); }
+    const margins = { narrow: '8mm 8mm 12mm', normal: '14mm 11mm 16mm', wide: '20mm 18mm 22mm' };
+    const size = o.orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait';
+    // ページ番号は @page マージンボックス（Firefox等で出力。Chromeはブラウザのヘッダ/フッタ設定を併用）
+    st.textContent = `@media print{@page{size:${size};margin:${margins[o.margin] || margins.normal};@bottom-center{content:"ページ " counter(page) " / " counter(pages);font-size:9px;color:#555;}}}`;
+  },
+  // revisedAt(ms) → <input type=date> 用 YYYY-MM-DD
+  _toDateInput: (ms) => { if (!ms) return ''; const d = new Date(ms); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; },
+  // 操作理由サジェスト（定型句＋学習履歴）
+  _reasonHistory: () => { try { return JSON.parse(localStorage.getItem(OperationManual.REASON_KEY) || '[]'); } catch (_) { return []; } },
+  _learnReasons: () => {
+    const used = [...OperationManual._steps.iso, ...OperationManual._steps.res].map(s => (s.reason || '').trim()).filter(Boolean);
+    if (!used.length) return;
+    let hist = OperationManual._reasonHistory();
+    used.forEach(r => { if (!OperationManual.REASON_BUILTIN.includes(r)) hist = [r, ...hist.filter(x => x !== r)]; });
+    try { localStorage.setItem(OperationManual.REASON_KEY, JSON.stringify(hist.slice(0, 30))); } catch (_) {}
+  },
+  _reasonDatalist: () => {
+    const list = [...OperationManual.REASON_BUILTIN, ...OperationManual._reasonHistory().filter(r => !OperationManual.REASON_BUILTIN.includes(r))];
+    return `<datalist id="opm-reason-suggest">${list.map(r => `<option value="${OperationManual._esc(r)}"></option>`).join('')}</datalist>`;
   },
   // 手順を複製（直下に挿入）。確認チェックはリセットして再確認を促す。
   _duplicateStep: (phase, id) => {
@@ -4387,16 +4598,19 @@ const OperationManual = {
     setTimeout(() => tr.classList.remove('manual-picked-flash'), 700);
     const sel = tr.querySelector('.opm-target-sel'); if (sel) sel.focus();
   },
-  _addStep: (phase, kind = 'valve') => {
+  _addStep: (phase, kind = 'valve', afterId = null) => {
     OperationManual._syncInputs();
     OperationManual._pushHistory();
     const id = 's' + (OperationManual._uid++);
-    OperationManual._steps[phase].push({
+    const step = {
       id, kind, node: null,
       op: kind === 'valve' ? VALVE_STATE.CLOSED : null, fromState: null,
       reason: '', memo: '', checked: false, tag: '', targetText: '', goal: '', measured: '',
       isDrain: false, isWarmup: false, editable: true
-    });
+    };
+    const arr = OperationManual._steps[phase];
+    const ai = afterId ? arr.findIndex(s => s.id === afterId) : -1;
+    if (ai >= 0) arr.splice(ai + 1, 0, step); else arr.push(step);
     OperationManual._render();
     // 追加した行を可視化しつつ最初の編集欄へフォーカス
     const tr = OperationManual._modal && OperationManual._modal.querySelector(`tr[data-id="${id}"]`);
@@ -4544,6 +4758,10 @@ const OperationManual = {
     targetName: (OperationManual._meta && OperationManual._meta.targetName) || '',
     createdAt: (OperationManual._meta && OperationManual._meta.createdAt) || Date.now(),
     updatedAt: Date.now(),
+    docNo: (OperationManual._meta && OperationManual._meta.docNo) || '',
+    rev: (OperationManual._meta && OperationManual._meta.rev) || '',
+    revisedAt: (OperationManual._meta && OperationManual._meta.revisedAt) || null,
+    footerNote: (OperationManual._meta && OperationManual._meta.footerNote != null) ? OperationManual._meta.footerNote : OperationManual.DEFAULT_FOOTER,
     columnOpts: { ...OperationManual._opts },
     steps: JSON.parse(JSON.stringify(OperationManual._steps))
   }),
@@ -4562,6 +4780,7 @@ const OperationManual = {
       OperationManual._meta.name = OperationManual._meta.targetName ? `${OperationManual._meta.targetName} 操作マニュアル` : '無題のマニュアル';
       autoNamed = true;
     }
+    OperationManual._learnReasons();
     const manual = OperationManual._collect();
     OperationManual._manualId = manual.id;
     OperationManual._savedAt = Date.now();
@@ -4572,6 +4791,7 @@ const OperationManual = {
   },
   // 閉じる/ライブラリ遷移時の自動反映。既存は常に更新、未保存ドラフトは手順があるときだけ保存。
   _autosaveIfContent: () => {
+    OperationManual._learnReasons();
     const hasContent = OperationManual._steps.iso.length || OperationManual._steps.res.length;
     if (OperationManual._manualId) { OperationManual._upsert(OperationManual._collect()); OperationManual._savedAt = Date.now(); }
     else if (hasContent) { const mn = OperationManual._collect(); OperationManual._manualId = mn.id; OperationManual._upsert(mn); OperationManual._savedAt = Date.now(); }
@@ -4759,6 +4979,14 @@ const ManualPicker = {
     const g = document.getElementById(`node-grp-${node.id}`);
     if (g) { g.classList.add('manual-picked-flash'); setTimeout(() => g.classList.remove('manual-picked-flash'), 400); }
   },
+  // 連続ピック中、直前に追加した手順を取り消す（誤クリックの即時リカバリ）
+  undoLast: () => {
+    if (!ManualPicker._count) return;
+    const arr = OperationManual._steps[ManualPicker._phase];
+    if (arr && arr.length) arr.pop();
+    ManualPicker._count = Math.max(0, ManualPicker._count - 1);
+    ManualPicker._updateBanner();
+  },
   finish: () => {
     const added = ManualPicker._count;
     ManualPicker.active = false;
@@ -4786,6 +5014,7 @@ const ManualPicker = {
            </select>
          </label>
          <span class="mpick-count" id="mpick-count">0 件追加</span>
+         <button class="opm-btn ghost" id="mpick-undo" title="直前に追加した手順を取り消す" disabled>↩ 直前を取消</button>
          <button class="opm-btn primary" id="mpick-done">完了</button>`;
     document.body.appendChild(b);
     ManualPicker._banner = b;
@@ -4795,12 +5024,15 @@ const ManualPicker = {
       b.querySelector('#mpick-phase-sel').value = ManualPicker._phase;
       b.querySelector('#mpick-phase-sel').onchange = (e) => { ManualPicker._phase = e.target.value; };
       b.querySelector('#mpick-done').onclick = ManualPicker.finish;
+      b.querySelector('#mpick-undo').onclick = ManualPicker.undoLast;
     }
   },
   _updateBanner: (lastName) => {
     if (!ManualPicker._banner) return;
     const c = ManualPicker._banner.querySelector('#mpick-count');
     if (c) c.textContent = `${ManualPicker._count} 件追加${lastName ? `（最新: ${lastName}）` : ''}`;
+    const u = ManualPicker._banner.querySelector('#mpick-undo');
+    if (u) u.disabled = !ManualPicker._count;
   }
 };
 

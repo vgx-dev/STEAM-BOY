@@ -922,6 +922,7 @@ g.node[data-active="1"] {
     <div class="sp-section-title">記録・共有</div>
     <div class="sp-buttons">
       <button class="sp-btn" id="btn-sequencer">⏺ 操作シーケンス</button>
+      <button class="sp-btn" id="btn-manuals">📋 操作マニュアル</button>
       <button class="sp-btn" id="btn-share">🔗 共有リンク</button>
     </div>
   </div>
@@ -1218,6 +1219,30 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
 .opm-btn.primary:hover{background:#0066d6;transform:translateY(-1px);}
 .opm-btn.ghost{background:rgba(0,0,0,0.05);color:var(--text-1);}
 .opm-btn.ghost:hover{background:rgba(0,0,0,0.09);}
+.opm-name-input{font-family:var(--font);font-size:12px;padding:3px 8px;border:1px solid rgba(0,0,0,0.14);border-radius:7px;min-width:160px;background:#fff;}
+.opm-name-input:focus{outline:none;border-color:var(--accent);}
+.opm-saved-badge,.opm-draft-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;}
+.opm-saved-badge{background:rgba(52,199,89,0.15);color:#1f8a3b;}
+.opm-draft-badge{background:rgba(0,0,0,0.08);color:var(--text-2);}
+.opm-print-only{display:none;}
+/* マニュアルライブラリ */
+#manual-lib-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.18);z-index:620;display:none;}
+#manual-lib-overlay.open{display:block;}
+#manual-lib-modal{position:fixed;top:48%;left:50%;transform:translate(-50%,-50%);width:min(94vw,640px);max-height:84vh;z-index:621;border-radius:16px;display:none;flex-direction:column;}
+#manual-lib-modal.open{display:flex;}
+.mlib-head{padding:14px 20px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(0,0,0,0.07);}
+.mlib-body{padding:12px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;}
+.mlib-empty{text-align:center;color:var(--text-2);font-size:13px;padding:32px 8px;line-height:1.7;}
+.mlib-item{display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:11px;background:rgba(255,255,255,0.5);}
+.mlib-item:hover{border-color:rgba(0,122,255,0.35);background:rgba(0,122,255,0.04);}
+.mlib-item-main{flex:1;min-width:0;}
+.mlib-item-name{font-size:14px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mlib-item-sub{font-size:11px;color:var(--text-2);margin-top:2px;}
+.mlib-item-acts{display:flex;gap:4px;flex-shrink:0;}
+.mlib-mini{padding:5px 10px;font-size:11px;font-weight:600;font-family:var(--font);border:none;border-radius:7px;background:rgba(0,0,0,0.06);color:var(--text-1);cursor:pointer;transition:background .15s;}
+.mlib-mini:hover{background:rgba(0,122,255,0.14);color:var(--accent);}
+.mlib-mini.danger:hover{background:rgba(255,59,48,0.14);color:var(--red);}
+.mlib-foot{padding:12px 20px 16px;display:flex;gap:10px;align-items:center;border-top:1px solid rgba(0,0,0,0.06);}
 @media print{
   @page{size:A4 portrait;margin:14mm 11mm 16mm;}
   /* マニュアル表示中は他要素を完全に除外し、表を通常フローで複数ページに分割 */
@@ -1228,6 +1253,7 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
   .opm-body{overflow:visible!important;padding:0!important;min-height:0!important;}
   .opm-meta{padding:0 0 8px!important;border-bottom:1.5px solid #333!important;margin-bottom:6px;}
   .opm-no-print{display:none!important;}
+  .opm-print-only{display:block!important;}
   .opm-dnd-col,.opm-act-col{display:none!important;}
   .opm-table{font-size:10.5px;page-break-inside:auto;}
   /* 各ページ先頭で表ヘッダを反復、行の途中分断を禁止 */
@@ -1301,7 +1327,7 @@ const buildNameMap=()=>{const c={source:1,valve:1,trap:1,drain:1,split:1,merge:1
 
 /* ━━━━━━━━ STORE ━━━━━━━━ */
 const Store={
-  nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],sequences:[],
+  nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],sequences:[],manuals:[],
   isolationProfiles:[{id:'default',name:'標準（1バルブ）',constraints:{upstreamValveCount:1,downstreamValveCount:1,branchIndependent:true,steamDrainProtection:false,drainOpenInstruction:true,ventOpenInstruction:false}},{id:'double',name:'ダブルブロック（2バルブ）',constraints:{upstreamValveCount:2,downstreamValveCount:2,branchIndependent:true,steamDrainProtection:false,drainOpenInstruction:true,ventOpenInstruction:false}}],lastProfileId:'default',
   config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false},  
   dragState:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
@@ -3029,6 +3055,7 @@ const Controller={
     Sequencer.init();
     document.getElementById('btn-tutorial').addEventListener('click',()=>Onboarding.tour(true));
     document.getElementById('btn-sequencer').addEventListener('click',()=>Sequencer.toggle());
+    document.getElementById('btn-manuals').addEventListener('click',()=>ManualLibrary.open());
     document.getElementById('btn-share').addEventListener('click',()=>Share.createLink());
 
     Renderer.updateZoom();
@@ -3583,6 +3610,7 @@ const Persistence = {
     nodes: Store.nodes.map(n => ({ id: n.id, type: n.type, x: n.x, y: n.y, rotation: n.rotation, state: n.state, ext: n.ext, labelOffset: n.labelOffset })),
     edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext })),
     sequences: Store.sequences,  // Phase 4: 記録済み操作シーケンス
+    manuals: Store.manuals,      // 手動作成・保存された操作マニュアル群（図JSONに内包）
     isolationProfiles: Store.isolationProfiles,
     lastProfileId: Store.lastProfileId,
     manualColumnOpts: OperationManual._opts
@@ -3603,6 +3631,7 @@ const Persistence = {
     Store.nodes = (d.nodes || []).map(n => Store.createNode(n.type || NODE_TYPE.SOURCE, n.x || 0, n.y || 0, n));
     Store.edges = (d.edges || []).map(e => Store.createEdge(e.from, e.to, e));
     Store.sequences = Array.isArray(d.sequences) ? d.sequences : [];  // Phase 4
+    Store.manuals = Array.isArray(d.manuals) ? d.manuals : [];        // 保存済み操作マニュアル
     if(d.isolationProfiles) Store.isolationProfiles = d.isolationProfiles;
     if(d.lastProfileId) Store.lastProfileId = d.lastProfileId;
     if(d.manualColumnOpts && typeof OperationManual !== 'undefined') OperationManual._opts = { showState: true, showTag: true, ...d.manualColumnOpts };
@@ -3941,6 +3970,8 @@ const SteamDrainProtector = {
 
 const OperationManual = {
   _modal: null, _overlay: null, _data: null,
+  _manualId: null,                 // 保存済みマニュアルのID（null=未保存の下書き）
+  _meta: null,                     // { name, targetName, createdAt }
   _steps: { iso: [], res: [] },
   _opts: { showState: true, showTag: true, showGauge: true },   // 列8(現在の状態)/列9(タグ番号)/計器値列。既定で表示
   _uid: 0,
@@ -3965,9 +3996,38 @@ const OperationManual = {
     const g = { valve: '⊗', safety: '⊕', drain: '⊘', trap: '◇' };
     return `<span class="opm-glyph">${g[node.type] || '⊗'}</span>`;
   },
+  // 隔離計画の自動計算結果から下書きを生成して開く（未保存の下書き）
   open: (planData) => {
     OperationManual._data = planData;
+    OperationManual._manualId = null;
+    OperationManual._meta = { name: `${planData.targetName || ''} 修理マニュアル`.trim(), targetName: planData.targetName || '', createdAt: Date.now() };
     OperationManual._build();
+    OperationManual._show();
+  },
+  // 保存済みマニュアルを開く（再計算しない＝編集が保持される）
+  openSaved: (manual) => {
+    OperationManual._data = { targetName: manual.targetName || '' };
+    OperationManual._manualId = manual.id;
+    OperationManual._meta = { name: manual.name || '', targetName: manual.targetName || '', createdAt: manual.createdAt || Date.now() };
+    if (manual.columnOpts) OperationManual._opts = { showState: true, showTag: true, showGauge: true, ...manual.columnOpts };
+    const clone = JSON.parse(JSON.stringify(manual.steps || { iso: [], res: [] }));
+    OperationManual._steps = { iso: clone.iso || [], res: clone.res || [] };
+    // ID重複を避けるため uid を再採番の基準まで進める
+    [...OperationManual._steps.iso, ...OperationManual._steps.res].forEach(s => {
+      const n = parseInt(String(s.id).replace(/^s/, ''), 10);
+      if (!isNaN(n) && n >= OperationManual._uid) OperationManual._uid = n + 1;
+    });
+    OperationManual._show();
+  },
+  // 白紙のマニュアルを新規作成して開く
+  openBlank: () => {
+    OperationManual._data = { targetName: '' };
+    OperationManual._manualId = null;
+    OperationManual._meta = { name: '新規マニュアル', targetName: '', createdAt: Date.now() };
+    OperationManual._steps = { iso: [], res: [] };
+    OperationManual._show();
+  },
+  _show: () => {
     OperationManual._ensure();
     OperationManual._render();
     OperationManual._overlay.classList.add('open');
@@ -4017,6 +4077,8 @@ const OperationManual = {
   // 編集中の入力値を手順データへ反映（再描画前に呼ぶ）
   _syncInputs: () => {
     const m = OperationManual._modal; if (!m) return;
+    const nameI = m.querySelector('#opm-name-input'); if (nameI && OperationManual._meta) OperationManual._meta.name = nameI.value;
+    const tgtI = m.querySelector('#opm-target-input'); if (tgtI && OperationManual._meta) { OperationManual._meta.targetName = tgtI.value; if (OperationManual._data) OperationManual._data.targetName = tgtI.value; }
     const all = [...OperationManual._steps.iso, ...OperationManual._steps.res];
     const map = new Map(all.map(s => [s.id, s]));
     m.querySelectorAll('.opm-reason-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.reason = i.value; });
@@ -4120,13 +4182,17 @@ const OperationManual = {
     m.innerHTML = `
       <div class="opm-head opm-no-print">
         <span class="opm-head-icon">📋</span>
-        <span class="opm-head-title">操作マニュアル — ${esc(d.targetName)} 修理</span>
+        <span class="opm-head-title">操作マニュアル</span>
+        ${OperationManual._manualId ? '<span class="opm-saved-badge">保存済み</span>' : '<span class="opm-draft-badge">未保存</span>'}
+        <button class="opm-btn ghost" id="opm-library" style="margin-left:auto;padding:6px 12px">📚 ライブラリ</button>
         <button class="iso-close-x" id="opm-x">✕</button>
       </div>
       <div class="opm-meta">
-        <div>対象: <strong>${esc(d.targetName)}</strong></div>
-        <div>プロファイル: <strong>${esc(profile.name)}</strong></div>
-        <div>作成日時: <strong>${new Date().toLocaleString()}</strong></div>
+        <div class="opm-no-print">マニュアル名: <input type="text" id="opm-name-input" class="opm-name-input" value="${esc(OperationManual._meta.name || '')}" placeholder="マニュアル名"></div>
+        <div class="opm-print-only opm-name-print"><strong>${esc(OperationManual._meta.name || '')}</strong></div>
+        <div class="opm-no-print">対象: <input type="text" id="opm-target-input" class="opm-name-input" value="${esc(OperationManual._meta.targetName || '')}" placeholder="対象機器名"></div>
+        <div class="opm-print-only">対象: <strong>${esc(OperationManual._meta.targetName || '')}</strong></div>
+        <div>作成日時: <strong>${new Date(OperationManual._meta.createdAt || Date.now()).toLocaleString()}</strong></div>
         <div class="opm-print-footer">作成者: ____________________</div>
       </div>
       <div class="opm-col-opts opm-no-print">
@@ -4154,9 +4220,10 @@ const OperationManual = {
         <div class="opm-add-menu opm-no-print" data-phase="res"></div>
       </div>
       <div class="opm-foot">
+        <button class="opm-btn primary" id="opm-save" style="background:var(--green);box-shadow:0 4px 14px rgba(52,199,89,.25)">💾 保存</button>
         <button class="opm-btn ghost" id="opm-csv">📥 CSV</button>
         <button class="opm-btn ghost" id="opm-print">🖨 印刷</button>
-        <button class="opm-btn primary" id="opm-pdf" style="background:var(--green);box-shadow:0 4px 14px rgba(52,199,89,.25)">📄 PDFで保存</button>
+        <button class="opm-btn ghost" id="opm-pdf">📄 PDF</button>
         <div style="flex:1"></div>
         <button class="opm-btn ghost" id="opm-cancel">閉じる</button>
         <button class="opm-btn primary" id="opm-seq">▶ シーケンサ連携</button>
@@ -4168,6 +4235,8 @@ const OperationManual = {
 
     m.querySelector('#opm-x').onclick = OperationManual.close;
     m.querySelector('#opm-cancel').onclick = OperationManual.close;
+    m.querySelector('#opm-save').onclick = () => OperationManual.save();
+    m.querySelector('#opm-library').onclick = () => { OperationManual._syncInputs(); OperationManual._persistIfSaved(); OperationManual.close(); ManualLibrary.open(); };
     m.querySelector('#opm-print').onclick = () => { OperationManual._syncInputs(); window.print(); };
     m.querySelector('#opm-pdf').onclick = () => {
       OperationManual._syncInputs();
@@ -4288,12 +4357,130 @@ const OperationManual = {
     Sequencer.stepTo(0);
     Toast.show(`操作マニュアルをシーケンサにインポートしました（${steps.length}手順）`);
   },
+  // 現在の編集内容を保存用オブジェクトにまとめる
+  _collect: () => ({
+    id: OperationManual._manualId || Store.generateId(),
+    name: (OperationManual._meta && OperationManual._meta.name) || '無題のマニュアル',
+    targetName: (OperationManual._meta && OperationManual._meta.targetName) || '',
+    createdAt: (OperationManual._meta && OperationManual._meta.createdAt) || Date.now(),
+    updatedAt: Date.now(),
+    columnOpts: { ...OperationManual._opts },
+    steps: JSON.parse(JSON.stringify(OperationManual._steps))
+  }),
+  // Store.manuals へ upsert
+  _upsert: (manual) => {
+    const i = Store.manuals.findIndex(x => x.id === manual.id);
+    if (i >= 0) Store.manuals[i] = manual; else Store.manuals.push(manual);
+    Persistence.scheduleSave();
+  },
+  // 明示保存（ボタン）。新規ならIDを採番して以後は同一レコードを更新
+  save: () => {
+    OperationManual._syncInputs();
+    if (OperationManual._meta && !OperationManual._meta.name.trim()) {
+      const n = prompt('マニュアル名を入力してください:', OperationManual._meta.targetName ? `${OperationManual._meta.targetName} 修理マニュアル` : '新規マニュアル');
+      if (n == null) return;
+      OperationManual._meta.name = n.trim() || '無題のマニュアル';
+    }
+    const manual = OperationManual._collect();
+    OperationManual._manualId = manual.id;
+    OperationManual._upsert(manual);
+    OperationManual._render();
+    Toast.show(`マニュアル「${manual.name}」を保存しました`);
+  },
+  // 保存済みマニュアルを開いている場合は、編集内容を黙って反映（閉じる/ライブラリ遷移時）
+  _persistIfSaved: () => {
+    if (!OperationManual._manualId) return;
+    OperationManual._upsert(OperationManual._collect());
+  },
   close: () => {
+    OperationManual._syncInputs();
+    OperationManual._persistIfSaved();
     if (OperationManual._overlay) OperationManual._overlay.classList.remove('open');
     if (OperationManual._modal) OperationManual._modal.classList.remove('open');
     document.body.classList.remove('opm-active');
     if (IsolationPlan._modal) IsolationPlan._modal.classList.remove('opm-suppressed');
     OperationManual._data = null;
+  }
+};
+
+/* ━━━━━━━━ MANUAL LIBRARY (手動マニュアルの保存・再利用ライブラリ) ━━━━━━━━ */
+const ManualLibrary = {
+  _overlay: null, _modal: null,
+  _esc: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+  _ensure: () => {
+    if (ManualLibrary._modal) return;
+    const ov = document.createElement('div'); ov.id = 'manual-lib-overlay';
+    ov.addEventListener('click', ManualLibrary.close);
+    const m = document.createElement('div'); m.id = 'manual-lib-modal'; m.className = 'glass';
+    document.body.appendChild(ov); document.body.appendChild(m);
+    ManualLibrary._overlay = ov; ManualLibrary._modal = m;
+  },
+  open: () => {
+    ManualLibrary._ensure();
+    ManualLibrary._render();
+    ManualLibrary._overlay.classList.add('open');
+    ManualLibrary._modal.classList.add('open');
+  },
+  _render: () => {
+    const m = ManualLibrary._modal, esc = ManualLibrary._esc;
+    const list = [...Store.manuals].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const stepCount = mn => ((mn.steps && mn.steps.iso ? mn.steps.iso.length : 0) + (mn.steps && mn.steps.res ? mn.steps.res.length : 0));
+    const rows = list.length ? list.map(mn => `
+      <div class="mlib-item" data-id="${mn.id}">
+        <div class="mlib-item-main">
+          <div class="mlib-item-name">${esc(mn.name || '無題のマニュアル')}</div>
+          <div class="mlib-item-sub">${esc(mn.targetName || '対象未設定')} ・ ${stepCount(mn)}手順 ・ 更新 ${new Date(mn.updatedAt || mn.createdAt || Date.now()).toLocaleString()}</div>
+        </div>
+        <div class="mlib-item-acts">
+          <button class="mlib-mini" data-act="open" data-id="${mn.id}">開く</button>
+          <button class="mlib-mini" data-act="dup" data-id="${mn.id}">複製</button>
+          <button class="mlib-mini" data-act="rename" data-id="${mn.id}">改名</button>
+          <button class="mlib-mini danger" data-act="del" data-id="${mn.id}">削除</button>
+        </div>
+      </div>`).join('') : '<div class="mlib-empty">保存されたマニュアルはありません。<br>「＋ 白紙で新規作成」または隔離計画から作成して保存してください。</div>';
+
+    m.innerHTML = `
+      <div class="mlib-head">
+        <span class="opm-head-icon">📚</span>
+        <span class="opm-head-title">操作マニュアル ライブラリ</span>
+        <button class="iso-close-x" id="mlib-x">✕</button>
+      </div>
+      <div class="mlib-body">${rows}</div>
+      <div class="mlib-foot">
+        <button class="opm-btn primary" id="mlib-new">＋ 白紙で新規作成</button>
+        <div style="flex:1"></div>
+        <button class="opm-btn ghost" id="mlib-close">閉じる</button>
+      </div>`;
+
+    m.querySelector('#mlib-x').onclick = ManualLibrary.close;
+    m.querySelector('#mlib-close').onclick = ManualLibrary.close;
+    m.querySelector('#mlib-new').onclick = () => { ManualLibrary.close(); OperationManual.openBlank(); };
+    m.querySelectorAll('.mlib-mini').forEach(b => b.onclick = () => ManualLibrary._action(b.dataset.act, b.dataset.id));
+  },
+  _action: (act, id) => {
+    const mn = Store.manuals.find(x => x.id === id);
+    if (!mn) return;
+    if (act === 'open') { ManualLibrary.close(); OperationManual.openSaved(mn); }
+    else if (act === 'dup') {
+      const copy = JSON.parse(JSON.stringify(mn));
+      copy.id = Store.generateId(); copy.name = `${mn.name || '無題'} のコピー`; copy.createdAt = Date.now(); copy.updatedAt = Date.now();
+      Store.manuals.push(copy); Persistence.scheduleSave(); ManualLibrary._render();
+    }
+    else if (act === 'rename') {
+      const n = prompt('新しいマニュアル名:', mn.name || '');
+      if (n != null) { mn.name = n.trim() || mn.name; mn.updatedAt = Date.now(); Persistence.scheduleSave(); ManualLibrary._render(); }
+    }
+    else if (act === 'del') {
+      if (confirm(`「${mn.name || '無題'}」を削除しますか？`)) {
+        const i = Store.manuals.findIndex(x => x.id === id);
+        if (i >= 0) Store.manuals.splice(i, 1);
+        Persistence.scheduleSave(); ManualLibrary._render();
+      }
+    }
+  },
+  close: () => {
+    if (ManualLibrary._overlay) ManualLibrary._overlay.classList.remove('open');
+    if (ManualLibrary._modal) ManualLibrary._modal.classList.remove('open');
   }
 };
 

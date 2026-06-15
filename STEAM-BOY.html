@@ -919,20 +919,20 @@ body.master-workspace #mt-resize-handle{display:block;}
     <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 9h12M9 3v12"/></svg>
     <span class="shortcut-hint">M</span>
   </button>
-  <button class="tool-btn" data-tool="reducer" title="減圧弁 (E)">
+  <button class="tool-btn" data-tool="reducer" title="Reducer (E)">
     <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <rect x="2" y="5" width="14" height="8" rx="1.5" stroke="currentColor" fill="none"/>
       <line x1="5" y1="9" x2="13" y2="9" stroke="currentColor" stroke-width="2"/>
     </svg>
     <span class="shortcut-hint">E</span>
   </button>
-  <button class="tool-btn" data-tool="safety" title="安全弁 (Q)">
+  <button class="tool-btn" data-tool="safety" title="Safety Valve (Q)">
     <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8">
       <text x="9" y="13.5" text-anchor="middle" font-weight="bold" font-size="14" fill="currentColor" stroke="none">Q</text>
     </svg>
     <span class="shortcut-hint">Q</span>
   </button>
-  <button class="tool-btn" data-tool="heatex" title="熱交換器 (H)">
+  <button class="tool-btn" data-tool="heatex" title="Heat Exchanger (H)">
     <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
       <polygon points="9,2 16,9 9,16 2,9" stroke="currentColor" fill="none"/>
     </svg>
@@ -1514,8 +1514,8 @@ const VALVE_STATE={CLOSED:0,PARTIAL:1,OPEN:2};
 const COLOR_MAP={0:'#8E8E93',1:'#007AFF',2:'#AF52DE',3:'#FF3B30'};
 const VALVE_STATE_LABEL={0:'閉止',1:'微開',2:'開放'};
 /* 共有の表示名ロジック（renderAll と同一カウンタ順）— Master/Isolation/Sequencer で共用 */
-const NAMING_LABELS={source:'Source',valve:'バルブ',trap:'Trap',drain:'Drain',split:'Split',merge:'Merge',reducer:'減圧弁',heatex:'熱交換器',safety:'安全弁'};
-const buildNameMap=()=>{const c={source:1,valve:1,trap:1,drain:1,split:1,merge:1,reducer:1,heatex:1,safety:1};const m=new Map();Store.nodes.forEach(n=>{const num=c[n.type]!==undefined?c[n.type]++:1;m.set(n.id,n.ext.customName||`${NAMING_LABELS[n.type]||n.type} ${num}`);});return m;};
+const NAMING_LABELS={source:'Source',valve:'Valve',trap:'Trap',drain:'Drain',split:'Split',merge:'Merge',reducer:'Reducer',heatex:'Heat Exchanger',safety:'Safety Valve',pgauge:'Pressure Gauge'};
+const buildNameMap=()=>{const c={source:1,valve:1,trap:1,drain:1,split:1,merge:1,reducer:1,heatex:1,safety:1,pgauge:1};const m=new Map();Store.nodes.forEach(n=>{const num=c[n.type]!==undefined?c[n.type]++:1;m.set(n.id,n.ext.customName||`${NAMING_LABELS[n.type]||n.type} ${num}`);});return m;};
 
 /* ━━━━━━━━ STORE ━━━━━━━━ */
 const Store={
@@ -1865,7 +1865,7 @@ const Animator={
 
 /* ━━━━━━━━ ANOMALY ━━━━━━━━ */
 const Anomaly={
-  TYPE_NAMES:{source:'Source',valve:'バルブ',trap:'Trap',drain:'Drain',split:'Split',merge:'Merge',reducer:'減圧弁',heatex:'熱交換器'},
+  TYPE_NAMES:{source:'Source',valve:'Valve',trap:'Trap',drain:'Drain',split:'Split',merge:'Merge',reducer:'Reducer',heatex:'Heat Exchanger',safety:'Safety Valve',pgauge:'Pressure Gauge'},
   detect:()=>{
     Store.anomalies=[];
     // 最適化3: ノードごとの O(E) filter ×2 をやめ、流入/流出本数を1パスで集計
@@ -2490,8 +2490,8 @@ const Renderer={
     const scale=Store.config.nodeRadius/10;
     // Epic 6-1: CSS変数 --esw を更新し、CSS側で stroke-width を自動適用させる（値が変化した時のみ）
     if(Renderer._lastEsw!==esw){Renderer._lastEsw=esw;Renderer.svgLayer.style.setProperty('--esw', esw+'px');}
-    let typeCounters={source:1,valve:1,trap:1,drain:1,split:1,merge:1,reducer:1,heatex:1,safety:1};
-    const labelsMap={source:'Source',valve:'バルブ',trap:'Trap',drain:'Drain',split:'Split',merge:'Merge',reducer:'減圧弁',heatex:'熱交換器',safety:'安全弁'};
+    let typeCounters={source:1,valve:1,trap:1,drain:1,split:1,merge:1,reducer:1,heatex:1,safety:1,pgauge:1};
+    const labelsMap={source:'Source',valve:'Valve',trap:'Trap',drain:'Drain',split:'Split',merge:'Merge',reducer:'Reducer',heatex:'Heat Exchanger',safety:'Safety Valve',pgauge:'Pressure Gauge'};
     let valveMatrixData=[];
     const activeEdges=new Set(),activeNodes=new Set();
 
@@ -3263,7 +3263,7 @@ const Controller={
         return a.x - b.x;
       });
 
-      const labelsMap = {valve:'バルブ', safety:'安全弁'};
+      const labelsMap = {valve:'Valve', safety:'Safety Valve'};
       let counts = {valve: 1, safety: 1};
       targets.forEach(n => {
         const c = counts[n.type]++;
@@ -3800,7 +3800,7 @@ const ImageViewer = {
 const MasterTable = {
   _nodeMap: null,
   _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX, NODE_TYPE.SOURCE],
-  _LABELS: { valve: 'バルブ', safety: '安全弁', reducer: '減圧弁', trap: 'トラップ', drain: 'ドレン', heatex: '熱交換器', source: 'Source' },
+  _LABELS: { valve: 'Valve', safety: 'Safety Valve', reducer: 'Reducer', trap: 'Trap', drain: 'Drain', heatex: 'Heat Exchanger', source: 'Source', pgauge: 'Pressure Gauge' },
 
   open: () => {
     MasterTable._nodeMap = new Map(Store.nodes.map(n => [n.id, n]));
@@ -3853,8 +3853,8 @@ const MasterTable = {
 
   // renderAll と同一の typeCounters ロジックで表示名を算出
   _collectNodes: () => {
-    const counters = { source:1, valve:1, trap:1, drain:1, split:1, merge:1, reducer:1, heatex:1, safety:1 };
-    const labelsMap = { source:'Source', valve:'バルブ', trap:'Trap', drain:'Drain', split:'Split', merge:'Merge', reducer:'減圧弁', heatex:'熱交換器', safety:'安全弁' };
+    const counters = { source:1, valve:1, trap:1, drain:1, split:1, merge:1, reducer:1, heatex:1, safety:1, pgauge:1 };
+    const labelsMap = { source:'Source', valve:'Valve', trap:'Trap', drain:'Drain', split:'Split', merge:'Merge', reducer:'Reducer', heatex:'Heat Exchanger', safety:'Safety Valve', pgauge:'Pressure Gauge' };
     const result = [];
     Store.nodes.forEach(n => {
       const num = counters[n.type] !== undefined ? counters[n.type]++ : 1;
@@ -4143,7 +4143,7 @@ const Onboarding = {
   FLAG: 'steamboy_onboarded_v1',
   _step: 0, _overlay: null,
   STEPS: [
-    { illus:'🧩', title:'1. 機器を配置する', desc:'上部ツールバーから機器（Source・バルブ・トラップなど）を選び、キャンバスをクリックすると配置できます。' },
+    { illus:'🧩', title:'1. 機器を配置する', desc:'上部ツールバーから機器（Source・Valve・Trap など）を選び、キャンバスをクリックすると配置できます。' },
     { illus:'🔗', title:'2. 配管でつなぐ', desc:'接続ボタン（鎖アイコン / キー C）を押し、つなぎたい2つの機器を順にクリックすると配管が引かれます。' },
     { illus:'🎚️', title:'3. バルブを操作する', desc:'バルブをクリックすると開度（閉止・微開・開放）を選べます。蒸気・ドレンの流れがリアルタイムに可視化されます。' }
   ],
@@ -5375,7 +5375,7 @@ const Sequencer = {
   // バルブ状態変更時にフックされる（記録中のみ手順へ追加）
   onValveChange: (valveId, from, to) => {
     if (!Sequencer.recording || from === to) return;
-    const name = buildNameMap().get(valveId) || 'バルブ';
+    const name = buildNameMap().get(valveId) || 'Valve';
     Sequencer._active.steps.push({ valveId, name, from, to });
     Sequencer._index = Sequencer._active.steps.length;
     Sequencer.refresh();

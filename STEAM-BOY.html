@@ -414,6 +414,12 @@ g.node[data-fluid-state="3"] .node-shape{stroke:#FF3B30;}
 g.node[data-valve-state="0"] .node-shape{fill:rgba(255,59,48,.2);}
 g.node[data-valve-state="1"] .node-shape{fill:rgba(255,149,0,.2);}
 g.node[data-valve-state="2"] .node-shape{fill:rgba(52,199,89,.2);}
+/* ③ 圧力計（Pressure Gauge）: 赤=蒸気 / 黄=残圧・残液・不確定 / 緑=空 */
+.pgauge-face{fill:#34C759;stroke:#2aa84a;stroke-width:2;transition:fill .2s,stroke .2s;}
+.pgauge-needle{stroke:#1d1d1f;stroke-opacity:.85;}
+g.node[data-gauge-state="steam"] .pgauge-face{fill:#FF3B30;stroke:#c92a20;}
+g.node[data-gauge-state="uncertain"] .pgauge-face{fill:#FFCC00;stroke:#c29a00;}
+g.node[data-gauge-state="empty"] .pgauge-face{fill:#34C759;stroke:#2aa84a;}
 
 /* ── Epic 7: Viewport Culling — 画面外エッジのアニメーション停止 ── */
 g.edge-grp[data-culled="1"] .flow-dash{animation-play-state:paused;}
@@ -937,6 +943,12 @@ body.master-workspace #mt-resize-handle{display:block;}
       <polygon points="9,2 16,9 9,16 2,9" stroke="currentColor" fill="none"/>
     </svg>
     <span class="shortcut-hint">H</span>
+  </button>
+  <button class="tool-btn" data-tool="pgauge" title="Pressure Gauge (G)">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+      <circle cx="9" cy="9" r="6.5" fill="none"/><line x1="9" y1="9" x2="12.5" y2="5.5" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    <span class="shortcut-hint">G</span>
   </button>
   <button class="tool-btn" data-tool="pin" title="ピン留め (P)">
       <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -1509,7 +1521,7 @@ const distPtSeg=(p,a,b)=>{const dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy;if(l2<1e-9)
 
 /* ━━━━━━━━ CONSTANTS ━━━━━━━━ */
 const FLUID={EMPTY:0,WATER:1,DRAIN:2,STEAM:3};
-const NODE_TYPE={SOURCE:'source',VALVE:'valve',TRAP:'trap',DRAIN:'drain',SPLIT:'split',MERGE:'merge',POINTER:'pointer',ROTATE:'rotate',REDUCER:'reducer',HEATEX:'heatex',SAFETY:'safety'};
+const NODE_TYPE={SOURCE:'source',VALVE:'valve',TRAP:'trap',DRAIN:'drain',SPLIT:'split',MERGE:'merge',POINTER:'pointer',ROTATE:'rotate',REDUCER:'reducer',HEATEX:'heatex',SAFETY:'safety',PGAUGE:'pgauge'};
 const VALVE_STATE={CLOSED:0,PARTIAL:1,OPEN:2};
 const COLOR_MAP={0:'#8E8E93',1:'#007AFF',2:'#AF52DE',3:'#FF3B30'};
 const VALVE_STATE_LABEL={0:'閉止',1:'微開',2:'開放'};
@@ -1603,6 +1615,7 @@ const SimulatorCore={
         else if(n.type===NODE_TYPE.DRAIN){fOut=(n._sim.fIn===FLUID.DRAIN)?FLUID.WATER:n._sim.fIn;}
         else if(n.type===NODE_TYPE.REDUCER){fOut=n._sim.fIn;rOut=Math.min(rateIn, n.ext.limitRate ?? 0.45);}
         else if(n.type===NODE_TYPE.HEATEX){fOut=n._sim.fIn;rOut=rateIn;}
+        else if(n.type===NODE_TYPE.PGAUGE){fOut=FLUID.EMPTY;rOut=0;}  // 圧力計は末端センサー（下流へ流さない）
         if(fOut===FLUID.EMPTY)rOut=0;
         if(n._sim.fOut!==fOut||n._sim.rateOut!==rOut){n._sim.fOut=fOut;n._sim.rateOut=rOut;changed=true;}
       });
@@ -2181,6 +2194,21 @@ const SealedDetector={
           e._anim.sealed=Store.config.showSealedAnim;
         });
       });
+
+      // ③ 圧力計の状態判定（A-4: 赤=蒸気 / 黄=残圧・残液・不確定 / 緑=空）。接続配管の実流・残留から導く。
+      Store.nodes.forEach(n=>{
+        if(n.type!==NODE_TYPE.PGAUGE)return;
+        let st='empty';
+        const es=edgesByNode.get(n.id)||EMPTY_EDGES;
+        for(const e of es){
+          const active=Math.max(e._sim.f||0, e._sim.b||0);
+          const r=e.ext.hasResidual?e.ext.residualType:0;
+          const unc=!!e.ext.residualUncertain;
+          if((active===FLUID.STEAM)||(r===FLUID.STEAM&&!unc)){st='steam';break;}
+          if(unc||r===FLUID.WATER||r===FLUID.DRAIN||active===FLUID.WATER||active===FLUID.DRAIN)st='uncertain';
+        }
+        n._sim.gauge=st;
+      });
     }
   }
 };
@@ -2664,7 +2692,7 @@ const Renderer={
       const hasAnomaly=_anomalyNodeSet.has(n.id);
 
       // Phase 3: シグネチャ（位置・回転・選択・流体・弁開度・ラベル・異常・名前）が一致したらスキップ
-      const sig=_nodeSigBase+n.x+','+n.y+','+(n.rotation||0)+'|'+(n.id===Store.config.selectedNodeIdForConnection?1:0)+(Store.selection.has(n.id)?1:0)+'|'+n._sim.fOut+','+((n._sim.fOut>0||n._sim.rateOut>0)?1:0)+'|'+n.state.valveState+'|'+n.labelOffset.x+','+n.labelOffset.y+'|'+(isPinned?1:0)+(hasAnomaly?1:0)+'|'+(n.ext.limitRate??'')+'|'+dispName;
+      const sig=_nodeSigBase+n.x+','+n.y+','+(n.rotation||0)+'|'+(n.id===Store.config.selectedNodeIdForConnection?1:0)+(Store.selection.has(n.id)?1:0)+'|'+n._sim.fOut+','+((n._sim.fOut>0||n._sim.rateOut>0)?1:0)+'|'+n.state.valveState+'|'+n.labelOffset.x+','+n.labelOffset.y+'|'+(isPinned?1:0)+(hasAnomaly?1:0)+'|'+(n.ext.limitRate??'')+'|'+(n._sim.gauge||'')+'|'+dispName;
 
       let g=document.getElementById(`node-grp-${n.id}`);
       if(g&&Renderer._nodeSig.get(n.id)===sig){
@@ -2686,6 +2714,7 @@ const Renderer={
       setAttr(g,'class',`node ${n.id===Store.config.selectedNodeIdForConnection?'selected':''} ${Store.selection.has(n.id)?'multi-selected':''}`);
       // Epic 6-1: 流体状態・バルブ状態を data-* 属性で投射→CSSで色制御
       setAttr(g,'data-fluid-state', n._sim.fOut);
+      if(n.type===NODE_TYPE.PGAUGE) setAttr(g,'data-gauge-state', n._sim.gauge||'empty');
       if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)) setAttr(g,'data-valve-state', n.state.valveState);
       else if(g.hasAttribute('data-valve-state')) g.removeAttribute('data-valve-state');
       // Feature 6: Breathing — active node detection
@@ -2707,10 +2736,12 @@ const Renderer={
         setAttr(sr,'r',Math.max(18,18/scale)+2);setAttr(sr,'transform',`scale(${scale})`);
       }else if(sr)sr.remove();
 
-      // REDUCER はグループ要素を wrapper とするため専用セレクタで取得
+      // REDUCER / PGAUGE はグループ要素を wrapper とするため専用セレクタで取得
       let shape = n.type===NODE_TYPE.REDUCER
         ? g.querySelector('g.reducer-grp')
-        : g.querySelector('.node-shape');
+        : n.type===NODE_TYPE.PGAUGE
+          ? g.querySelector('g.pgauge-grp')
+          : g.querySelector('.node-shape');
 
       if(!shape){
         if(n.type===NODE_TYPE.VALVE)shape=createNS('polygon',{points:'-10,-8 -10,8 10,-8 10,8'});
@@ -2737,13 +2768,25 @@ const Renderer={
           shape=createNS('text',{x:0, y:5, 'text-anchor':'middle', 'font-size':'14', 'font-weight':'bold', fill:'currentColor'});
           shape.textContent='Q';
         }
+        else if(n.type===NODE_TYPE.PGAUGE){
+          // 圧力計: 文字盤（円）＋針。色は data-gauge-state で制御（赤/黄/緑）
+          const grp=createNS('g');
+          grp.classList.add('pgauge-grp');
+          const face=createNS('circle',{r:'10'});
+          face.classList.add('pgauge-face');
+          const needle=createNS('line',{x1:'0',y1:'0',x2:'5',y2:'-6','stroke-linecap':'round','stroke-width':'2'});
+          needle.classList.add('pgauge-needle');
+          grp.appendChild(face);
+          grp.appendChild(needle);
+          shape=grp;
+        }
         else shape=createNS('circle',{r:'10'});
-        if(n.type!==NODE_TYPE.REDUCER) shape.classList.add('node-shape');
+        if(n.type!==NODE_TYPE.REDUCER&&n.type!==NODE_TYPE.PGAUGE) shape.classList.add('node-shape');
         g.appendChild(shape);
       }
       // transform と class を更新（変化時のみ — 属性ダーティチェック）
       setAttr(shape,'transform',`scale(${nodeScale}) rotate(${n.rotation||0})`);
-      if(n.type!==NODE_TYPE.REDUCER) setAttr(shape,'class','node-shape');
+      if(n.type!==NODE_TYPE.REDUCER&&n.type!==NODE_TYPE.PGAUGE) setAttr(shape,'class','node-shape');
 
       let ll=g.querySelector('.leader-line'),lbl=g.querySelector('.node-label');
       if(Store.config.showValveLabels&&[NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)){
@@ -3314,7 +3357,7 @@ const Controller={
       if(ev.key==='Escape'){ContextMenu.close();if(document.body.classList.contains('master-workspace')){MasterTable.close();return;}if(ManualPicker.active){ManualPicker.finish();return;}if(Onboarding._overlay&&Onboarding._overlay.classList.contains('show')){Onboarding.close();return;}if(Sequencer.playing){Sequencer.pause();return;}ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
       if((ev.key==='Delete'||ev.key==='Backspace')&&Store.selection.size>0){ev.preventDefault();Controller.deleteSelected();return;}
       if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
-      const toolKeys={v:'pointer',r:'rotate',s:'source',a:'valve',t:'trap',d:'drain',y:'split',m:'merge',e:'reducer',h:'heatex',q:'safety',p:'pin'};
+      const toolKeys={v:'pointer',r:'rotate',s:'source',a:'valve',t:'trap',d:'drain',y:'split',m:'merge',e:'reducer',h:'heatex',q:'safety',p:'pin',g:'pgauge'};
       const k=ev.key.toLowerCase();
       if(toolKeys[k]){Controller.setTool(toolKeys[k]);return;}
       if(k==='c'){document.getElementById('btn-connect').click();return;}
@@ -3723,7 +3766,7 @@ const parseSharePointUrl = (rawUrl) => {
 
 /* ━━━━━━━━ IMAGE VIEWER ━━━━━━━━ */
 const ImageViewer = {
-  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX, NODE_TYPE.SOURCE],
+  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX, NODE_TYPE.SOURCE, NODE_TYPE.PGAUGE],
 
   init: () => {
     // ドラッグ (Store.matrixDrag 機構を流用)
@@ -3799,7 +3842,7 @@ const ImageViewer = {
 /* ━━━━━━━━ MASTER TABLE ━━━━━━━━ */
 const MasterTable = {
   _nodeMap: null,
-  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX, NODE_TYPE.SOURCE],
+  _TARGET_TYPES: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.REDUCER, NODE_TYPE.TRAP, NODE_TYPE.DRAIN, NODE_TYPE.HEATEX, NODE_TYPE.SOURCE, NODE_TYPE.PGAUGE],
   _LABELS: { valve: 'Valve', safety: 'Safety Valve', reducer: 'Reducer', trap: 'Trap', drain: 'Drain', heatex: 'Heat Exchanger', source: 'Source', pgauge: 'Pressure Gauge' },
 
   open: () => {

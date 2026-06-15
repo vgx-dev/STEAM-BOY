@@ -1072,74 +1072,9 @@ g.node[data-active="1"] {
 .vs-warn strong{display:block;margin-bottom:2px;font-size:11px;}
 .vs-opt.vs-danger::after{content:'⚠';position:absolute;top:2px;right:3px;font-size:10px;}
 
-/* ── Phase 2: 隔離計画（Isolation Plan） ── */
-#iso-plan-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.12);z-index:500;display:none;}
-#iso-plan-overlay.open{display:block;}
-#iso-plan-modal{position:fixed;top:48%;left:50%;transform:translate(-50%,-50%);width:min(92vw,560px);max-height:82vh;z-index:501;border-radius:16px;display:none;flex-direction:column;}
-#iso-plan-modal.open{display:flex;}
-.iso-head{padding:16px 20px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(0,0,0,0.07);flex-shrink:0;}
-.iso-head-icon{font-size:18px;}
-.iso-head-title{font-size:15px;font-weight:700;flex:1;}
 .iso-close-x{width:26px;height:26px;border:none;background:rgba(0,0,0,0.06);border-radius:50%;font-size:12px;cursor:pointer;color:var(--text-2);display:flex;align-items:center;justify-content:center;transition:background .15s;}
 .iso-close-x:hover{background:rgba(0,0,0,0.12);}
-.iso-body{padding:16px 20px;overflow-y:auto;min-height:0;}
-.iso-summary{font-size:13px;line-height:1.6;color:var(--text-1);margin-bottom:12px;}
-.iso-summary strong{color:var(--accent);}
-.iso-warn{padding:10px 12px;background:rgba(255,149,0,0.1);border-left:3px solid var(--orange);border-radius:0 8px 8px 0;font-size:12px;font-weight:600;color:#9a5b00;margin-bottom:14px;line-height:1.5;}
-.iso-table{width:100%;border-collapse:collapse;font-size:13px;}
-.iso-table th{text-align:left;font-size:10px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.08);}
-.iso-table td{padding:8px 8px;border-bottom:1px solid rgba(0,0,0,0.05);vertical-align:middle;}
-.iso-num{font-weight:700;color:var(--text-3);width:24px;text-align:center;font-variant-numeric:tabular-nums;}
-.iso-vname{font-weight:600;}
-.iso-table tr.iso-done .iso-vname{color:var(--text-3);text-decoration:line-through;}
-.iso-live{display:inline-block;margin-left:4px;padding:1px 6px;border-radius:8px;background:rgba(255,149,0,0.15);color:var(--orange);font-size:10px;font-weight:700;}
-.iso-idle{display:inline-block;margin-left:4px;padding:1px 6px;border-radius:8px;background:rgba(0,0,0,0.05);color:var(--text-3);font-size:10px;font-weight:700;}
-.iso-check{width:16px;height:16px;cursor:pointer;}
-.iso-empty{text-align:center;padding:24px;color:var(--text-3);font-size:13px;line-height:1.7;}
-.iso-foot{padding:12px 20px 16px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid rgba(0,0,0,0.06);flex-shrink:0;flex-wrap:wrap;}
-.iso-btn{padding:9px 18px;border-radius:10px;font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;border:none;transition:all .15s;}
-.iso-btn.primary{background:var(--red);color:#fff;box-shadow:0 4px 14px rgba(255,59,48,0.28);}
-.iso-btn.primary:hover{background:#e0321f;transform:translateY(-1px);}
-.iso-btn.primary:disabled{background:rgba(0,0,0,0.12);color:var(--text-3);box-shadow:none;cursor:default;transform:none;}
-.iso-btn.ghost{background:rgba(0,0,0,0.05);color:var(--text-1);}
-.iso-btn.ghost:hover{background:rgba(0,0,0,0.09);}
-g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
-@keyframes isoBoundaryPulse{0%,100%{filter:drop-shadow(0 0 2px rgba(255,59,48,.65));}50%{filter:drop-shadow(0 0 8px rgba(255,59,48,.95));}}
-
-/* 印刷時は隔離計画チェックリストのみを出力 */
-@media print{
-  body > *:not(#iso-plan-modal):not(#op-manual-modal){visibility:hidden!important;}
-  #iso-plan-overlay{display:none!important;}
-  #iso-plan-modal{position:absolute!important;left:0!important;top:0!important;transform:none!important;width:100%!important;max-height:none!important;box-shadow:none!important;background:#fff!important;border:none!important;}
-  #iso-plan-modal *{visibility:visible!important;}
-  .iso-no-print{display:none!important;}
-}
-
-/* ── Constraint Panel (inside iso-plan-modal) ── */
-.iso-constraint-panel{border:1px solid rgba(0,0,0,0.08);border-radius:12px;background:rgba(0,0,0,0.02);margin-bottom:14px;overflow:hidden;}
-.iso-constraint-toggle{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text-1);user-select:none;transition:background .15s;}
-.iso-constraint-toggle:hover{background:rgba(0,0,0,0.03);}
-.iso-constraint-toggle .iso-arrow{transition:transform .2s;font-size:10px;}
-.iso-constraint-toggle.open .iso-arrow{transform:rotate(90deg);}
-.iso-constraint-body{display:none;padding:4px 14px 14px;}
-.iso-constraint-toggle.open+.iso-constraint-body{display:block;}
-.iso-cst-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px;color:var(--text-1);}
-.iso-cst-row label{flex:1;display:flex;align-items:center;gap:8px;cursor:pointer;}
-.iso-cst-row select,.iso-cst-row input[type=number]{height:28px;border:1px solid rgba(0,0,0,0.12);border-radius:7px;background:rgba(0,0,0,0.03);font-size:12px;font-family:var(--font);color:var(--text-1);padding:0 6px;outline:none;width:60px;}
-.iso-cst-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--accent);}
-.iso-profile-row{display:flex;gap:8px;align-items:center;margin-bottom:10px;}
-.iso-profile-row select{flex:1;height:30px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;background:rgba(0,0,0,0.03);font-size:12px;font-family:var(--font);color:var(--text-1);padding:0 8px;outline:none;}
-.iso-profile-btn{padding:4px 10px;border:none;border-radius:7px;background:rgba(0,0,0,0.06);color:var(--text-1);font-size:11px;font-weight:600;font-family:var(--font);cursor:pointer;transition:background .15s;white-space:nowrap;}
-.iso-profile-btn:hover{background:rgba(0,0,0,0.1);}
-.iso-warn-list{margin-bottom:10px;}
-.iso-warn-item{padding:8px 12px;background:rgba(255,149,0,0.08);border-left:3px solid var(--orange);border-radius:0 8px 8px 0;font-size:11px;font-weight:600;color:#9a5b00;margin-bottom:6px;line-height:1.5;}
-.iso-section-label{font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px;padding-bottom:4px;border-bottom:1px solid rgba(0,0,0,0.06);}
-#iso-plan-modal{width:min(92vw,640px);}
-
 /* ── Operation Manual Modal ── */
-#iso-plan-modal.opm-suppressed{display:none!important;}
-#op-manual-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.18);z-index:600;display:none;}
-#op-manual-overlay.open{display:block;}
 #op-manual-modal{position:fixed;top:48%;left:50%;transform:translate(-50%,-50%);width:min(96vw,900px);max-height:88vh;z-index:601;border-radius:16px;display:none;flex-direction:column;}
 #op-manual-modal.open{display:flex;}
 .opm-head{padding:14px 20px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(0,0,0,0.07);flex-shrink:0;}
@@ -1254,11 +1189,33 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
 #svg-layer.manual-picking g.node{cursor:crosshair;}
 .manual-picked-flash{animation:manualPickFlash .4s ease-out;}
 @keyframes manualPickFlash{0%{opacity:.3;}50%{opacity:1;}100%{opacity:1;}}
+/* 図⇄手順リンク：手順に対応する機器を図上で強調 */
+#svg-layer g.node.manual-link-hl{animation:manualLinkPulse 1.2s ease-in-out infinite;}
+@keyframes manualLinkPulse{0%,100%{filter:drop-shadow(0 0 2px rgba(0,122,255,.55));}50%{filter:drop-shadow(0 0 9px rgba(0,122,255,.95));}}
+.opm-table tbody tr.opm-row-selected{background:rgba(0,122,255,0.1)!important;box-shadow:inset 3px 0 0 var(--accent);}
+.opm-pick-target{margin-left:4px;padding:1px 5px;border:none;border-radius:6px;background:rgba(0,122,255,0.12);color:var(--accent);font-size:11px;cursor:pointer;vertical-align:middle;}
+.opm-pick-target:hover{background:rgba(0,122,255,0.22);}
+/* マニュアル・ワークスペース（左：生キャンバス／右：編集パネルの2分割） */
+body.manual-workspace #op-manual-modal{top:0;right:0;left:auto;bottom:0;width:var(--manual-w,46vw);max-width:none;max-height:none;height:100vh;transform:none!important;border-radius:0;box-shadow:-8px 0 28px rgba(0,0,0,0.14);}
+body.manual-workspace #workspace{right:var(--manual-w,46vw);}
+body.manual-workspace #toolbar{left:calc((100vw - var(--manual-w,46vw)) / 2);}
+body.manual-workspace #zoom-controls{right:calc(var(--manual-w,46vw) + 16px);}
+#opm-resize-handle{display:none;position:fixed;top:0;right:var(--manual-w,46vw);width:7px;height:100vh;z-index:602;cursor:col-resize;background:transparent;transition:background .15s;}
+#opm-resize-handle::after{content:"";position:absolute;top:50%;left:2px;width:3px;height:42px;margin-top:-21px;border-radius:3px;background:rgba(0,0,0,0.18);}
+#opm-resize-handle:hover{background:rgba(0,122,255,0.15);}
+body.manual-workspace #opm-resize-handle{display:block;}
+@media (max-width:900px){
+  body.manual-workspace #op-manual-modal{top:auto;left:0;right:0;bottom:0;width:100vw;height:var(--manual-h,52vh);box-shadow:0 -8px 28px rgba(0,0,0,0.14);}
+  body.manual-workspace #workspace{right:0;bottom:var(--manual-h,52vh);}
+  body.manual-workspace #toolbar{left:50%;}
+  body.manual-workspace #zoom-controls{right:16px;bottom:calc(var(--manual-h,52vh) + 16px);}
+  #opm-resize-handle{top:auto;right:0;bottom:var(--manual-h,52vh);left:0;width:100vw;height:7px;cursor:row-resize;}
+  #opm-resize-handle::after{top:2px;left:50%;margin-top:0;margin-left:-21px;width:42px;height:3px;}
+}
 @media print{
   @page{size:A4 portrait;margin:14mm 11mm 16mm;}
   /* マニュアル表示中は他要素を完全に除外し、表を通常フローで複数ページに分割 */
   body.opm-active > *:not(#op-manual-modal){display:none!important;}
-  #op-manual-overlay{display:none!important;}
   #op-manual-modal{position:static!important;transform:none!important;width:100%!important;max-height:none!important;max-width:none!important;box-shadow:none!important;background:#fff!important;border:none!important;border-radius:0!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;display:block!important;overflow:visible!important;}
   #op-manual-modal *{visibility:visible!important;}
   .opm-body{overflow:visible!important;padding:0!important;min-height:0!important;}
@@ -1339,7 +1296,6 @@ const buildNameMap=()=>{const c={source:1,valve:1,trap:1,drain:1,split:1,merge:1
 /* ━━━━━━━━ STORE ━━━━━━━━ */
 const Store={
   nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],sequences:[],manuals:[],
-  isolationProfiles:[{id:'default',name:'標準（1バルブ）',constraints:{upstreamValveCount:1,downstreamValveCount:1,branchIndependent:true,steamDrainProtection:false,drainOpenInstruction:true,ventOpenInstruction:false}},{id:'double',name:'ダブルブロック（2バルブ）',constraints:{upstreamValveCount:2,downstreamValveCount:2,branchIndependent:true,steamDrainProtection:false,drainOpenInstruction:true,ventOpenInstruction:false}}],lastProfileId:'default',
   config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false},  
   dragState:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
   multiDrag:{active:false,nodes:[],gEl:null,startSvgX:0,startSvgY:0,startClientX:0,startClientY:0,hasDragged:false,pointerId:null,preSnapshot:null},
@@ -2042,7 +1998,7 @@ const Minimap={
     }
     const ws=$id('workspace');if(ws){const z=Store.config.currentZoom,vx=ws.scrollLeft/z,vy=ws.scrollTop/z,vw=ws.clientWidth/z,vh=ws.clientHeight/z;ctx.strokeStyle='rgba(0,122,255,.7)';ctx.lineWidth=1.5;ctx.strokeRect(ox+vx*ms,oy+vy*ms,vw*ms,vh*ms);}
   },
-  panTo:(mx,my)=>{const c=Minimap.canvas,W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;const svgX=Math.max(0,Math.min((mx-ox)/ms,Store.config.baseWidth)),svgY=Math.max(0,Math.min((my-oy)/ms,Store.config.baseHeight));const ws=$id('workspace'),z=Store.config.currentZoom;ws.scrollLeft=svgX*z-ws.clientWidth/2;ws.scrollTop=svgY*z-ws.clientHeight/2;Minimap.draw();}
+  panTo:(mx,my)=>{const c=Minimap.canvas,W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;const svgX=Math.max(0,Math.min((mx-ox)/ms,Store.config.baseWidth)),svgY=Math.max(0,Math.min((my-oy)/ms,Store.config.baseHeight));Renderer.centerOnSvg(svgX,svgY);}
 };
 
 /* ━━━━━━━━ CULLING (Epic 7: Viewport Culling — 画面外アニメーション停止) ━━━━━━━━ */
@@ -2180,6 +2136,8 @@ const Renderer={
   },
   
   getMouseSvgCoords:(ev)=>{const r=Renderer.svgLayer.getBoundingClientRect();return{x:(ev.clientX-r.left)/Store.config.currentZoom,y:(ev.clientY-r.top)/Store.config.currentZoom};},
+  // SVG座標(x,y)をビューポート中央へスクロール（Minimap.panTo / マニュアルのオートパンで共用）
+  centerOnSvg:(x,y)=>{const ws=$id('workspace');if(!ws)return;const z=Store.config.currentZoom;ws.scrollLeft=x*z-ws.clientWidth/2;ws.scrollTop=y*z-ws.clientHeight/2;if(typeof Minimap!=='undefined'&&Minimap.draw)Minimap.draw();},
   buildTrimmedPath:(nFrom,edge,nTo)=>{
     const ELBOW=2;
     const wps=edge.ext.waypoints||[],allPts=[nFrom,...wps,nTo],trim=Store.config.nodeRadius;
@@ -3052,7 +3010,7 @@ const Controller={
       if(['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;
       if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault();Controller.undo();return;}
       if(ev.key==='Tab'){ev.preventDefault();document.body.classList.toggle('zen-mode');return;}
-      if(ev.key==='Escape'){ContextMenu.close();if(ManualPicker.active){ManualPicker.finish();return;}if(Onboarding._overlay&&Onboarding._overlay.classList.contains('show')){Onboarding.close();return;}if(IsolationPlan._modal&&IsolationPlan._modal.classList.contains('open')){IsolationPlan.close();return;}if(Sequencer.playing){Sequencer.pause();return;}ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
+      if(ev.key==='Escape'){ContextMenu.close();if(ManualPicker.active){ManualPicker.finish();return;}if(Onboarding._overlay&&Onboarding._overlay.classList.contains('show')){Onboarding.close();return;}if(Sequencer.playing){Sequencer.pause();return;}ValveSelector.close();IsolationTracer.clear();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;if(Store.config.isConnectMode){Store.config.isConnectMode=false;document.getElementById('btn-connect').classList.remove('connect-on');}closeSettings();Renderer.renderAll();return;}
       if((ev.key==='Delete'||ev.key==='Backspace')&&Store.selection.size>0){ev.preventDefault();Controller.deleteSelected();return;}
       if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
       const toolKeys={v:'pointer',r:'rotate',s:'source',a:'valve',t:'trap',d:'drain',y:'split',m:'merge',e:'reducer',h:'heatex',q:'safety',p:'pin'};
@@ -3150,10 +3108,10 @@ const Controller={
   handleCanvasPointerDown:(ev)=>{
     if(ev.button&&ev.button!==0)return;
 
-    // マニュアル「図から選択」モード: ノードクリックを手順追加として横取り
+    // マニュアル「図から選択／対象指定」モード: ノードクリックを横取り
     if(ManualPicker.active){
       const ng=ev.target.closest('g.node');
-      if(ng){const n=Store.getNode(ng.getAttribute('data-id'));if(n)ManualPicker.pick(n);}
+      if(ng){const n=Store.getNode(ng.getAttribute('data-id'));if(n){ if(ManualPicker._assignStepId)ManualPicker.assign(n); else ManualPicker.pick(n); }}
       return;
     }
 
@@ -3271,7 +3229,7 @@ const Controller={
     ];
     if(isValveLike)items.push({icon:'📌',label:node.ext.isPinned?'ピン留めを解除':'ピン留め',onClick:()=>{Store.pushHistory();node.ext.isPinned=!node.ext.isPinned;Renderer.renderAll();}});
     items.push({separator:true});
-    items.push({icon:'🔒',label:'隔離計画を作成',onClick:()=>IsolationPlan.open(node.id)});
+    items.push({icon:'📋',label:'この機器の操作マニュアル',onClick:()=>OperationManual.openForTarget(node.id)});
     items.push({separator:true});
     items.push({icon:'🗑',label:'削除',danger:true,onClick:()=>Controller.deleteNode(node)});
     ContextMenu.open(ev.clientX,ev.clientY,items);
@@ -3629,8 +3587,6 @@ const Persistence = {
     edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext })),
     sequences: Store.sequences,  // Phase 4: 記録済み操作シーケンス
     manuals: Store.manuals,      // 手動作成・保存された操作マニュアル群（図JSONに内包）
-    isolationProfiles: Store.isolationProfiles,
-    lastProfileId: Store.lastProfileId,
     manualColumnOpts: OperationManual._opts
   }),
   // ファイル読込・自動復元の共通復元ロジック
@@ -3650,8 +3606,6 @@ const Persistence = {
     Store.edges = (d.edges || []).map(e => Store.createEdge(e.from, e.to, e));
     Store.sequences = Array.isArray(d.sequences) ? d.sequences : [];  // Phase 4
     Store.manuals = Array.isArray(d.manuals) ? d.manuals : [];        // 保存済み操作マニュアル
-    if(d.isolationProfiles) Store.isolationProfiles = d.isolationProfiles;
-    if(d.lastProfileId) Store.lastProfileId = d.lastProfileId;
     if(d.manualColumnOpts && typeof OperationManual !== 'undefined') OperationManual._opts = { showState: true, showTag: true, ...d.manualColumnOpts };
     Store.invalidateIndex();
     Store.history = [];
@@ -3867,128 +3821,12 @@ const Onboarding = {
   }
 };
 
-/* ━━━━━━━━ OPERATION MANUAL & ISOLATION UTILS ━━━━━━━━ */
-// 方向判定（決定事項#1: 案A=シミュレーション結果ベース／停止区間は案B=ソース距離ベースにフォールバック）
-const SourceDist = {
-  // 全ソースノードからの無向BFS距離。ソースに近い側＝上流。
-  compute: () => {
-    const dist = new Map(), q = [];
-    Store.nodes.forEach(n => { if (n.type === NODE_TYPE.SOURCE) { dist.set(n.id, 0); q.push(n.id); } });
-    let head = 0;
-    while (head < q.length) {
-      const cur = q[head++], dc = dist.get(cur);
-      Store.edgesByNode(cur).forEach(e => {
-        const nb = e.from === cur ? e.to : e.from;
-        if (!dist.has(nb)) { dist.set(nb, dc + 1); q.push(nb); }
-      });
-    }
-    return dist;
-  }
-};
-// currentId から edge e を渡る向きが「下流（流れ方向）」なら true を返す
-const flowDir = (e, currentId, distMap) => {
-  if (e._sim && e._sim.rate > 0) return e.from === currentId;   // 案A: 順流
-  if (e._sim && e._sim.b > 0) return e.to === currentId;        // 案A: 逆流方向が下流
-  const other = e.from === currentId ? e.to : e.from;           // 案B フォールバック: ソース距離
-  const dc = distMap && distMap.get(currentId), dn = distMap && distMap.get(other);
-  if (dc != null && dn != null && dc !== dn) return dn > dc;    // 距離が増える向き＝下流
-  return e.from === currentId;                                  // 最終フォールバック: 接続順
-};
-
-const DirectionalBFS = {
-  search: (startId, isUpstream, targetCount, branchIndependent) => {
-    const nodeMap = Store.nodeMap();
-    const distMap = SourceDist.compute();
-    const resultValves = new Map();
-    const zoneNodes = new Set([startId]);
-    const zoneEdges = new Set();
-    const VALVE_TYPES = [NODE_TYPE.VALVE, NODE_TYPE.SAFETY];
-    const warnings = [];
-
-    const dfs = (currentId, vCount, visitedNodes, pathNodes) => {
-      let isEnd = true;
-      const edges = Store.edgesByNode(currentId);
-
-      edges.forEach(e => {
-        const isFlowForward = flowDir(e, currentId, distMap);
-
-        if (isUpstream ? !isFlowForward : isFlowForward) {
-          const nextId = e.from === currentId ? e.to : e.from;
-          if (!visitedNodes.has(nextId)) {
-            isEnd = false;
-            zoneEdges.add(e.id);
-            zoneNodes.add(nextId);
-            
-            const nextNode = nodeMap.get(nextId);
-            if (!nextNode) return;
-            
-            let nextVCount = vCount;
-            if (VALVE_TYPES.includes(nextNode.type)) {
-              nextVCount++;
-              resultValves.set(nextId, nextNode);
-              if (branchIndependent && nextVCount >= targetCount) return;
-            }
-            if (!branchIndependent && resultValves.size >= targetCount) return;
-            
-            const nextVisited = new Set(visitedNodes);
-            nextVisited.add(nextId);
-            const nextPath = [...pathNodes, nextNode.ext.customName || nextNode.type];
-            dfs(nextId, nextVCount, nextVisited, nextPath);
-          }
-        }
-      });
-      if (isEnd && (branchIndependent ? vCount < targetCount : resultValves.size < targetCount)) {
-        if(currentId !== startId && !nodeMap.get(currentId)?.type.includes('source')) {
-          warnings.push(`経路にバルブが不足しています (現在:${vCount}個 / 目標:${targetCount}個)`);
-        }
-      }
-    };
-    
-    dfs(startId, 0, new Set([startId]), [nodeMap.get(startId)?.ext.customName || nodeMap.get(startId)?.type]);
-    return { valves: Array.from(resultValves.values()), zoneNodes, zoneEdges, warnings: [...new Set(warnings)] };
-  }
-};
-
-const SteamDrainProtector = {
-  detect: (startId, zoneNodes) => {
-    const nodeMap = Store.nodeMap();
-    const distMap = SourceDist.compute();
-    const riskNodes = [];
-    const protectValves = new Map();
-    const VALVE_TYPES = [NODE_TYPE.VALVE, NODE_TYPE.SAFETY];
-
-    const dfs = (currentId, visited) => {
-      Store.edgesByNode(currentId).forEach(e => {
-        const isFlowForward = flowDir(e, currentId, distMap);
-
-        if (isFlowForward) {
-          const nextId = e.from === currentId ? e.to : e.from;
-          if (!visited.has(nextId) && !zoneNodes.has(nextId)) {
-            const nextNode = nodeMap.get(nextId);
-            if (!nextNode) return;
-            
-            if (nextNode.type === NODE_TYPE.DRAIN || nextNode.type === NODE_TYPE.TRAP) {
-              riskNodes.push(nextNode);
-            } else if (VALVE_TYPES.includes(nextNode.type)) {
-              protectValves.set(nextId, nextNode);
-            } else {
-              const nextVisited = new Set(visited);
-              nextVisited.add(nextId);
-              dfs(nextId, nextVisited);
-            }
-          }
-        }
-      });
-    };
-    
-    zoneNodes.forEach(nId => dfs(nId, new Set(zoneNodes)));
-    return { riskNodes, protectValves: Array.from(protectValves.values()) };
-  }
-};
-
+/* ━━━━━━━━ OPERATION MANUAL ━━━━━━━━ */
 const OperationManual = {
-  _modal: null, _overlay: null, _data: null,
+  _modal: null,
   _manualId: null,                 // 保存済みマニュアルのID（null=未保存の下書き）
+  _targetId: null,                 // 対象機器のノードID（対象につき1冊の紐付けキー）
+  _selectedStepId: null,           // 図⇄手順リンクで選択中の手順ID
   _meta: null,                     // { name, targetName, createdAt }
   _steps: { iso: [], res: [] },
   _opts: { showState: true, showTag: true, showGauge: true },   // 列8(現在の状態)/列9(タグ番号)/計器値列。既定で表示
@@ -4014,18 +3852,23 @@ const OperationManual = {
     const g = { valve: '⊗', safety: '⊕', drain: '⊘', trap: '◇' };
     return `<span class="opm-glyph">${g[node.type] || '⊗'}</span>`;
   },
-  // 隔離計画の自動計算結果から下書きを生成して開く（未保存の下書き）
-  open: (planData) => {
-    OperationManual._data = planData;
+  // 機器を対象としたマニュアルを開く（対象につき1冊。既存があればそれを開く）
+  openForTarget: (nodeId) => {
+    const existing = Store.manuals.find(mn => mn.targetId === nodeId);
+    if (existing) { OperationManual.openSaved(existing); return; }
+    // 未保存ドラフトとして開く（手順を入れずに閉じれば保存しない＝空マニュアルを残さない）
+    const nm = buildNameMap();
+    const name = nm.get(nodeId) || (Store.getNode(nodeId) ? Store.getNode(nodeId).type : '');
     OperationManual._manualId = null;
-    OperationManual._meta = { name: `${planData.targetName || ''} 修理マニュアル`.trim(), targetName: planData.targetName || '', createdAt: Date.now() };
-    OperationManual._build();
+    OperationManual._targetId = nodeId;
+    OperationManual._meta = { name: `${name} 操作マニュアル`.trim(), targetName: name, createdAt: Date.now() };
+    OperationManual._steps = { iso: [], res: [] };
     OperationManual._show();
   },
   // 保存済みマニュアルを開く（再計算しない＝編集が保持される）
   openSaved: (manual) => {
-    OperationManual._data = { targetName: manual.targetName || '' };
     OperationManual._manualId = manual.id;
+    OperationManual._targetId = manual.targetId || null;
     OperationManual._meta = { name: manual.name || '', targetName: manual.targetName || '', createdAt: manual.createdAt || Date.now() };
     if (manual.columnOpts) OperationManual._opts = { showState: true, showTag: true, showGauge: true, ...manual.columnOpts };
     const clone = JSON.parse(JSON.stringify(manual.steps || { iso: [], res: [] }));
@@ -4039,8 +3882,8 @@ const OperationManual = {
   },
   // 白紙のマニュアルを新規作成して開く
   openBlank: () => {
-    OperationManual._data = { targetName: '' };
     OperationManual._manualId = null;
+    OperationManual._targetId = null;
     OperationManual._meta = { name: '新規マニュアル', targetName: '', createdAt: Date.now() };
     OperationManual._steps = { iso: [], res: [] };
     OperationManual._show();
@@ -4048,55 +3891,43 @@ const OperationManual = {
   _show: () => {
     OperationManual._ensure();
     OperationManual._render();
-    OperationManual._overlay.classList.add('open');
     OperationManual._modal.classList.add('open');
-    document.body.classList.add('opm-active'); // 印刷時に他要素を完全に除外しページ分割を正常化
-    if (IsolationPlan._modal) IsolationPlan._modal.classList.add('opm-suppressed'); // 背面の隔離計画を一時的に隠す（重なり・印刷対策）
+    document.body.classList.add('manual-workspace'); // 左：生キャンバス／右：編集パネルの2分割
+    document.body.classList.add('opm-active');       // 印刷時に他要素を完全に除外しページ分割を正常化
+    if (typeof Renderer !== 'undefined' && Renderer.updateZoom) Renderer.updateZoom();
   },
   _ensure: () => {
     if (OperationManual._modal) return;
-    const ov = document.createElement('div'); ov.id = 'op-manual-overlay';
-    ov.addEventListener('click', OperationManual.close);
     const m = document.createElement('div'); m.id = 'op-manual-modal'; m.className = 'glass';
-    document.body.appendChild(ov); document.body.appendChild(m);
-    OperationManual._overlay = ov; OperationManual._modal = m;
+    document.body.appendChild(m);
+    OperationManual._modal = m;
+    OperationManual._ensureResizeHandle();
   },
-  // 手順データの生成（隔離フェーズ＋暖管復旧フェーズ）
-  _build: () => {
-    const d = OperationManual._data;
-    const dist = SourceDist.compute();
-    const byDistAsc = arr => [...arr].sort((a, b) => (dist.get(a.id) ?? 0) - (dist.get(b.id) ?? 0));
-    const byDistDesc = arr => [...arr].sort((a, b) => (dist.get(b.id) ?? 0) - (dist.get(a.id) ?? 0));
-    const mk = (o) => ({
-      id: 's' + (OperationManual._uid++), kind: 'valve', memo: '', checked: false,
-      tag: (o.node && Store.getNode(o.node.id) && Store.getNode(o.node.id).ext.tagNo) || '',
-      targetText: '', goal: '', measured: '', isDrain: false, isWarmup: false, ...o
-    });
-
-    /* 【隔離フェーズ】 */
-    const iso = [];
-    const up = d.upstreamValves || [], down = d.downstreamValves || [], prot = d.protectValves || [], drn = d.drainValves || [];
-    up.forEach((v, i) => iso.push(mk({ node: v, op: VALVE_STATE.CLOSED, fromState: v.state, reason: `上流隔離 (${i + 1}/${up.length})` })));
-    down.forEach((v, i) => iso.push(mk({ node: v, op: VALVE_STATE.CLOSED, fromState: v.state, reason: `下流隔離 (${i + 1}/${down.length})` })));
-    prot.forEach((v) => iso.push(mk({ node: v, op: VALVE_STATE.CLOSED, fromState: v.state, reason: `🔥 蒸気ドレン吹上げ保護`, isDrain: true })));
-    drn.forEach((v) => iso.push(mk({ node: v, op: VALVE_STATE.OPEN, fromState: VALVE_STATE.CLOSED, reason: `残留蒸気/ドレン排出` })));
-
-    /* 【復旧フェーズ】 決定事項#3: 一次側蒸気の微開圧入 → 各バイパス微開 → Drain管へドレンを押し流して暖管 → 通常バルブセット */
-    const res = [];
-    drn.forEach((v) => res.push(mk({ node: v, op: VALVE_STATE.OPEN, fromState: VALVE_STATE.OPEN, reason: `暖管準備：ドレン排出口を確保（開放維持）`, isWarmup: true, isDrain: true })));
-    byDistAsc(up).forEach((v) => res.push(mk({ node: v, op: VALVE_STATE.PARTIAL, fromState: VALVE_STATE.CLOSED, reason: `一次側蒸気 微開圧入（暖管開始）`, isWarmup: true })));
-    [...prot, ...down].forEach((v) => res.push(mk({ node: v, op: VALVE_STATE.PARTIAL, fromState: VALVE_STATE.CLOSED, reason: `バイパス微開・ドレンをDrain管へ押し流して暖管`, isWarmup: true })));
-    res.push(mk({ node: null, kind: 'check', op: null, reason: `暖管完了確認（配管昇温・ドレン排出完了）` }));
-    drn.forEach((v) => res.push(mk({ node: v, op: VALVE_STATE.CLOSED, fromState: VALVE_STATE.OPEN, reason: `ドレン弁 閉止（通常バルブセット）` })));
-    [...down, ...prot, ...byDistDesc(up)].forEach((v) => res.push(mk({ node: v, op: VALVE_STATE.OPEN, fromState: VALVE_STATE.PARTIAL, reason: `通常バルブセット 全開（復旧）` })));
-
-    OperationManual._steps = { iso, res };
+  // 分割比を変えるドラッグハンドル（縦/横はメディアクエリで切替）
+  _ensureResizeHandle: () => {
+    if (document.getElementById('opm-resize-handle')) return;
+    const h = document.createElement('div'); h.id = 'opm-resize-handle';
+    document.body.appendChild(h);
+    let dragging = false;
+    const onMove = (e) => {
+      if (!dragging) return;
+      const narrow = window.matchMedia('(max-width:900px)').matches;
+      if (narrow) {
+        const hgt = Math.min(window.innerHeight * 0.85, Math.max(220, window.innerHeight - e.clientY));
+        document.body.style.setProperty('--manual-h', hgt + 'px');
+      } else {
+        const w = Math.min(window.innerWidth * 0.8, Math.max(320, window.innerWidth - e.clientX));
+        document.body.style.setProperty('--manual-w', w + 'px');
+      }
+    };
+    const onUp = () => { dragging = false; document.body.classList.remove('opm-resizing'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); if (Renderer && Renderer.updateZoom) Renderer.updateZoom(); };
+    h.addEventListener('pointerdown', (e) => { e.preventDefault(); dragging = true; document.body.classList.add('opm-resizing'); window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp); });
   },
   // 編集中の入力値を手順データへ反映（再描画前に呼ぶ）
   _syncInputs: () => {
     const m = OperationManual._modal; if (!m) return;
     const nameI = m.querySelector('#opm-name-input'); if (nameI && OperationManual._meta) OperationManual._meta.name = nameI.value;
-    const tgtI = m.querySelector('#opm-target-input'); if (tgtI && OperationManual._meta) { OperationManual._meta.targetName = tgtI.value; if (OperationManual._data) OperationManual._data.targetName = tgtI.value; }
+    const tgtI = m.querySelector('#opm-target-input'); if (tgtI && OperationManual._meta) OperationManual._meta.targetName = tgtI.value;
     const all = [...OperationManual._steps.iso, ...OperationManual._steps.res];
     const map = new Map(all.map(s => [s.id, s]));
     m.querySelectorAll('.opm-reason-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.reason = i.value; });
@@ -4121,8 +3952,8 @@ const OperationManual = {
     m.querySelectorAll('.opm-measured-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.measured = i.value; });
   },
   _render: () => {
-    const d = OperationManual._data, m = OperationManual._modal, o = OperationManual._opts, esc = OperationManual._esc;
-    const profile = Store.isolationProfiles.find(p => p.id === Store.lastProfileId) || Store.isolationProfiles[0];
+    const m = OperationManual._modal, o = OperationManual._opts, esc = OperationManual._esc;
+    const nameMap = buildNameMap(); // 1回だけ構築して各行で再利用
 
     const thead = `<tr>
       <th>#</th>
@@ -4141,11 +3972,10 @@ const OperationManual = {
 
     // 操作対象セレクト（バルブ操作の追加手順用）— 操作可能なノードを列挙
     const targetOptions = (selId) => {
-      const nm = buildNameMap();
       const types = [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.DRAIN];
       let opts = `<option value="" ${!selId ? 'selected' : ''}>（未選択）</option>`;
       Store.nodes.filter(n => types.includes(n.type)).forEach(n => {
-        opts += `<option value="${n.id}" ${n.id === selId ? 'selected' : ''}>${esc(nm.get(n.id) || n.type)}</option>`;
+        opts += `<option value="${n.id}" ${n.id === selId ? 'selected' : ''}>${esc(nameMap.get(n.id) || n.type)}</option>`;
       });
       return opts;
     };
@@ -4166,7 +3996,7 @@ const OperationManual = {
       let targetCell;
       if (s.editable) {
         targetCell = isValve
-          ? `<select class="opm-target-sel" data-id="${s.id}">${targetOptions(s.node ? s.node.id : '')}</select>`
+          ? `<select class="opm-target-sel" data-id="${s.id}">${targetOptions(s.node ? s.node.id : '')}</select><button class="opm-pick-target opm-no-print" data-id="${s.id}" title="図で対象を選ぶ">🎯</button>`
           : `<input type="text" class="opm-targettext-input" data-id="${s.id}" value="${esc(s.targetText || '')}" placeholder="${esc(K.ph || '対象...')}">`;
       } else {
         targetCell = s.node ? esc(s.node.name) : (s.targetText ? esc(s.targetText) : '<span class="opm-check-tgt">全系統</span>');
@@ -4255,8 +4085,8 @@ const OperationManual = {
     m.querySelector('#opm-x').onclick = OperationManual.close;
     m.querySelector('#opm-cancel').onclick = OperationManual.close;
     m.querySelector('#opm-save').onclick = () => OperationManual.save();
-    m.querySelector('#opm-pick').onclick = () => ManualPicker.start('iso');
-    m.querySelector('#opm-library').onclick = () => { OperationManual._syncInputs(); OperationManual._persistIfSaved(); OperationManual.close(); ManualLibrary.open(); };
+    m.querySelector('#opm-pick').onclick = () => ManualPicker.start(ManualPicker._phase || 'iso');
+    m.querySelector('#opm-library').onclick = () => { OperationManual._syncInputs(); OperationManual._autosaveIfContent(); OperationManual.close(); ManualLibrary.open(); };
     m.querySelector('#opm-print').onclick = () => { OperationManual._syncInputs(); window.print(); };
     m.querySelector('#opm-pdf').onclick = () => {
       OperationManual._syncInputs();
@@ -4266,9 +4096,8 @@ const OperationManual = {
     m.querySelector('#opm-csv').onclick = () => { OperationManual._syncInputs(); OperationManual.exportCsv(); };
     m.querySelector('#opm-seq').onclick = () => {
       OperationManual._syncInputs();
-      OperationManual.exportToSequencer(d.targetName);
+      OperationManual.exportToSequencer(OperationManual._meta.targetName);
       OperationManual.close();
-      IsolationPlan.close();
       Sequencer.show();
     };
     const toggle = (key) => () => { OperationManual._syncInputs(); OperationManual._opts[key] = !OperationManual._opts[key]; OperationManual._render(); Persistence.scheduleSave(); };
@@ -4289,6 +4118,17 @@ const OperationManual = {
     });
 
     OperationManual._attachDnD();
+
+    // 図⇄手順リンク：行ホバーで対象を図上強調、クリックで選択＋オートパン
+    m.querySelectorAll('.opm-table tbody tr').forEach(tr => {
+      tr.addEventListener('mouseenter', () => { const s = OperationManual._stepById(tr.dataset.id); if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, false); });
+      tr.addEventListener('mouseleave', () => { if (!OperationManual._selectedStepId) OperationManual._clearCanvasFocus(); else { const s = OperationManual._stepById(OperationManual._selectedStepId); if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, false); } });
+      tr.addEventListener('click', (e) => { if (e.target.closest('input,select,button,textarea,a')) return; OperationManual._selectStep(tr.dataset.id); });
+    });
+    // 🎯 選択手順の対象を図から指定
+    m.querySelectorAll('.opm-pick-target').forEach(b => b.onclick = (e) => { e.stopPropagation(); ManualPicker.startAssign(b.dataset.id); });
+    // 選択状態の見た目を復元
+    if (OperationManual._selectedStepId) { const tr = m.querySelector(`.opm-table tbody tr[data-id="${OperationManual._selectedStepId}"]`); if (tr) tr.classList.add('opm-row-selected'); }
   },
   _toggleAddMenu: (phase, btn) => {
     const menu = OperationManual._modal.querySelector(`.opm-add-menu[data-phase="${phase}"]`);
@@ -4377,9 +4217,36 @@ const OperationManual = {
     Sequencer.stepTo(0);
     Toast.show(`操作マニュアルをシーケンサにインポートしました（${steps.length}手順）`);
   },
+  // ───── 図⇄手順リンク ─────
+  _stepById: (id) => [...OperationManual._steps.iso, ...OperationManual._steps.res].find(s => s.id === id),
+  _clearCanvasFocus: () => { document.querySelectorAll('#svg-layer .manual-link-hl').forEach(el => el.classList.remove('manual-link-hl')); },
+  _focusNodeOnCanvas: (nodeId, pan) => {
+    OperationManual._clearCanvasFocus();
+    const node = Store.getNode(nodeId);
+    if (!node) return;
+    const g = document.getElementById(`node-grp-${nodeId}`);
+    if (g) g.classList.add('manual-link-hl');
+    if (!pan) return;
+    // 画面外ならビュー中心へオートパン（中心化は Renderer.centerOnSvg を共用）
+    const ws = document.getElementById('workspace'); if (!ws) return;
+    const z = Store.config.currentZoom;
+    const x1 = ws.scrollLeft / z, y1 = ws.scrollTop / z, x2 = (ws.scrollLeft + ws.clientWidth) / z, y2 = (ws.scrollTop + ws.clientHeight) / z;
+    const margin = 40;
+    if (node.x < x1 + margin || node.x > x2 - margin || node.y < y1 + margin || node.y > y2 - margin) {
+      Renderer.centerOnSvg(node.x, node.y);
+    }
+  },
+  _selectStep: (id) => {
+    OperationManual._selectedStepId = id;
+    const m = OperationManual._modal; if (m) m.querySelectorAll('.opm-table tbody tr').forEach(tr => tr.classList.toggle('opm-row-selected', tr.dataset.id === id));
+    const s = OperationManual._stepById(id);
+    if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, true);
+    else OperationManual._clearCanvasFocus();
+  },
   // 現在の編集内容を保存用オブジェクトにまとめる
   _collect: () => ({
     id: OperationManual._manualId || Store.generateId(),
+    targetId: OperationManual._targetId || null,
     name: (OperationManual._meta && OperationManual._meta.name) || '無題のマニュアル',
     targetName: (OperationManual._meta && OperationManual._meta.targetName) || '',
     createdAt: (OperationManual._meta && OperationManual._meta.createdAt) || Date.now(),
@@ -4407,19 +4274,21 @@ const OperationManual = {
     OperationManual._render();
     Toast.show(`マニュアル「${manual.name}」を保存しました`);
   },
-  // 保存済みマニュアルを開いている場合は、編集内容を黙って反映（閉じる/ライブラリ遷移時）
-  _persistIfSaved: () => {
-    if (!OperationManual._manualId) return;
-    OperationManual._upsert(OperationManual._collect());
+  // 閉じる/ライブラリ遷移時の自動反映。既存は常に更新、未保存ドラフトは手順があるときだけ保存。
+  _autosaveIfContent: () => {
+    const hasContent = OperationManual._steps.iso.length || OperationManual._steps.res.length;
+    if (OperationManual._manualId) { OperationManual._upsert(OperationManual._collect()); }
+    else if (hasContent) { const mn = OperationManual._collect(); OperationManual._manualId = mn.id; OperationManual._upsert(mn); }
   },
   close: () => {
     OperationManual._syncInputs();
-    OperationManual._persistIfSaved();
-    if (OperationManual._overlay) OperationManual._overlay.classList.remove('open');
+    OperationManual._autosaveIfContent();
     if (OperationManual._modal) OperationManual._modal.classList.remove('open');
     document.body.classList.remove('opm-active');
-    if (IsolationPlan._modal) IsolationPlan._modal.classList.remove('opm-suppressed');
-    OperationManual._data = null;
+    document.body.classList.remove('manual-workspace');
+    OperationManual._selectedStepId = null;
+    OperationManual._clearCanvasFocus();
+    if (typeof Renderer !== 'undefined' && Renderer.updateZoom) Renderer.updateZoom();
   }
 };
 
@@ -4457,7 +4326,7 @@ const ManualLibrary = {
           <button class="mlib-mini" data-act="rename" data-id="${mn.id}">改名</button>
           <button class="mlib-mini danger" data-act="del" data-id="${mn.id}">削除</button>
         </div>
-      </div>`).join('') : '<div class="mlib-empty">保存されたマニュアルはありません。<br>「＋ 白紙で新規作成」または隔離計画から作成して保存してください。</div>';
+      </div>`).join('') : '<div class="mlib-empty">保存されたマニュアルはありません。<br>「＋ 白紙で新規作成」、または図で機器を右クリック →「この機器の操作マニュアル」から作成してください。</div>';
 
     m.innerHTML = `
       <div class="mlib-head">
@@ -4506,19 +4375,39 @@ const ManualLibrary = {
 
 /* ━━━━━━━━ MANUAL PICKER (キャンバスから直接バルブ/機器を手順に追加) ━━━━━━━━ */
 const ManualPicker = {
-  active: false, _phase: 'iso', _count: 0, _banner: null,
+  active: false, _phase: 'iso', _count: 0, _banner: null, _assignStepId: null,
   _opTypes: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.DRAIN],
+  // 選択中の手順の対象を図から指定するモード
+  startAssign: (stepId) => {
+    if (!OperationManual._modal) return;
+    OperationManual._syncInputs();
+    ManualPicker._assignStepId = stepId;
+    ManualPicker._count = 0;
+    ManualPicker.active = true;
+    ManualPicker._showBanner(true);
+    Renderer.svgLayer.classList.add('manual-picking');
+  },
+  assign: (node) => {
+    if (!ManualPicker._opTypes.includes(node.type)) { Toast.show('対象はバルブ・安全弁・ドレンから選んでください'); return; }
+    const s = OperationManual._stepById(ManualPicker._assignStepId);
+    if (s) {
+      const nm = buildNameMap();
+      s.node = { id: node.id, name: nm.get(node.id) || node.type, type: node.type, state: node.state.valveState };
+      s.fromState = node.state.valveState;
+      if (!s.tag && node.ext && node.ext.tagNo) s.tag = node.ext.tagNo;
+    }
+    const g = document.getElementById(`node-grp-${node.id}`);
+    if (g) { g.classList.add('manual-picked-flash'); setTimeout(() => g.classList.remove('manual-picked-flash'), 400); }
+    ManualPicker._assignStepId = null;
+    ManualPicker.finish();
+  },
   start: (phase = 'iso') => {
     if (!OperationManual._modal) return;
     OperationManual._syncInputs();              // 編集中の入力を保持
     ManualPicker._phase = phase;
     ManualPicker._count = 0;
     ManualPicker.active = true;
-    // マニュアルのモーダル/オーバーレイを一時的に隠してキャンバス操作を可能にする
-    OperationManual._overlay.classList.remove('open');
-    OperationManual._modal.classList.remove('open');
-    document.body.classList.remove('opm-active');
-    if (IsolationPlan._modal) IsolationPlan._modal.classList.remove('opm-suppressed');
+    // 2分割ワークスペースではパネルを開いたまま、左の生キャンバスから直接ピックする
     ManualPicker._showBanner();
     Renderer.svgLayer.classList.add('manual-picking');
   },
@@ -4544,271 +4433,47 @@ const ManualPicker = {
     if (g) { g.classList.add('manual-picked-flash'); setTimeout(() => g.classList.remove('manual-picked-flash'), 400); }
   },
   finish: () => {
+    const added = ManualPicker._count;
     ManualPicker.active = false;
+    ManualPicker._assignStepId = null;
     Renderer.svgLayer.classList.remove('manual-picking');
     if (ManualPicker._banner) { ManualPicker._banner.remove(); ManualPicker._banner = null; }
     OperationManual._show();   // 再描画して追加された手順を反映
-    if (ManualPicker._count) Toast.show(`${ManualPicker._count}件の手順を図から追加しました`);
+    if (added) Toast.show(`${added}件の手順を図から追加しました`);
+    ManualPicker._count = 0;
   },
-  _showBanner: () => {
+  _showBanner: (isAssign) => {
     if (ManualPicker._banner) ManualPicker._banner.remove();
     const b = document.createElement('div');
     b.id = 'manual-pick-banner'; b.className = 'glass';
-    b.innerHTML = `
-      <span class="mpick-ico">🖱</span>
-      <span class="mpick-msg">図のバルブ・機器をクリックして手順に追加</span>
-      <label class="mpick-phase">追加先:
-        <select id="mpick-phase-sel">
-          <option value="iso">🔒 隔離フェーズ</option>
-          <option value="res">🔓 復旧フェーズ</option>
-        </select>
-      </label>
-      <span class="mpick-count" id="mpick-count">0 件追加</span>
-      <button class="opm-btn primary" id="mpick-done">完了</button>`;
+    b.innerHTML = isAssign
+      ? `<span class="mpick-ico">🎯</span>
+         <span class="mpick-msg">対象にする機器を図でクリックしてください</span>
+         <button class="opm-btn ghost" id="mpick-cancel">キャンセル</button>`
+      : `<span class="mpick-ico">🖱</span>
+         <span class="mpick-msg">図のバルブ・機器をクリックして手順に追加</span>
+         <label class="mpick-phase">追加先:
+           <select id="mpick-phase-sel">
+             <option value="iso">🔒 隔離フェーズ</option>
+             <option value="res">🔓 復旧フェーズ</option>
+           </select>
+         </label>
+         <span class="mpick-count" id="mpick-count">0 件追加</span>
+         <button class="opm-btn primary" id="mpick-done">完了</button>`;
     document.body.appendChild(b);
     ManualPicker._banner = b;
-    b.querySelector('#mpick-phase-sel').value = ManualPicker._phase;
-    b.querySelector('#mpick-phase-sel').onchange = (e) => { ManualPicker._phase = e.target.value; };
-    b.querySelector('#mpick-done').onclick = ManualPicker.finish;
+    if (isAssign) {
+      b.querySelector('#mpick-cancel').onclick = () => { ManualPicker._assignStepId = null; ManualPicker.finish(); };
+    } else {
+      b.querySelector('#mpick-phase-sel').value = ManualPicker._phase;
+      b.querySelector('#mpick-phase-sel').onchange = (e) => { ManualPicker._phase = e.target.value; };
+      b.querySelector('#mpick-done').onclick = ManualPicker.finish;
+    }
   },
   _updateBanner: (lastName) => {
     if (!ManualPicker._banner) return;
     const c = ManualPicker._banner.querySelector('#mpick-count');
     if (c) c.textContent = `${ManualPicker._count} 件追加${lastName ? `（最新: ${lastName}）` : ''}`;
-  }
-};
-
-/* ━━━━━━━━ ISOLATION PLAN (Phase 2: 隔離計画 / LOTO支援) ━━━━━━━━ */
-const IsolationPlan = {
-  _overlay: null, _modal: null, _data: null,
-  _nameMap: () => buildNameMap(),
-  compute: (targetId) => {
-    const nodeMap = Store.nodeMap();
-    const target = nodeMap.get(targetId);
-    if (!target) return null;
-    
-    if(!Store.isolationProfiles) Store.isolationProfiles = [{id:'default',name:'標準（1バルブ）',constraints:{upstreamValveCount:1,downstreamValveCount:1,branchIndependent:true,steamDrainProtection:false,drainOpenInstruction:true,ventOpenInstruction:false}}];
-    const profile = Store.isolationProfiles.find(p=>p.id===Store.lastProfileId) || Store.isolationProfiles[0];
-    const c = profile.constraints;
-
-    const upRes = DirectionalBFS.search(targetId, true, c.upstreamValveCount, c.branchIndependent);
-    const downRes = DirectionalBFS.search(targetId, false, c.downstreamValveCount, c.branchIndependent);
-    
-    const zoneNodes = new Set([...upRes.zoneNodes, ...downRes.zoneNodes]);
-    const zoneEdges = new Set([...upRes.zoneEdges, ...downRes.zoneEdges]);
-    
-    let protectValves = [], riskNodes = [];
-    if (c.steamDrainProtection) {
-      const sp = SteamDrainProtector.detect(targetId, zoneNodes);
-      protectValves = sp.protectValves;
-      riskNodes = sp.riskNodes;
-    }
-    
-    const drainValves = [];
-    if (c.drainOpenInstruction) {
-      zoneNodes.forEach(nid => {
-        const n = nodeMap.get(nid);
-        if (n && n.type === NODE_TYPE.DRAIN) drainValves.push(n);
-      });
-    }
-
-    const nameMap = IsolationPlan._nameMap();
-    const mapValve = v => {
-      const live = [...Store.edgesByNode(v.id)].some(e => e._sim.f > 0 || e._sim.b > 0);
-      return { id: v.id, name: nameMap.get(v.id) || v.type, state: v.state.valveState, live, type: v.type };
-    };
-
-    const upV = upRes.valves.map(mapValve);
-    const downV = downRes.valves.map(mapValve);
-    const protV = protectValves.map(mapValve);
-    const drnV = drainValves.map(mapValve);
-
-    const allValvesMap = new Map();
-    [...upV, ...downV, ...protV].forEach(v => allValvesMap.set(v.id, v));
-    const allValves = Array.from(allValvesMap.values());
-    
-    const zoneHasSteam = [...zoneEdges].some(eid => { const e = Store.getEdge(eid); return e && (e._sim.f === FLUID.STEAM || e._sim.b === FLUID.STEAM); });
-    
-    return { targetId, targetName: nameMap.get(targetId), valves: allValves, upstreamValves: upV, downstreamValves: downV, protectValves: protV, drainValves: drnV, zoneNodes, zoneEdges, steamTrapWarning: zoneHasSteam && !drnV.length, warnings: [...upRes.warnings, ...downRes.warnings] };
-  },
-  _ensure: () => {
-    if (IsolationPlan._modal) return;
-    const ov = document.createElement('div'); ov.id = 'iso-plan-overlay';
-    ov.addEventListener('click', IsolationPlan.close);
-    const m = document.createElement('div'); m.id = 'iso-plan-modal'; m.className = 'glass';
-    document.body.appendChild(ov); document.body.appendChild(m);
-    IsolationPlan._overlay = ov; IsolationPlan._modal = m;
-  },
-  open: (targetId) => {
-    const data = IsolationPlan.compute(targetId);
-    if (!data) return;
-    IsolationPlan._data = data;
-    IsolationPlan._ensure();
-    IsolationPlan._render();
-    IsolationPlan._overlay.classList.add('open');
-    IsolationPlan._modal.classList.add('open');
-    IsolationPlan._highlight();
-  },
-  _render: () => {
-    const d = IsolationPlan._data, m = IsolationPlan._modal;
-    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const stLabels = ['閉止', '微開', '開放'], stCls = ['badge-0', 'badge-1', 'badge-2'];
-    const profile = Store.isolationProfiles.find(p=>p.id===Store.lastProfileId) || Store.isolationProfiles[0];
-    
-    let bodyHtml;
-    const canApply = d.valves.some(v => v.state !== VALVE_STATE.CLOSED);
-    
-    const profOpts = Store.isolationProfiles.map(p => `<option value="${p.id}" ${p.id===profile.id?'selected':''}>${esc(p.name)}</option>`).join('');
-    
-    const cstPanel = `
-      <div class="iso-constraint-panel iso-no-print">
-        <div class="iso-constraint-toggle" id="iso-cst-toggle">
-          <span class="iso-arrow">▶</span> 隔離要件設定: <span>${esc(profile.name)}</span>
-        </div>
-        <div class="iso-constraint-body">
-          <div class="iso-profile-row">
-            <select id="iso-prof-sel">${profOpts}</select>
-            <button class="iso-profile-btn" id="iso-prof-save">上書き保存</button>
-            <button class="iso-profile-btn" id="iso-prof-new">新規</button>
-          </div>
-          <div class="iso-section-label">バルブ閉止制約</div>
-          <div class="iso-cst-row">
-            <label>上流閉止バルブ数 <input type="number" id="iso-up-c" min="1" max="5" value="${profile.constraints.upstreamValveCount}"></label>
-            <label>下流閉止バルブ数 <input type="number" id="iso-dn-c" min="1" max="5" value="${profile.constraints.downstreamValveCount}"></label>
-          </div>
-          <div class="iso-cst-row">
-            <label><input type="checkbox" id="iso-br-ind" ${profile.constraints.branchIndependent?'checked':''}> 分岐ごとに独立でカウント</label>
-          </div>
-          <div class="iso-section-label">追加保護・指示</div>
-          <div class="iso-cst-row">
-            <label><input type="checkbox" id="iso-stm-prt" ${profile.constraints.steamDrainProtection?'checked':''}> 🔥蒸気ドレン吹上げ保護を含める</label>
-            <label><input type="checkbox" id="iso-drn-opn" ${profile.constraints.drainOpenInstruction?'checked':''}> 残留蒸気排出指示を含める</label>
-          </div>
-        </div>
-      </div>
-    `;
-
-    if (!d.valves.length) {
-      bodyHtml = `${cstPanel}<div class="iso-empty">対象の周囲に隔離用バルブが見つかりませんでした。</div>`;
-    } else {
-      const rows = d.valves.map((v, i) => {
-        const liveBadge = v.live ? '<span class="iso-live">通気中</span>' : '<span class="iso-idle">停止</span>';
-        const isProt = d.protectValves.some(pv=>pv.id===v.id);
-        const namePrefix = isProt ? '🔥 ' : '';
-        return `<tr class="${v.state === VALVE_STATE.CLOSED ? 'iso-done' : ''}">
-          <td class="iso-num">${i + 1}</td>
-          <td><input type="checkbox" class="iso-check" ${v.state === VALVE_STATE.CLOSED ? 'checked' : ''}></td>
-          <td class="iso-vname">${namePrefix}${esc(v.name)}</td>
-          <td><span class="status-badge ${stCls[v.state]}">${stLabels[v.state]}</span>${liveBadge}</td>
-        </tr>`;
-      }).join('');
-      
-      const warnItems = d.warnings.map(w => `<div class="iso-warn-item">⚠ ${esc(w)}</div>`).join('');
-      const warns = warnItems ? `<div class="iso-warn-list">${warnItems}</div>` : '';
-      const trapWarn = d.steamTrapWarning ? `<div class="iso-warn-item">⚠ 隔離後、ゾーン内に蒸気が密閉される可能性があります。ドレン開放を検討してください。</div>` : '';
-      
-      bodyHtml = `
-        ${cstPanel}
-        <p class="iso-summary"><strong>${esc(d.targetName)}</strong> を隔離するには、次の <strong>${d.valves.length}</strong> 個のバルブを閉じてください。</p>
-        ${warns}${trapWarn}
-        <table class="iso-table"><thead><tr><th>#</th><th></th><th>バルブ</th><th>現在の状態</th></tr></thead><tbody>${rows}</tbody></table>`;
-    }
-    
-    m.innerHTML = `
-      <div class="iso-head">
-        <span class="iso-head-icon">🔒</span>
-        <span class="iso-head-title">隔離計画</span>
-        <button class="iso-close-x iso-no-print" id="iso-x">✕</button>
-      </div>
-      <div class="iso-body">${bodyHtml}</div>
-      <div class="iso-foot iso-no-print">
-        <button class="iso-btn ghost" id="iso-print">🖨 印刷</button>
-        <button class="iso-btn primary" id="iso-manual" style="background:var(--green)">📋 マニュアル作成</button>
-        <div style="flex:1"></div>
-        <button class="iso-btn ghost" id="iso-cancel">閉じる</button>
-        <button class="iso-btn primary" id="iso-apply" ${canApply ? '' : 'disabled'}>すべて閉じる</button>
-      </div>`;
-      
-    m.querySelector('#iso-x').onclick = IsolationPlan.close;
-    m.querySelector('#iso-cancel').onclick = IsolationPlan.close;
-    m.querySelector('#iso-print').onclick = () => window.print();
-    if(d.valves.length) m.querySelector('#iso-manual').onclick = () => OperationManual.open(d);
-    
-    const ap = m.querySelector('#iso-apply'); if (ap && canApply) ap.onclick = IsolationPlan.apply;
-    
-    // UI Events for constraints
-    const tgl = m.querySelector('#iso-cst-toggle');
-    if(tgl) {
-      tgl.onclick = () => { tgl.classList.toggle('open'); };
-      const updateCst = () => {
-        const p = Store.isolationProfiles.find(pf=>pf.id===Store.lastProfileId);
-        if(!p) return;
-        p.constraints.upstreamValveCount = parseInt(m.querySelector('#iso-up-c').value)||1;
-        p.constraints.downstreamValveCount = parseInt(m.querySelector('#iso-dn-c').value)||1;
-        p.constraints.branchIndependent = m.querySelector('#iso-br-ind').checked;
-        p.constraints.steamDrainProtection = m.querySelector('#iso-stm-prt').checked;
-        p.constraints.drainOpenInstruction = m.querySelector('#iso-drn-opn').checked;
-        Persistence.scheduleSave();
-        IsolationPlan.open(d.targetId); // Recompute & render
-        setTimeout(()=>document.querySelector('#iso-cst-toggle').classList.add('open'), 10);
-      };
-      m.querySelector('#iso-up-c').onchange = updateCst;
-      m.querySelector('#iso-dn-c').onchange = updateCst;
-      m.querySelector('#iso-br-ind').onchange = updateCst;
-      m.querySelector('#iso-stm-prt').onchange = updateCst;
-      m.querySelector('#iso-drn-opn').onchange = updateCst;
-      
-      m.querySelector('#iso-prof-sel').onchange = (e) => {
-        Store.lastProfileId = e.target.value;
-        Persistence.scheduleSave();
-        IsolationPlan.open(d.targetId);
-        setTimeout(()=>document.querySelector('#iso-cst-toggle').classList.add('open'), 10);
-      };
-      m.querySelector('#iso-prof-save').onclick = () => {
-        Toast.show('プロファイルを保存しました');
-      };
-      m.querySelector('#iso-prof-new').onclick = () => {
-        const n = prompt('新しいプロファイル名:');
-        if(n) {
-          const np = {id:Store.generateId(), name:n, constraints:{...profile.constraints}};
-          Store.isolationProfiles.push(np);
-          Store.lastProfileId = np.id;
-          Persistence.scheduleSave();
-          IsolationPlan.open(d.targetId);
-          setTimeout(()=>document.querySelector('#iso-cst-toggle').classList.add('open'), 10);
-        }
-      };
-    }
-  },
-  apply: () => {
-    const d = IsolationPlan._data; if (!d || !d.valves.length) return;
-    const toClose = d.valves.filter(v => v.state !== VALVE_STATE.CLOSED);
-    if (!toClose.length) { Toast.show('すべてのバルブは既に閉止しています'); return; }
-    Store.pushHistory();
-    toClose.forEach(v => { const n = Store.getNode(v.id); if (n) { Sequencer.onValveChange(n.id, n.state.valveState, VALVE_STATE.CLOSED); n.state.valveState = VALVE_STATE.CLOSED; } });
-    IsolationPlan.close();
-    Simulator.run(() => {
-      Renderer.renderAll();
-      Toast.show(`${toClose.length}個のバルブを閉止し、${d.targetName} を隔離しました`, { actionLabel: '元に戻す', onAction: Controller.undo, duration: 7000 });
-    });
-  },
-  _highlight: () => {
-    const d = IsolationPlan._data; if (!d) return;
-    const valveIds = new Set(d.valves.map(v => v.id));
-    Renderer.svgLayer.classList.add('isolation-mode');
-    Store.nodes.forEach(n => { const g = document.getElementById(`node-grp-${n.id}`); if (g) { g.classList.toggle('focus', d.zoneNodes.has(n.id) || valveIds.has(n.id)); g.classList.toggle('iso-boundary', valveIds.has(n.id)); } });
-    Store.edges.forEach(e => { const eg = document.getElementById(`edge-grp-${e.id}`); if (eg) eg.classList.toggle('focus', d.zoneEdges.has(e.id)); });
-  },
-  _clearHighlight: () => {
-    document.querySelectorAll('#svg-layer .iso-boundary').forEach(el => el.classList.remove('iso-boundary'));
-    if (IsolationTracer.active) { IsolationTracer._apply(); }
-    else { Renderer.svgLayer.classList.remove('isolation-mode'); document.querySelectorAll('#svg-layer .focus').forEach(el => el.classList.remove('focus')); }
-  },
-  close: () => {
-    IsolationPlan._clearHighlight();
-    if (IsolationPlan._overlay) IsolationPlan._overlay.classList.remove('open');
-    if (IsolationPlan._modal) IsolationPlan._modal.classList.remove('open');
-    IsolationPlan._data = null;
   }
 };
 

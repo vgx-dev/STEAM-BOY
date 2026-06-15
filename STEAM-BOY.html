@@ -355,6 +355,13 @@ body.zen-mode #autosave-off-badge{display:none;}
 .edge-sealed-bg {
   animation: sealedBgPulse 2.4s ease-in-out infinite !important;
 }
+/* ④ 不確定残留（密閉空間の広がり）＝黄。赤/紫の点滅を黄の点滅へ上書き */
+@keyframes uncertainPulse { 0%,100%{stroke:#FFCC00;opacity:1;} 50%{stroke:#FFE066;opacity:1;} }
+@keyframes uncertainBgPulse { 0%,100%{stroke:#FFCC00;opacity:.3;} 50%{stroke:#FFE066;opacity:.3;} }
+g.edge-grp[data-uncertain="1"] .edge-path,
+g.edge-grp[data-uncertain="1"] .flow-base:not(.edge-sealed-bg){stroke:#FFCC00 !important;}
+g.edge-grp[data-uncertain="1"] .edge-sealed{animation:uncertainPulse 2.4s ease-in-out infinite !important;}
+g.edge-grp[data-uncertain="1"] .edge-sealed-bg{animation:uncertainBgPulse 2.4s ease-in-out infinite !important;}
 .sealed-icon {
   animation: anomalyBlink 2.4s ease-in-out infinite;
   pointer-events: none;
@@ -1929,11 +1936,16 @@ const SealedDetector={
     });
     const EMPTY_EDGES=[];
 
+    // ④ 前フレームの残留状態を退避（密閉空間の「広がり」検知用：旧Empty区間 / 旧不確定 の判定に使う）
+    const priorRes=new Map();
+    Store.edges.forEach(e=>priorRes.set(e.id,{had:!!e.ext.hasResidual,type:e.ext.hasResidual?e.ext.residualType:0,unc:!!e.ext.residualUncertain,prevF:e._sim._prevF||0,prevB:e._sim._prevB||0}));
+
     // Step 1: 動的流量が発生したエッジの残留を即座にリセット
     Store.edges.forEach(e=>{
       if(e._sim.f>0||(e._sim.b&&e._sim.b>0)){
         e.ext.hasResidual=false;
         e.ext.residualType=0;
+        e.ext.residualUncertain=false;
         if(e._anim)e._anim.sealed=false;
       }
     });
@@ -2192,6 +2204,28 @@ const SealedDetector={
           e.ext.hasResidual=true;e.ext.residualType=FLUID.STEAM;
           if(!e._anim)e._anim={};
           e._anim.sealed=Store.config.showSealedAnim;
+        });
+      });
+
+      // ④ Step 5-4: 密閉空間の「広がり」を不確定残留（黄）に。
+      // 蒸気を含む密閉区間が、前フレームでEmptyだった区間（＝間仕切りバルブ開放で新たに連結）と
+      // 同一の密閉成分に統合された場合、その成分の蒸気残留を全体で「不確定（黄）」とする。
+      // いったん不確定になった区間は、密閉のまま残圧が残る限り不確定を維持（旧不確定を引き継ぐ）。
+      components.forEach(comp=>{
+        let hasSteam=false, hasPrevEmpty=false, hasPrevUncertain=false;
+        comp.edges.forEach(eid=>{
+          const e=edgeMap.get(eid); if(!e) return;
+          if(e.ext.hasResidual && e.ext.residualType===FLUID.STEAM) hasSteam=true;
+          const p=priorRes.get(eid);
+          if(p){
+            if(p.unc) hasPrevUncertain=true;
+            if(!p.had && !p.type && !p.prevF && !p.prevB) hasPrevEmpty=true; // 前フレームは完全に空
+          }
+        });
+        const uncertain = hasSteam && (hasPrevEmpty || hasPrevUncertain);
+        comp.edges.forEach(eid=>{
+          const e=edgeMap.get(eid); if(!e) return;
+          e.ext.residualUncertain = !!(uncertain && e.ext.hasResidual && e.ext.residualType===FLUID.STEAM);
         });
       });
 
@@ -2538,12 +2572,13 @@ const Renderer={
       // Epic 10: 流量ゼロでも hasResidual なら residualType を流体として表示
       const isResidual=(dsRaw===FLUID.EMPTY)&&!!edge.ext.hasResidual;
       const ds=isResidual?edge.ext.residualType:dsRaw;
+      const isUncertain=isResidual&&!!edge.ext.residualUncertain;   // ④ 不確定残留（黄）
       const dRate=isBk?(edge._sim.brate||.4):edge._sim.rate;
       const isSealed=Store.config.showSealedAnim&&edge._anim&&edge._anim.sealed;
 
-      // Phase 3: シグネチャ算出（位置・ウェイポイント・流体状態・残留・密閉）
+      // Phase 3: シグネチャ算出（位置・ウェイポイント・流体状態・残留・密閉・不確定）
       const wps=edge.ext.waypoints||[];
-      let sig=_edgeSigBase+nF.x+','+nF.y+'|'+nT.x+','+nT.y+'|'+ds+','+(isBk?1:0)+','+dRate+','+(isResidual?1:0)+','+(isSealed?1:0);
+      let sig=_edgeSigBase+nF.x+','+nF.y+'|'+nT.x+','+nT.y+'|'+ds+','+(isBk?1:0)+','+dRate+','+(isResidual?1:0)+','+(isSealed?1:0)+','+(isUncertain?1:0);
       for(let i=0;i<wps.length;i++)sig+=';'+wps[i].x+','+wps[i].y;
 
       let eg=document.getElementById(`edge-grp-${edge.id}`);
@@ -2561,6 +2596,8 @@ const Renderer={
       setAttr(eg,'data-fluid',ds);
       // Epic 10: 残留フラグを data-residual で投射→CSS がアニメーション一時停止
       setAttr(eg,'data-residual',isResidual?'1':'0');
+      // ④ 不確定残留（密閉空間の広がり）を data-uncertain で投射→CSS が黄に上書き
+      setAttr(eg,'data-uncertain',isUncertain?'1':'0');
 
       // 1. 当たり判定用パス（極細になっても操作性を失わないため）
       // 最適化5: contextmenu/dblclick は edgesGroup へのデリゲーションに移行済み（個別リスナーなし）

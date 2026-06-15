@@ -1254,6 +1254,24 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
 #svg-layer.manual-picking g.node{cursor:crosshair;}
 .manual-picked-flash{animation:manualPickFlash .4s ease-out;}
 @keyframes manualPickFlash{0%{opacity:.3;}50%{opacity:1;}100%{opacity:1;}}
+/* マニュアル・ワークスペース（左：生キャンバス／右：編集パネルの2分割） */
+body.manual-workspace #op-manual-overlay{display:none!important;}
+body.manual-workspace #op-manual-modal{top:0;right:0;left:auto;bottom:0;width:var(--manual-w,46vw);max-width:none;max-height:none;height:100vh;transform:none!important;border-radius:0;box-shadow:-8px 0 28px rgba(0,0,0,0.14);}
+body.manual-workspace #workspace{right:var(--manual-w,46vw);}
+body.manual-workspace #toolbar{left:calc((100vw - var(--manual-w,46vw)) / 2);}
+body.manual-workspace #zoom-controls{right:calc(var(--manual-w,46vw) + 16px);}
+#opm-resize-handle{display:none;position:fixed;top:0;right:var(--manual-w,46vw);width:7px;height:100vh;z-index:602;cursor:col-resize;background:transparent;transition:background .15s;}
+#opm-resize-handle::after{content:"";position:absolute;top:50%;left:2px;width:3px;height:42px;margin-top:-21px;border-radius:3px;background:rgba(0,0,0,0.18);}
+#opm-resize-handle:hover{background:rgba(0,122,255,0.15);}
+body.manual-workspace #opm-resize-handle{display:block;}
+@media (max-width:900px){
+  body.manual-workspace #op-manual-modal{top:auto;left:0;right:0;bottom:0;width:100vw;height:var(--manual-h,52vh);box-shadow:0 -8px 28px rgba(0,0,0,0.14);}
+  body.manual-workspace #workspace{right:0;bottom:var(--manual-h,52vh);}
+  body.manual-workspace #toolbar{left:50%;}
+  body.manual-workspace #zoom-controls{right:16px;bottom:calc(var(--manual-h,52vh) + 16px);}
+  #opm-resize-handle{top:auto;right:0;bottom:var(--manual-h,52vh);left:0;width:100vw;height:7px;cursor:row-resize;}
+  #opm-resize-handle::after{top:2px;left:50%;margin-top:0;margin-left:-21px;width:42px;height:3px;}
+}
 @media print{
   @page{size:A4 portrait;margin:14mm 11mm 16mm;}
   /* マニュアル表示中は他要素を完全に除外し、表を通常フローで複数ページに分割 */
@@ -3963,9 +3981,10 @@ const OperationManual = {
   _show: () => {
     OperationManual._ensure();
     OperationManual._render();
-    OperationManual._overlay.classList.add('open');
     OperationManual._modal.classList.add('open');
-    document.body.classList.add('opm-active'); // 印刷時に他要素を完全に除外しページ分割を正常化
+    document.body.classList.add('manual-workspace'); // 左：生キャンバス／右：編集パネルの2分割
+    document.body.classList.add('opm-active');       // 印刷時に他要素を完全に除外しページ分割を正常化
+    if (typeof Renderer !== 'undefined' && Renderer.updateZoom) Renderer.updateZoom();
   },
   _ensure: () => {
     if (OperationManual._modal) return;
@@ -3974,6 +3993,27 @@ const OperationManual = {
     const m = document.createElement('div'); m.id = 'op-manual-modal'; m.className = 'glass';
     document.body.appendChild(ov); document.body.appendChild(m);
     OperationManual._overlay = ov; OperationManual._modal = m;
+    OperationManual._ensureResizeHandle();
+  },
+  // 分割比を変えるドラッグハンドル（縦/横はメディアクエリで切替）
+  _ensureResizeHandle: () => {
+    if (document.getElementById('opm-resize-handle')) return;
+    const h = document.createElement('div'); h.id = 'opm-resize-handle';
+    document.body.appendChild(h);
+    let dragging = false;
+    const onMove = (e) => {
+      if (!dragging) return;
+      const narrow = window.matchMedia('(max-width:900px)').matches;
+      if (narrow) {
+        const hgt = Math.min(window.innerHeight * 0.85, Math.max(220, window.innerHeight - e.clientY));
+        document.body.style.setProperty('--manual-h', hgt + 'px');
+      } else {
+        const w = Math.min(window.innerWidth * 0.8, Math.max(320, window.innerWidth - e.clientX));
+        document.body.style.setProperty('--manual-w', w + 'px');
+      }
+    };
+    const onUp = () => { dragging = false; document.body.classList.remove('opm-resizing'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); if (Renderer && Renderer.updateZoom) Renderer.updateZoom(); };
+    h.addEventListener('pointerdown', (e) => { e.preventDefault(); dragging = true; document.body.classList.add('opm-resizing'); window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); });
   },
   // 編集中の入力値を手順データへ反映（再描画前に呼ぶ）
   _syncInputs: () => {
@@ -4300,6 +4340,8 @@ const OperationManual = {
     if (OperationManual._overlay) OperationManual._overlay.classList.remove('open');
     if (OperationManual._modal) OperationManual._modal.classList.remove('open');
     document.body.classList.remove('opm-active');
+    document.body.classList.remove('manual-workspace');
+    if (typeof Renderer !== 'undefined' && Renderer.updateZoom) Renderer.updateZoom();
     OperationManual._data = null;
   }
 };
@@ -4395,10 +4437,7 @@ const ManualPicker = {
     ManualPicker._phase = phase;
     ManualPicker._count = 0;
     ManualPicker.active = true;
-    // マニュアルのモーダル/オーバーレイを一時的に隠してキャンバス操作を可能にする
-    OperationManual._overlay.classList.remove('open');
-    OperationManual._modal.classList.remove('open');
-    document.body.classList.remove('opm-active');
+    // 2分割ワークスペースではパネルを開いたまま、左の生キャンバスから直接ピックする
     ManualPicker._showBanner();
     Renderer.svgLayer.classList.add('manual-picking');
   },

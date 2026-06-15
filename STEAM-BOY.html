@@ -1406,6 +1406,24 @@ body.master-workspace #mt-resize-handle{display:block;}
 .opm-badge-pulse{animation:manualLinkPulse 1.1s ease-in-out infinite;}
 @keyframes manualLinkPulse{0%,100%{filter:drop-shadow(0 0 2px rgba(0,122,255,.55));}50%{filter:drop-shadow(0 0 9px rgba(0,122,255,.95));}}
 .opm-table tbody tr.opm-row-selected{background:rgba(0,122,255,0.1)!important;box-shadow:inset 3px 0 0 var(--accent);}
+/* A-1 複数選択行・一括操作バー */
+.opm-table tbody tr.opm-row-multisel td{background:rgba(0,122,255,0.12)!important;box-shadow:inset 2px 0 0 var(--accent);}
+.opm-bulk-bar{display:flex;align-items:center;gap:8px;padding:8px 20px;background:rgba(0,122,255,0.06);border-bottom:1px solid rgba(0,0,0,0.06);flex-wrap:wrap;}
+.opm-bulk-count{font-size:12px;font-weight:700;color:var(--accent);}
+.opm-bulk-btn{padding:5px 11px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;background:#fff;color:var(--text-1);font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;transition:all .12s;}
+.opm-bulk-btn:hover{background:rgba(0,0,0,0.04);}
+.opm-bulk-btn.iso:hover{background:rgba(255,149,0,0.12);border-color:var(--orange);color:#b3650a;}
+.opm-bulk-btn.res:hover{background:rgba(52,199,89,0.12);border-color:var(--green);color:#1f8a3b;}
+.opm-bulk-btn.danger{color:var(--red);border-color:rgba(255,59,48,0.2);}
+.opm-bulk-btn.danger:hover{background:rgba(255,59,48,0.08);}
+.opm-bulk-btn.quiet{border:none;background:transparent;color:var(--text-2);}
+/* A-3 セクション見出し行 */
+.opm-section-row td{background:linear-gradient(90deg,rgba(0,122,255,0.10),rgba(0,122,255,0.02));}
+.opm-section-cell{display:flex;align-items:center;gap:8px;padding:6px 8px!important;}
+.opm-section-mark{color:var(--accent);font-weight:800;font-size:13px;}
+.opm-section-input{flex:1;min-width:0;border:none;background:transparent;font-size:12.5px;font-weight:700;color:var(--text-1);font-family:var(--font);outline:none;padding:3px 4px;border-radius:5px;letter-spacing:.3px;}
+.opm-section-input:focus{background:rgba(0,122,255,0.08);}
+.opm-section-input::placeholder{font-weight:600;color:var(--text-3);}
 .opm-pick-target{margin-left:4px;padding:1px 5px;border:none;border-radius:6px;background:rgba(0,122,255,0.12);color:var(--accent);font-size:11px;cursor:pointer;vertical-align:middle;}
 .opm-pick-target:hover{background:rgba(0,122,255,0.22);}
 /* マニュアル・ワークスペース（左：生キャンバス／右：編集パネルの2分割） */
@@ -1458,6 +1476,10 @@ body.manual-workspace.manual-split-v #opm-resize-handle::after{top:2px;left:50%;
   /* 操作バッジはモノクロでも判読できるよう枠線を付与 */
   .opm-op-badge{border:1px solid #888!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
   .opm-reason-input,.opm-memo-input,.opm-tag-input,.opm-goal-input,.opm-measured-input{border:none!important;border-bottom:1px solid #ccc!important;background:#fff!important;color:#000!important;-webkit-text-fill-color:#000;opacity:1!important;}
+  /* A-3 セクション見出し（印刷） */
+  .opm-section-row td{background:#ececec!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;border-top:1.5px solid #999!important;}
+  .opm-section-input{border:none!important;background:transparent!important;color:#000!important;-webkit-text-fill-color:#000;font-weight:800!important;font-size:11.5px!important;opacity:1!important;}
+  .opm-section-mark{color:#000!important;}
   .opm-check{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
   .opm-foot{display:none!important;}
   .opm-printopts{display:none!important;}
@@ -4317,6 +4339,8 @@ const OperationManual = {
   _manualId: null,                 // 保存済みマニュアルのID（null=未保存の下書き）
   _targetId: null,                 // 対象機器のノードID（対象につき1冊の紐付けキー）
   _selectedStepId: null,           // 図⇄手順リンクで選択中の手順ID
+  _multiSel: new Set(),            // A-1 複数選択中の手順ID
+  _selAnchor: null,                // A-1 範囲選択の起点
   _autosaveTimer: null,            // 入力デバウンス autosave 用
   _savedAt: null,                  // 最終保存時刻（ステータス表示用）
   _meta: null,                     // { name, targetName, createdAt }
@@ -4553,6 +4577,7 @@ const OperationManual = {
     m.querySelectorAll('.opm-targettext-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.targetText = i.value; });
     m.querySelectorAll('.opm-goal-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.goal = i.value; });
     m.querySelectorAll('.opm-measured-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.measured = i.value; });
+    m.querySelectorAll('.opm-section-input').forEach(i => { const s = map.get(i.dataset.id); if (s) s.title = i.value; });
     // タイトルブロック（文書番号・版数・改訂日）とフッター注記を同期
     const dn = m.querySelector('#opm-docno'); if (dn && OperationManual._meta) OperationManual._meta.docNo = dn.value;
     const rv = m.querySelector('#opm-rev'); if (rv && OperationManual._meta) OperationManual._meta.rev = rv.value;
@@ -4596,11 +4621,27 @@ const OperationManual = {
     const quickAdd = (phase) => `<div class="opm-quickadd opm-no-print" data-phase="${phase}">
       <span class="opm-qa-label">＋ 手順:</span>
       ${Object.entries(OperationManual.KINDS).map(([k, v]) => `<button class="opm-qa-btn" data-phase="${phase}" data-kind="${k}">${v.menu}</button>`).join('')}
+      <button class="opm-qa-btn opm-qa-section" data-phase="${phase}" data-kind="section" title="区切り見出しを挿入">▸ 見出し</button>
       <span class="opm-qa-sep"></span>
       <button class="opm-qa-pick" data-phase="${phase}" title="図のバルブ・機器をクリックして追加">🖱 図から追加</button>
     </div>`;
+    // 表の総列数（セクション行の colspan 用）
+    const colCount = 8 + (o.showTag ? 1 : 0) + (o.showState ? 1 : 0) + (o.showGauge ? 2 : 0);
 
-    const renderRows = (steps, phase, startNum) => steps.map((s, idx) => {
+    const renderRows = (steps, phase) => { let num = 0; return steps.map((s, idx) => {
+      // A-3: セクション見出し行（番号を持たず、表を横断する見出し）
+      if (s.kind === 'section') {
+        return `<tr class="opm-section-row" draggable="true" data-phase="${phase}" data-id="${s.id}">
+          <td colspan="${colCount}" class="opm-section-cell">
+            <span class="opm-drag opm-no-print" title="ドラッグで移動">⠿</span>
+            <span class="opm-section-mark">▸</span>
+            <input type="text" class="opm-section-input" data-id="${s.id}" value="${esc(s.title || '')}" placeholder="セクション見出し（例: 一次隔離）">
+            <button class="opm-del opm-no-print" data-id="${s.id}" data-phase="${phase}" title="この見出しを削除">✕</button>
+          </td>
+        </tr>`;
+      }
+      num++;
+      const startNum = num - idx;   // 既存の `startNum + idx` 表現を踏襲しつつ通し番号(num)を使う
       const isValve = s.kind === 'valve';
       const K = OperationManual.KINDS[s.kind] || OperationManual.KINDS.note;
       const badge = OperationManual._badgeFor(s);
@@ -4640,7 +4681,7 @@ const OperationManual = {
           <button class="opm-del" data-id="${s.id}" data-phase="${phase}" title="この手順を削除">✕</button>
         </td>
       </tr>`;
-    }).join('');
+    }).join(''); };
 
     const isoCount = OperationManual._steps.iso.length;
     // 図連携: 対象未設定のバルブ手順（シーケンサ連携できない＝要修正）の件数
@@ -4703,7 +4744,16 @@ const OperationManual = {
         <label><input type="checkbox" id="opm-opt-tag" ${o.showTag ? 'checked' : ''}> タグ番号</label>
         <label><input type="checkbox" id="opm-opt-gauge" ${o.showGauge ? 'checked' : ''}> 計器値（目標/実測）</label>
         <button class="opm-btn ghost${OperationManual._printPanelOpen ? ' active' : ''}" id="opm-printopts-toggle" style="padding:5px 12px;font-size:12px" title="印刷・帳票の体裁を設定">🖨 印刷設定</button>
-        <span class="opm-hint" title="行末でEnter→同種手順を直下に追加／Ctrl+↑↓で行移動／⠿ドラッグで並べ替え">⌨ Enter＝行追加・Ctrl+↑↓＝移動</span>
+        <span class="opm-hint" title="行末でEnter→同種手順を直下に追加／Ctrl+↑↓で行移動／⠿ドラッグで並べ替え／Ctrl+クリックで複数選択">⌨ Enter＝行追加・Ctrl+↑↓＝移動・Ctrl+クリック＝複数選択</span>
+      </div>
+      <div class="opm-bulk-bar opm-no-print" id="opm-bulk-bar" style="display:none">
+        <span class="opm-bulk-count" id="opm-bulk-count">0件選択中</span>
+        <button class="opm-bulk-btn" id="opm-bulk-check" title="選択行の確認をまとめてON">✔ 一括チェック</button>
+        <button class="opm-bulk-btn" id="opm-bulk-dup" title="選択行を複製">⧉ 複製</button>
+        <button class="opm-bulk-btn iso" id="opm-bulk-iso" title="選択行を隔離フェーズへ移動">🔒 隔離へ</button>
+        <button class="opm-bulk-btn res" id="opm-bulk-res" title="選択行を復旧フェーズへ移動">🔓 復旧へ</button>
+        <button class="opm-bulk-btn danger" id="opm-bulk-del" title="選択行を削除">✕ 削除</button>
+        <button class="opm-bulk-btn quiet" id="opm-bulk-clear" title="選択を解除">解除</button>
       </div>
       <div class="opm-printopts opm-no-print" id="opm-printopts" style="${OperationManual._printPanelOpen ? '' : 'display:none'}">
         <div class="opm-po-group">
@@ -4735,16 +4785,16 @@ const OperationManual = {
       <div class="opm-body">
         ${titleBlock}
         <div class="opm-phase">🔒 【隔離フェーズ】（安全対策・隔離）</div>
-        <table class="opm-table">
+        <table class="opm-table" data-phase="iso">
           <thead>${thead}</thead>
-          <tbody>${renderRows(OperationManual._steps.iso, 'iso', 1)}</tbody>
+          <tbody>${renderRows(OperationManual._steps.iso, 'iso')}</tbody>
         </table>
         ${quickAdd('iso')}
 
         <div class="opm-phase restore">🔓 【復旧フェーズ】（暖管 → 通常バルブセット）</div>
-        <table class="opm-table">
+        <table class="opm-table" data-phase="res">
           <thead>${thead}</thead>
-          <tbody>${renderRows(OperationManual._steps.res, 'res', 1)}</tbody>
+          <tbody>${renderRows(OperationManual._steps.res, 'res')}</tbody>
         </table>
         ${quickAdd('res')}
       </div>
@@ -4878,10 +4928,25 @@ const OperationManual = {
     m.querySelectorAll('.opm-table tbody tr').forEach(tr => {
       tr.addEventListener('mouseenter', () => { const s = OperationManual._stepById(tr.dataset.id); if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, false); });
       tr.addEventListener('mouseleave', () => { if (!OperationManual._selectedStepId) OperationManual._clearCanvasFocus(); else { const s = OperationManual._stepById(OperationManual._selectedStepId); if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, false); } });
-      tr.addEventListener('click', (e) => { if (e.target.closest('input,select,button,textarea,a')) return; OperationManual._selectStep(tr.dataset.id); });
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('input,select,button,textarea,a')) return;
+        const id = tr.dataset.id;
+        if (e.ctrlKey || e.metaKey) { OperationManual._toggleMultiSel(id); }
+        else if (e.shiftKey) { OperationManual._rangeMultiSel(id); }
+        else { OperationManual._multiSel = new Set([id]); OperationManual._selAnchor = id; OperationManual._selectStep(id); }
+        OperationManual._applyMultiSelUI();
+      });
     });
     // 🎯 選択手順の対象を図から指定
     m.querySelectorAll('.opm-pick-target').forEach(b => b.onclick = (e) => { e.stopPropagation(); ManualPicker.startAssign(b.dataset.id); });
+    // A-1: 一括操作バーの配線
+    const _bb = (id, fn) => { const b = m.querySelector(id); if (b) b.onclick = fn; };
+    _bb('#opm-bulk-check', () => OperationManual._bulkCheck());
+    _bb('#opm-bulk-dup', () => OperationManual._bulkDuplicate());
+    _bb('#opm-bulk-iso', () => OperationManual._bulkMovePhase('iso'));
+    _bb('#opm-bulk-res', () => OperationManual._bulkMovePhase('res'));
+    _bb('#opm-bulk-del', () => OperationManual._bulkDelete());
+    _bb('#opm-bulk-clear', () => { OperationManual._multiSel.clear(); OperationManual._applyMultiSelUI(); });
     // 選択状態の見た目を復元
     if (OperationManual._selectedStepId) { const tr = m.querySelector(`.opm-table tbody tr[data-id="${OperationManual._selectedStepId}"]`); if (tr) tr.classList.add('opm-row-selected'); }
 
@@ -4895,6 +4960,7 @@ const OperationManual = {
     }
     OperationManual._applyPrintOpts();   // 帳票の体裁（向き/余白/縞/モノクロ/文字サイズ）を反映
     OperationManual._drawStepBadges();    // B-4: 図上の手順番号バッジを更新
+    OperationManual._applyMultiSelUI();   // A-1: 複数選択の見た目と一括バーを復元
   },
   // 帳票/印刷の体裁をモーダルのクラス＋動的@pageに反映
   _applyPrintOpts: () => {
@@ -4965,7 +5031,7 @@ const OperationManual = {
       id, kind, node: null,
       op: kind === 'valve' ? VALVE_STATE.CLOSED : null, fromState: null,
       reason: '', memo: '', checked: false, tag: '', targetText: '', goal: '', measured: '',
-      isDrain: false, isWarmup: false, editable: true
+      title: '', isDrain: false, isWarmup: false, editable: true   // title: A-3 セクション見出し用
     };
     const arr = OperationManual._steps[phase];
     const ai = afterId ? arr.findIndex(s => s.id === afterId) : -1;
@@ -4975,7 +5041,7 @@ const OperationManual = {
     const tr = OperationManual._modal && OperationManual._modal.querySelector(`tr[data-id="${id}"]`);
     if (tr) {
       tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      const f = tr.querySelector('.opm-target-sel, .opm-targettext-input, .opm-reason-input');
+      const f = tr.querySelector('.opm-section-input, .opm-target-sel, .opm-targettext-input, .opm-reason-input');
       if (f) f.focus();
     }
   },
@@ -4993,14 +5059,38 @@ const OperationManual = {
     m.querySelectorAll('.opm-table tbody tr').forEach(tr => {
       tr.addEventListener('dragstart', e => { dragId = tr.dataset.id; dragPhase = tr.dataset.phase; tr.classList.add('opm-dragging'); e.dataTransfer.effectAllowed = 'move'; });
       tr.addEventListener('dragend', () => { tr.classList.remove('opm-dragging'); m.querySelectorAll('.opm-drag-over').forEach(x => x.classList.remove('opm-drag-over')); });
-      tr.addEventListener('dragover', e => { if (tr.dataset.phase !== dragPhase) return; e.preventDefault(); tr.classList.add('opm-drag-over'); });
+      // A-2: フェーズ間移動を許可（同一/別フェーズどちらにもドロップ可）
+      tr.addEventListener('dragover', e => { if (dragId == null) return; e.preventDefault(); tr.classList.add('opm-drag-over'); });
       tr.addEventListener('dragleave', () => tr.classList.remove('opm-drag-over'));
       tr.addEventListener('drop', e => {
         e.preventDefault(); tr.classList.remove('opm-drag-over');
-        if (tr.dataset.phase !== dragPhase || tr.dataset.id === dragId) return;
-        OperationManual._reorder(dragPhase, dragId, tr.dataset.id);
+        if (tr.dataset.id === dragId) return;
+        if (tr.dataset.phase === dragPhase) OperationManual._reorder(dragPhase, dragId, tr.dataset.id);
+        else OperationManual._moveAcross(dragPhase, dragId, tr.dataset.phase, tr.dataset.id);
       });
     });
+    // 空フェーズや末尾への追加: tbody 自体をドロップ先にして当該フェーズ末尾へ
+    m.querySelectorAll('.opm-table tbody').forEach(tb => {
+      tb.addEventListener('dragover', e => { if (dragId == null) return; e.preventDefault(); });
+      tb.addEventListener('drop', e => {
+        if (dragId == null || e.target.closest('tr')) return;   // 行上のドロップは行ハンドラに委譲
+        e.preventDefault();
+        const ph = tb.closest('table').dataset.phase;
+        if (ph && ph !== dragPhase) OperationManual._moveAcross(dragPhase, dragId, ph, null);
+      });
+    });
+  },
+  // A-2: フェーズ間で手順を移動（toId の直前へ挿入。toId=null なら末尾）
+  _moveAcross: (fromPhase, fromId, toPhase, toId) => {
+    OperationManual._syncInputs();
+    const src = OperationManual._steps[fromPhase], dst = OperationManual._steps[toPhase];
+    const fi = src.findIndex(s => s.id === fromId);
+    if (fi < 0) return;
+    OperationManual._pushHistory();
+    const [moved] = src.splice(fi, 1);
+    const ti = toId ? dst.findIndex(s => s.id === toId) : dst.length;
+    dst.splice(ti < 0 ? dst.length : ti, 0, moved);
+    OperationManual._render();
   },
   _reorder: (phase, fromId, toId) => {
     OperationManual._syncInputs();
@@ -5058,6 +5148,7 @@ const OperationManual = {
     const rows = ['フェーズ,手順番号,種別,操作対象,タグ番号,操作,現在の状態,目標値,実測値,操作理由,確認,備考'];
     let n = 1;
     OperationManual._allSteps().forEach(s => {
+      if (s.kind === 'section') { rows.push([q(s.phase), '', q('見出し'), q(s.title || ''), '', '', '', '', '', '', '', ''].join(',')); return; }
       const K = OperationManual.KINDS[s.kind] || OperationManual.KINDS.note;
       const badge = OperationManual._badgeFor(s);
       const opLbl = (badge && badge.label) ? badge.label : '';
@@ -5109,6 +5200,59 @@ const OperationManual = {
     if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, true);
     else OperationManual._clearCanvasFocus();
   },
+  // ───── A-1 複数選択・一括操作 ─────
+  _phaseOf: (id) => OperationManual._steps.iso.some(s => s.id === id) ? 'iso' : (OperationManual._steps.res.some(s => s.id === id) ? 'res' : null),
+  _toggleMultiSel: (id) => { const sel = OperationManual._multiSel; if (sel.has(id)) sel.delete(id); else { sel.add(id); OperationManual._selAnchor = id; } },
+  _rangeMultiSel: (id) => {
+    const anchor = OperationManual._selAnchor;
+    if (!anchor) { OperationManual._multiSel.add(id); OperationManual._selAnchor = id; return; }
+    const ph = OperationManual._phaseOf(id);
+    if (ph !== OperationManual._phaseOf(anchor)) { OperationManual._multiSel.add(id); return; } // 別フェーズ間はトグルのみ
+    const arr = OperationManual._steps[ph];
+    const a = arr.findIndex(s => s.id === anchor), b = arr.findIndex(s => s.id === id);
+    if (a < 0 || b < 0) return;
+    for (let i = Math.min(a, b); i <= Math.max(a, b); i++) OperationManual._multiSel.add(arr[i].id);
+  },
+  _applyMultiSelUI: () => {
+    const m = OperationManual._modal; if (!m) return;
+    const sel = OperationManual._multiSel;
+    m.querySelectorAll('.opm-table tbody tr').forEach(tr => tr.classList.toggle('opm-row-multisel', sel.has(tr.dataset.id)));
+    const bar = m.querySelector('#opm-bulk-bar'), cnt = m.querySelector('#opm-bulk-count');
+    if (bar) bar.style.display = sel.size ? 'flex' : 'none';
+    if (cnt) cnt.textContent = `${sel.size}件選択中`;
+  },
+  _bulkApply: (fn, { rerender = true } = {}) => {
+    OperationManual._syncInputs();
+    OperationManual._pushHistory();
+    fn();
+    if (rerender) OperationManual._render(); else OperationManual._applyMultiSelUI();
+  },
+  _bulkCheck: () => OperationManual._bulkApply(() => {
+    OperationManual._multiSel.forEach(id => { const s = OperationManual._stepById(id); if (s && s.kind !== 'section') s.checked = true; });
+  }),
+  _bulkDuplicate: () => OperationManual._bulkApply(() => {
+    ['iso', 'res'].forEach(ph => {
+      const arr = OperationManual._steps[ph];
+      for (let i = arr.length - 1; i >= 0; i--) {
+        if (OperationManual._multiSel.has(arr[i].id)) {
+          const copy = JSON.parse(JSON.stringify(arr[i])); copy.id = 's' + (OperationManual._uid++); copy.checked = false;
+          arr.splice(i + 1, 0, copy);
+        }
+      }
+    });
+    OperationManual._multiSel.clear();
+  }),
+  _bulkDelete: () => OperationManual._bulkApply(() => {
+    ['iso', 'res'].forEach(ph => { OperationManual._steps[ph] = OperationManual._steps[ph].filter(s => !OperationManual._multiSel.has(s.id)); });
+    OperationManual._multiSel.clear();
+  }),
+  _bulkMovePhase: (target) => OperationManual._bulkApply(() => {
+    const other = target === 'iso' ? 'res' : 'iso';
+    const moving = OperationManual._steps[other].filter(s => OperationManual._multiSel.has(s.id));
+    if (!moving.length) return;
+    OperationManual._steps[other] = OperationManual._steps[other].filter(s => !OperationManual._multiSel.has(s.id));
+    OperationManual._steps[target] = OperationManual._steps[target].concat(moving);
+  }),
   // B-4: 図上に手順番号バッジを描画（隔離=オレンジ / 復旧=緑 で色分け。overlay-layer なのでズーム/パンに追従）
   _clearStepBadges: () => { const l = document.getElementById('opm-badge-layer'); if (l) l.remove(); },
   _drawStepBadges: () => {
@@ -5118,9 +5262,11 @@ const OperationManual = {
     if (!layer) { layer = createNS('g', { id: 'opm-badge-layer' }); ov.appendChild(layer); }
     // node → [{num, phase}]（valve手順のみ）
     const byNode = new Map();
-    ['iso', 'res'].forEach(ph => OperationManual._steps[ph].forEach((s, i) => {
-      if (s.kind === 'valve' && s.node && s.node.id) { const a = byNode.get(s.node.id) || []; a.push({ num: i + 1, phase: ph }); byNode.set(s.node.id, a); }
-    }));
+    ['iso', 'res'].forEach(ph => { let num = 0; OperationManual._steps[ph].forEach((s) => {
+      if (s.kind === 'section') return;   // 見出しは番号を持たない
+      num++;
+      if (s.kind === 'valve' && s.node && s.node.id) { const a = byNode.get(s.node.id) || []; a.push({ num, phase: ph }); byNode.set(s.node.id, a); }
+    }); });
     let html = '';
     const sel = OperationManual._selectedStepId;
     byNode.forEach((list, nodeId) => {
@@ -5190,6 +5336,7 @@ const OperationManual = {
     document.body.classList.remove('opm-active');
     document.body.classList.remove('manual-workspace', 'manual-split-v', 'manual-split-h');
     OperationManual._selectedStepId = null;
+    OperationManual._multiSel.clear();
     OperationManual._clearCanvasFocus();
     OperationManual._clearStepBadges();
     if (typeof Renderer !== 'undefined' && Renderer.updateZoom) Renderer.updateZoom();

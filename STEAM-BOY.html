@@ -19,7 +19,55 @@
   --text-1:#1D1D1F; --text-2:#6E6E73; --text-3:#AEAEB2;
   --accent:#007AFF; --green:#34C759; --orange:#FF9500; --red:#FF3B30;
   --font:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','Inter',system-ui,sans-serif;
+  /* ── Floating Palette デザイントークン（全パレット共通のマテリアル） ── */
+  --p-radius:14px;
+  --p-blur:24px;
+  --p-bg:rgba(255,255,255,0.68);
+  --p-surface:#ffffff;
+  --p-hairline:rgba(255,255,255,0.6);
+  --p-border:rgba(0,0,0,0.06);
+  --p-shadow:0 8px 32px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.04);
+  --p-shadow-raised:0 16px 46px rgba(0,0,0,0.20), 0 2px 8px rgba(0,0,0,0.10);
+  --p-hover:rgba(0,0,0,0.05);
+  --p-track:rgba(0,0,0,0.10);
+  --p-ease:cubic-bezier(.16,1,.3,1);
 }
+/* ── ダークモード（チロム/パレットのみにスコープ。白背景のモーダル・図面キャンバスは明色を維持） ── */
+[data-theme="dark"] #toolbar,
+[data-theme="dark"] #settings-panel,
+[data-theme="dark"] #floating-matrix,
+[data-theme="dark"] #minimap-container,
+[data-theme="dark"] #zoom-controls,
+[data-theme="dark"] #image-viewer,
+[data-theme="dark"] #selection-toolbar,
+[data-theme="dark"] #btn-master-table{
+  --text-1:#F5F5F7; --text-2:#AEAEB2; --text-3:#8A8A90;
+  color:var(--text-1);
+  --p-bg:rgba(38,38,44,0.78);
+  --p-surface:#34343c;
+  --p-hairline:rgba(255,255,255,0.07);
+  --p-border:rgba(255,255,255,0.10);
+  --p-shadow:0 8px 32px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.35);
+  --p-shadow-raised:0 16px 46px rgba(0,0,0,0.62), 0 2px 8px rgba(0,0,0,0.45);
+  --p-hover:rgba(255,255,255,0.09);
+  --p-track:rgba(255,255,255,0.16);
+}
+/* ダーク時の内側コントロール（ハードコード色をパネル内だけ上書き。light は不変） */
+[data-theme="dark"] .sp-btn{background:#34343c;border-color:var(--p-border);color:var(--text-1);}
+[data-theme="dark"] .sp-btn:hover{background:#40404a;}
+[data-theme="dark"] .sp-btn.danger{color:#ff6b61;border-color:rgba(255,59,48,0.3);}
+[data-theme="dark"] #settings-panel input[type="number"]{background:rgba(255,255,255,0.06);border-color:var(--p-border);color:var(--text-1);}
+[data-theme="dark"] #settings-panel input[type="range"]{background:var(--p-track);}
+[data-theme="dark"] .sp-close{background:rgba(255,255,255,0.1);color:var(--text-2);}
+[data-theme="dark"] .sp-close:hover{background:rgba(255,255,255,0.18);}
+[data-theme="dark"] .sp-section,[data-theme="dark"] .sp-hints,[data-theme="dark"] .matrix-header,[data-theme="dark"] #minimap-header,[data-theme="dark"] .matrix-tabs,[data-theme="dark"] .iv-header{border-color:var(--p-border)!important;}
+[data-theme="dark"] .sp-file-label{background:rgba(0,122,255,0.2);}
+[data-theme="dark"] .sp-toggle input[type="checkbox"]{background:rgba(255,255,255,0.18);}
+[data-theme="dark"] .tool-btn:hover{background:var(--p-hover);}
+[data-theme="dark"] .toolbar-sep{background:var(--p-border);}
+[data-theme="dark"] #zoom-controls button:hover{background:var(--p-hover);}
+[data-theme="dark"] .panel-minimize-btn:hover{background:var(--p-hover);}
+[data-theme="dark"] .anomaly-item{background:rgba(255,149,0,0.14);}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:var(--font);height:100vh;overflow:hidden;background:#E5E5EA;color:var(--text-1);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
 input, textarea{user-select:auto;-webkit-user-select:auto;}
@@ -42,11 +90,19 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 
 /* ── Glass Mixin ── */
 .glass {
-  background: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(24px) saturate(200%);
-  -webkit-backdrop-filter: blur(24px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 1);
+  background: var(--p-bg);
+  backdrop-filter: blur(var(--p-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--p-blur)) saturate(180%);
+  border: 1px solid var(--p-border);
+  box-shadow: var(--p-shadow), inset 0 1px 0 var(--p-hairline);
+  transition: box-shadow .2s var(--p-ease), opacity .22s var(--p-ease), transform .22s var(--p-ease);
+}
+/* クリックで最前面に来たパレットを少し持ち上げる（B7） */
+.glass.palette-raised { box-shadow: var(--p-shadow-raised), inset 0 1px 0 var(--p-hairline); }
+/* ドラッグ中の吸着スナップガイド */
+.glass.palette-dragging { box-shadow: var(--p-shadow-raised), inset 0 1px 0 var(--p-hairline); cursor: grabbing; }
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{ animation-duration:.001ms!important; animation-iteration-count:1!important; transition-duration:.001ms!important; }
 }
 
 /* ── Workspace ── */
@@ -86,7 +142,7 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 .tool-btn .shortcut-hint{position:absolute;bottom:-1px;right:2px;font-size:8px;font-weight:600;color:inherit;opacity:.5;line-height:1;pointer-events:none;}
 
 /* ── Settings Panel ── */
-#settings-panel{position:fixed;top:60px;left:16px;width:256px;max-height:calc(100vh - 250px);overflow-y:auto;z-index:190;border-radius:14px;opacity:0;transform:translateY(-6px) scale(.98);pointer-events:none;}
+#settings-panel{position:fixed;top:60px;left:16px;width:256px;max-height:calc(100vh - 250px);overflow-y:auto;z-index:190;border-radius:var(--p-radius);opacity:0;transform:translateY(-6px) scale(.98);pointer-events:none;}
 #settings-panel::-webkit-scrollbar{width:3px;}
 #settings-panel::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:2px;}
 .sp-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 6px;}
@@ -130,7 +186,7 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
     min-height: 60px;
     max-height: calc(100vh - 100px); /* ★これを追加（画面の高さから100px引いた長さを限界にする） */
     z-index: 190;
-    border-radius: 14px;
+    border-radius: var(--p-radius);
     display: flex;
     flex-direction: column;
     resize: both;
@@ -152,21 +208,19 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
     grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
     grid-auto-rows: min-content;
     gap: 6px;
-    background: rgba(255, 255, 255, 0.72);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border-radius: 0 0 14px 14px;
+    background: transparent;
+    border-radius: 0 0 var(--p-radius) var(--p-radius);
 }
 #valveMatrixContent::-webkit-scrollbar{width:3px;}
 #valveMatrixContent::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.1);border-radius:2px;}
 .matrix-item {
-  background: #ffffff;
+  background: var(--p-surface);
   border: none;
   border-radius: 10px;
   padding: 8px 4px;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0,0,0,0.02);
-  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 0 0 1px var(--p-border);
+  transition: transform 0.2s var(--p-ease), box-shadow 0.2s var(--p-ease);
 }
 .matrix-item:hover {
   transform: translateY(-2px);
@@ -181,7 +235,7 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 .matrix-empty{font-size:11px;color:var(--text-3);text-align:center;grid-column:1/-1;padding:14px 0;}
 
 /* ── Minimap ── */
-#minimap-container{position:fixed;bottom:72px;left:16px;z-index:190;border-radius:12px;overflow:hidden;cursor:default;}
+#minimap-container{position:fixed;bottom:72px;left:16px;z-index:190;border-radius:var(--p-radius);overflow:hidden;cursor:default;}
 #minimap-header{font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--text-3);padding:6px 10px 3px;text-transform:uppercase;display:flex;align-items:center;gap:6px;cursor:grab;touch-action:none;border-bottom:1px solid rgba(0,0,0,0.06);}
 #minimap-header:active{cursor:grabbing;}
 
@@ -906,6 +960,7 @@ g.node[data-active="1"] {
     </div>
     <label class="sp-toggle"><input type="checkbox" id="toggleAutoElbow"><span>エルボー自動挿入</span></label>
     <label class="sp-toggle"><input type="checkbox" id="toggleSealedAnim" checked><span>密閉・不確定表示</span></label>
+    <label class="sp-toggle"><input type="checkbox" id="toggleDarkChrome"><span>ダークモード（パネル）</span></label>
   </div>
 
   <div class="sp-section">
@@ -2095,6 +2150,41 @@ const Minimap={
   panTo:(mx,my)=>{const c=Minimap.canvas,W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;const svgX=Math.max(0,Math.min((mx-ox)/ms,Store.config.baseWidth)),svgY=Math.max(0,Math.min((my-oy)/ms,Store.config.baseHeight));Renderer.centerOnSvg(svgX,svgY);}
 };
 
+/* ━━━━━━━━ PALETTE FX (フローティングパレット共通: 位置永続化・前面化・ダーク・最小化記憶) ━━━━━━━━ */
+// すべて軽量（イベントは pointerdown/up・resize のみ、毎フレーム処理なし）。
+const PaletteFX = {
+  IDS: ['settings-panel','floating-matrix','minimap-container','image-viewer'],
+  POS_KEY:'steamboy_palette_pos', MIN_KEY:'steamboy_palette_min', THEME_KEY:'steamboy_theme',
+  _z: 191,
+  _readJSON:(k)=>{try{return JSON.parse(localStorage.getItem(k)||'{}');}catch(_){return {};}},
+  savePos:(id,el)=>{const all=PaletteFX._readJSON(PaletteFX.POS_KEY);all[id]={left:el.style.left,top:el.style.top,width:el.style.width||'',height:el.style.height||''};try{localStorage.setItem(PaletteFX.POS_KEY,JSON.stringify(all));}catch(_){}},
+  saveMin:()=>{const all={};PaletteFX.IDS.forEach(id=>{const el=document.getElementById(id);if(el)all[id]=el.classList.contains('minimized');});try{localStorage.setItem(PaletteFX.MIN_KEY,JSON.stringify(all));}catch(_){}},
+  restore:()=>{
+    const pos=PaletteFX._readJSON(PaletteFX.POS_KEY),min=PaletteFX._readJSON(PaletteFX.MIN_KEY);
+    PaletteFX.IDS.forEach(id=>{const el=document.getElementById(id);if(!el)return;const p=pos[id];
+      if(p&&p.left){el.style.left=p.left;el.style.top=p.top;el.style.right='auto';el.style.bottom='auto';if(p.width)el.style.width=p.width;if(p.height)el.style.height=p.height;}
+      if(min[id])el.classList.add('minimized');});
+    requestAnimationFrame(PaletteFX.clampAll);
+  },
+  clampAll:()=>{PaletteFX.IDS.forEach(id=>{const el=document.getElementById(id);if(!el||!el.style.left)return;const w=el.offsetWidth,h=el.offsetHeight,vw=innerWidth,vh=innerHeight;el.style.left=Math.max(8,Math.min(parseFloat(el.style.left)||16,Math.max(8,vw-w-8)))+'px';el.style.top=Math.max(8,Math.min(parseFloat(el.style.top)||16,Math.max(8,vh-h-8)))+'px';});},
+  raise:(el)=>{if(el)el.style.zIndex=(++PaletteFX._z);},
+  applyTheme:(dark)=>{
+    document.documentElement.setAttribute('data-theme',dark?'dark':'light');
+    try{localStorage.setItem(PaletteFX.THEME_KEY,dark?'dark':'light');}catch(_){}
+    const cb=document.getElementById('toggleDarkChrome');if(cb)cb.checked=dark;
+    const tc=document.querySelector('meta[name=theme-color]');if(tc)tc.setAttribute('content',dark?'#1a1a1e':'#E5E5EA');
+  },
+  init:()=>{
+    let saved=null;try{saved=localStorage.getItem(PaletteFX.THEME_KEY);}catch(_){}
+    PaletteFX.applyTheme(saved==='dark');   // 既定は明色（図面の判読性を優先。チロムのみ任意でダーク）
+    const cb=document.getElementById('toggleDarkChrome');
+    if(cb)cb.addEventListener('change',()=>PaletteFX.applyTheme(cb.checked));
+    PaletteFX.restore();
+    PaletteFX.IDS.forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('pointerdown',()=>PaletteFX.raise(el),true);});
+    let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(PaletteFX.clampAll,150);});
+  }
+};
+
 /* ━━━━━━━━ CULLING (Epic 7: Viewport Culling — 画面外アニメーション停止) ━━━━━━━━ */
 const Culling={
   _timer:null,
@@ -2993,13 +3083,15 @@ const Controller={
     document.getElementById('minimap-header').addEventListener('pointerdown',ev=>{if(ev.target.closest('button'))return;const m=document.getElementById('minimap-container');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,targetId:'minimap-container'};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
     document.getElementById('settings-header').addEventListener('pointerdown',ev=>{if(ev.target.closest('button'))return;const m=document.getElementById('settings-panel');Store.matrixDrag={isDragging:true,pointerId:ev.pointerId,offsetX:ev.clientX-m.offsetLeft,offsetY:ev.clientY-m.offsetTop,targetId:'settings-panel'};try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}});
 
-    // ▼最小化ボタンのクリック処理
+    // ▼最小化ボタンのクリック処理（状態は localStorage に記憶）
     document.querySelectorAll('.panel-minimize-btn').forEach(btn => {
       btn.addEventListener('click', (ev) => {
         const panel = ev.target.closest('.glass');
-        if(panel) panel.classList.toggle('minimized');
+        if(panel){ panel.classList.toggle('minimized'); if(typeof PaletteFX!=='undefined')PaletteFX.saveMin(); }
       });
     });
+    // フローティングパレット共通挙動（位置永続化・前面化・ダーク・最小化記憶）
+    if(typeof PaletteFX!=='undefined')PaletteFX.init();
 
     // Epic 5: rAFラッパーで 1フレーム 1回に限定。1000Hzマウスでも 60fpsと完全同期したドラッグ体験を実現。
     let _pendingPointerEv=null,_rafPending=false;
@@ -3172,7 +3264,17 @@ const Controller={
     if(Store.matrixDrag.isDragging){
       const tid = Store.matrixDrag.targetId || (Store.matrixDrag.isMap ? 'minimap-container' : 'floating-matrix');
       const m=$id(tid); // 最適化3: ドラッグ中の毎フレーム getElementById をメモ化キャッシュに置換
-      if(m){m.style.left=(ev.clientX-Store.matrixDrag.offsetX)+'px';m.style.top=(ev.clientY-Store.matrixDrag.offsetY)+'px';m.style.right='auto';m.style.bottom='auto';}
+      if(m){
+        if(!m.classList.contains('palette-dragging'))m.classList.add('palette-dragging');
+        // B5: 画面端へのエッジスナップ（16pxガター, 12px以内で吸着）＋画面内クランプ
+        let nx=ev.clientX-Store.matrixDrag.offsetX, ny=ev.clientY-Store.matrixDrag.offsetY;
+        const w=m.offsetWidth,h=m.offsetHeight,vw=window.innerWidth,vh=window.innerHeight,G=16,SNAP=12;
+        if(Math.abs(nx-G)<SNAP)nx=G; else if(Math.abs((vw-w-G)-nx)<SNAP)nx=vw-w-G;
+        if(Math.abs(ny-G)<SNAP)ny=G; else if(Math.abs((vh-h-G)-ny)<SNAP)ny=vh-h-G;
+        nx=Math.max(8,Math.min(nx,Math.max(8,vw-w-8)));
+        ny=Math.max(8,Math.min(ny,Math.max(8,vh-h-8)));
+        m.style.left=nx+'px';m.style.top=ny+'px';m.style.right='auto';m.style.bottom='auto';
+      }
     }
     if(Store.multiDrag.active&&ev.pointerId===Store.multiDrag.pointerId){const _mdx=ev.clientX-Store.multiDrag.startClientX,_mdy=ev.clientY-Store.multiDrag.startClientY,moved=Math.sqrt(_mdx*_mdx+_mdy*_mdy);if(!Store.multiDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.multiDrag.hasDragged=true;if(!Store.multiDrag.preSnapshot)Store.multiDrag.preSnapshot=Store.snapshot();}if(Store.multiDrag.hasDragged){const coords=Renderer.getMouseSvgCoords(ev),dx=coords.x-Store.multiDrag.startSvgX,dy=coords.y-Store.multiDrag.startSvgY;Store.multiDrag.nodes.forEach(item=>{item.node.x=item.startX+dx;item.node.y=item.startY+dy;const gEl=Renderer.nodesGroup.querySelector(`[data-id="${item.node.id}"]`);if(gEl)Renderer.updateNodeLive(item.node,gEl);});}}
     if(Store.dragState.isDragging&&Store.dragState.targetNode&&ev.pointerId===Store.dragState.pointerId){const _ddx=ev.clientX-Store.dragState.startClientX,_ddy=ev.clientY-Store.dragState.startClientY,moved=Math.sqrt(_ddx*_ddx+_ddy*_ddy);if(!Store.dragState.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.dragState.hasDragged=true;if(!Store.dragState.preSnapshot)Store.dragState.preSnapshot=Store.snapshot();}if(Store.dragState.hasDragged&&!Store.config.isConnectMode){const raw=Renderer.getMouseSvgCoords(ev),sn=Controller.applySnap(raw.x-Store.dragState.offsetX,raw.y-Store.dragState.offsetY,Store.dragState.targetNode.id);Store.dragState.targetNode.x=sn.x;Store.dragState.targetNode.y=sn.y;Renderer.updateNodeLive(Store.dragState.targetNode,Store.dragState.gEl);Renderer.showSnapGuides(sn.gX,sn.gY);}}
@@ -3183,7 +3285,11 @@ const Controller={
   },
 
   handleGlobalPointerUp:(ev)=>{
-    if(Store.matrixDrag.isDragging)Store.matrixDrag.isDragging=false;
+    if(Store.matrixDrag.isDragging){
+      Store.matrixDrag.isDragging=false;
+      const _tid=Store.matrixDrag.targetId||'floating-matrix',_pm=$id(_tid);
+      if(_pm){_pm.classList.remove('palette-dragging');if(typeof PaletteFX!=='undefined')PaletteFX.savePos(_tid,_pm);}
+    }
     if(Store.multiDrag.active&&ev.pointerId===Store.multiDrag.pointerId){
       try{if(Store.multiDrag.gEl?.hasPointerCapture(ev.pointerId))Store.multiDrag.gEl.releasePointerCapture(ev.pointerId);}catch(_){}
       if(Store.multiDrag.hasDragged&&Store.multiDrag.preSnapshot)Store.pushSnapshot(Store.multiDrag.preSnapshot);

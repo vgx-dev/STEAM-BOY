@@ -3948,17 +3948,15 @@ const OperationManual = {
   openForTarget: (nodeId) => {
     const existing = Store.manuals.find(mn => mn.targetId === nodeId);
     if (existing) { OperationManual.openSaved(existing); return; }
+    // 未保存ドラフトとして開く（手順を入れずに閉じれば保存しない＝空マニュアルを残さない）
     const nm = buildNameMap();
     const name = nm.get(nodeId) || (Store.getNode(nodeId) ? Store.getNode(nodeId).type : '');
-    const manual = {
-      id: Store.generateId(), targetId: nodeId,
-      name: `${name} 操作マニュアル`.trim(), targetName: name,
-      createdAt: Date.now(), updatedAt: Date.now(),
-      columnOpts: { ...OperationManual._opts }, steps: { iso: [], res: [] }
-    };
-    Store.manuals.push(manual);
-    Persistence.scheduleSave();
-    OperationManual.openSaved(manual);
+    OperationManual._data = { targetName: name };
+    OperationManual._manualId = null;
+    OperationManual._targetId = nodeId;
+    OperationManual._meta = { name: `${name} 操作マニュアル`.trim(), targetName: name, createdAt: Date.now() };
+    OperationManual._steps = { iso: [], res: [] };
+    OperationManual._show();
   },
   // 保存済みマニュアルを開く（再計算しない＝編集が保持される）
   openSaved: (manual) => {
@@ -4019,8 +4017,8 @@ const OperationManual = {
         document.body.style.setProperty('--manual-w', w + 'px');
       }
     };
-    const onUp = () => { dragging = false; document.body.classList.remove('opm-resizing'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); if (Renderer && Renderer.updateZoom) Renderer.updateZoom(); };
-    h.addEventListener('pointerdown', (e) => { e.preventDefault(); dragging = true; document.body.classList.add('opm-resizing'); window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); });
+    const onUp = () => { dragging = false; document.body.classList.remove('opm-resizing'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); if (Renderer && Renderer.updateZoom) Renderer.updateZoom(); };
+    h.addEventListener('pointerdown', (e) => { e.preventDefault(); dragging = true; document.body.classList.add('opm-resizing'); window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp); });
   },
   // 編集中の入力値を手順データへ反映（再描画前に呼ぶ）
   _syncInputs: () => {
@@ -4184,8 +4182,8 @@ const OperationManual = {
     m.querySelector('#opm-x').onclick = OperationManual.close;
     m.querySelector('#opm-cancel').onclick = OperationManual.close;
     m.querySelector('#opm-save').onclick = () => OperationManual.save();
-    m.querySelector('#opm-pick').onclick = () => ManualPicker.start('iso');
-    m.querySelector('#opm-library').onclick = () => { OperationManual._syncInputs(); OperationManual._persistIfSaved(); OperationManual.close(); ManualLibrary.open(); };
+    m.querySelector('#opm-pick').onclick = () => ManualPicker.start(ManualPicker._phase || 'iso');
+    m.querySelector('#opm-library').onclick = () => { OperationManual._syncInputs(); OperationManual._autosaveIfContent(); OperationManual.close(); ManualLibrary.open(); };
     m.querySelector('#opm-print').onclick = () => { OperationManual._syncInputs(); window.print(); };
     m.querySelector('#opm-pdf').onclick = () => {
       OperationManual._syncInputs();
@@ -4375,14 +4373,15 @@ const OperationManual = {
     OperationManual._render();
     Toast.show(`マニュアル「${manual.name}」を保存しました`);
   },
-  // 保存済みマニュアルを開いている場合は、編集内容を黙って反映（閉じる/ライブラリ遷移時）
-  _persistIfSaved: () => {
-    if (!OperationManual._manualId) return;
-    OperationManual._upsert(OperationManual._collect());
+  // 閉じる/ライブラリ遷移時の自動反映。既存は常に更新、未保存ドラフトは手順があるときだけ保存。
+  _autosaveIfContent: () => {
+    const hasContent = OperationManual._steps.iso.length || OperationManual._steps.res.length;
+    if (OperationManual._manualId) { OperationManual._upsert(OperationManual._collect()); }
+    else if (hasContent) { const mn = OperationManual._collect(); OperationManual._manualId = mn.id; OperationManual._upsert(mn); }
   },
   close: () => {
     OperationManual._syncInputs();
-    OperationManual._persistIfSaved();
+    OperationManual._autosaveIfContent();
     if (OperationManual._overlay) OperationManual._overlay.classList.remove('open');
     if (OperationManual._modal) OperationManual._modal.classList.remove('open');
     document.body.classList.remove('opm-active');
@@ -4484,11 +4483,13 @@ const ManualPicker = {
     if (!OperationManual._modal) return;
     OperationManual._syncInputs();
     ManualPicker._assignStepId = stepId;
+    ManualPicker._count = 0;
     ManualPicker.active = true;
     ManualPicker._showBanner(true);
     Renderer.svgLayer.classList.add('manual-picking');
   },
   assign: (node) => {
+    if (!ManualPicker._opTypes.includes(node.type)) { Toast.show('対象はバルブ・安全弁・ドレンから選んでください'); return; }
     const s = OperationManual._stepById(ManualPicker._assignStepId);
     if (s) {
       const nm = buildNameMap();
@@ -4540,6 +4541,7 @@ const ManualPicker = {
     if (ManualPicker._banner) { ManualPicker._banner.remove(); ManualPicker._banner = null; }
     OperationManual._show();   // 再描画して追加された手順を反映
     if (added) Toast.show(`${added}件の手順を図から追加しました`);
+    ManualPicker._count = 0;
   },
   _showBanner: (isAssign) => {
     if (ManualPicker._banner) ManualPicker._banner.remove();

@@ -1254,6 +1254,12 @@ g.node.iso-boundary{animation:isoBoundaryPulse 1.5s ease-in-out infinite;}
 #svg-layer.manual-picking g.node{cursor:crosshair;}
 .manual-picked-flash{animation:manualPickFlash .4s ease-out;}
 @keyframes manualPickFlash{0%{opacity:.3;}50%{opacity:1;}100%{opacity:1;}}
+/* 図⇄手順リンク：手順に対応する機器を図上で強調 */
+#svg-layer g.node.manual-link-hl{animation:manualLinkPulse 1.2s ease-in-out infinite;}
+@keyframes manualLinkPulse{0%,100%{filter:drop-shadow(0 0 2px rgba(0,122,255,.55));}50%{filter:drop-shadow(0 0 9px rgba(0,122,255,.95));}}
+.opm-table tbody tr.opm-row-selected{background:rgba(0,122,255,0.1)!important;box-shadow:inset 3px 0 0 var(--accent);}
+.opm-pick-target{margin-left:4px;padding:1px 5px;border:none;border-radius:6px;background:rgba(0,122,255,0.12);color:var(--accent);font-size:11px;cursor:pointer;vertical-align:middle;}
+.opm-pick-target:hover{background:rgba(0,122,255,0.22);}
 /* マニュアル・ワークスペース（左：生キャンバス／右：編集パネルの2分割） */
 body.manual-workspace #op-manual-overlay{display:none!important;}
 body.manual-workspace #op-manual-modal{top:0;right:0;left:auto;bottom:0;width:var(--manual-w,46vw);max-width:none;max-height:none;height:100vh;transform:none!important;border-radius:0;box-shadow:-8px 0 28px rgba(0,0,0,0.14);}
@@ -3167,10 +3173,10 @@ const Controller={
   handleCanvasPointerDown:(ev)=>{
     if(ev.button&&ev.button!==0)return;
 
-    // マニュアル「図から選択」モード: ノードクリックを手順追加として横取り
+    // マニュアル「図から選択／対象指定」モード: ノードクリックを横取り
     if(ManualPicker.active){
       const ng=ev.target.closest('g.node');
-      if(ng){const n=Store.getNode(ng.getAttribute('data-id'));if(n)ManualPicker.pick(n);}
+      if(ng){const n=Store.getNode(ng.getAttribute('data-id'));if(n){ if(ManualPicker._assignStepId)ManualPicker.assign(n); else ManualPicker.pick(n); }}
       return;
     }
 
@@ -3912,6 +3918,7 @@ const OperationManual = {
   _modal: null, _overlay: null, _data: null,
   _manualId: null,                 // 保存済みマニュアルのID（null=未保存の下書き）
   _targetId: null,                 // 対象機器のノードID（対象につき1冊の紐付けキー）
+  _selectedStepId: null,           // 図⇄手順リンクで選択中の手順ID
   _meta: null,                     // { name, targetName, createdAt }
   _steps: { iso: [], res: [] },
   _opts: { showState: true, showTag: true, showGauge: true },   // 列8(現在の状態)/列9(タグ番号)/計器値列。既定で表示
@@ -4088,7 +4095,7 @@ const OperationManual = {
       let targetCell;
       if (s.editable) {
         targetCell = isValve
-          ? `<select class="opm-target-sel" data-id="${s.id}">${targetOptions(s.node ? s.node.id : '')}</select>`
+          ? `<select class="opm-target-sel" data-id="${s.id}">${targetOptions(s.node ? s.node.id : '')}</select><button class="opm-pick-target opm-no-print" data-id="${s.id}" title="図で対象を選ぶ">🎯</button>`
           : `<input type="text" class="opm-targettext-input" data-id="${s.id}" value="${esc(s.targetText || '')}" placeholder="${esc(K.ph || '対象...')}">`;
       } else {
         targetCell = s.node ? esc(s.node.name) : (s.targetText ? esc(s.targetText) : '<span class="opm-check-tgt">全系統</span>');
@@ -4210,6 +4217,17 @@ const OperationManual = {
     });
 
     OperationManual._attachDnD();
+
+    // 図⇄手順リンク：行ホバーで対象を図上強調、クリックで選択＋オートパン
+    m.querySelectorAll('.opm-table tbody tr').forEach(tr => {
+      tr.addEventListener('mouseenter', () => { const s = OperationManual._stepById(tr.dataset.id); if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, false); });
+      tr.addEventListener('mouseleave', () => { if (!OperationManual._selectedStepId) OperationManual._clearCanvasFocus(); else { const s = OperationManual._stepById(OperationManual._selectedStepId); if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, false); } });
+      tr.addEventListener('click', (e) => { if (e.target.closest('input,select,button,textarea,a')) return; OperationManual._selectStep(tr.dataset.id); });
+    });
+    // 🎯 選択手順の対象を図から指定
+    m.querySelectorAll('.opm-pick-target').forEach(b => b.onclick = (e) => { e.stopPropagation(); ManualPicker.startAssign(b.dataset.id); });
+    // 選択状態の見た目を復元
+    if (OperationManual._selectedStepId) { const tr = m.querySelector(`.opm-table tbody tr[data-id="${OperationManual._selectedStepId}"]`); if (tr) tr.classList.add('opm-row-selected'); }
   },
   _toggleAddMenu: (phase, btn) => {
     const menu = OperationManual._modal.querySelector(`.opm-add-menu[data-phase="${phase}"]`);
@@ -4298,6 +4316,34 @@ const OperationManual = {
     Sequencer.stepTo(0);
     Toast.show(`操作マニュアルをシーケンサにインポートしました（${steps.length}手順）`);
   },
+  // ───── 図⇄手順リンク ─────
+  _stepById: (id) => [...OperationManual._steps.iso, ...OperationManual._steps.res].find(s => s.id === id),
+  _clearCanvasFocus: () => { document.querySelectorAll('#svg-layer .manual-link-hl').forEach(el => el.classList.remove('manual-link-hl')); },
+  _focusNodeOnCanvas: (nodeId, pan) => {
+    OperationManual._clearCanvasFocus();
+    const node = Store.getNode(nodeId);
+    if (!node) return;
+    const g = document.getElementById(`node-grp-${nodeId}`);
+    if (g) g.classList.add('manual-link-hl');
+    if (!pan) return;
+    // 画面外ならビュー中心へオートパン
+    const ws = document.getElementById('workspace'); if (!ws) return;
+    const z = Store.config.currentZoom;
+    const x1 = ws.scrollLeft / z, y1 = ws.scrollTop / z, x2 = (ws.scrollLeft + ws.clientWidth) / z, y2 = (ws.scrollTop + ws.clientHeight) / z;
+    const margin = 40;
+    if (node.x < x1 + margin || node.x > x2 - margin || node.y < y1 + margin || node.y > y2 - margin) {
+      ws.scrollLeft = node.x * z - ws.clientWidth / 2;
+      ws.scrollTop = node.y * z - ws.clientHeight / 2;
+      if (typeof Minimap !== 'undefined' && Minimap.draw) Minimap.draw();
+    }
+  },
+  _selectStep: (id) => {
+    OperationManual._selectedStepId = id;
+    const m = OperationManual._modal; if (m) m.querySelectorAll('.opm-table tbody tr').forEach(tr => tr.classList.toggle('opm-row-selected', tr.dataset.id === id));
+    const s = OperationManual._stepById(id);
+    if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, true);
+    else OperationManual._clearCanvasFocus();
+  },
   // 現在の編集内容を保存用オブジェクトにまとめる
   _collect: () => ({
     id: OperationManual._manualId || Store.generateId(),
@@ -4341,6 +4387,8 @@ const OperationManual = {
     if (OperationManual._modal) OperationManual._modal.classList.remove('open');
     document.body.classList.remove('opm-active');
     document.body.classList.remove('manual-workspace');
+    OperationManual._selectedStepId = null;
+    OperationManual._clearCanvasFocus();
     if (typeof Renderer !== 'undefined' && Renderer.updateZoom) Renderer.updateZoom();
     OperationManual._data = null;
   }
@@ -4429,8 +4477,30 @@ const ManualLibrary = {
 
 /* ━━━━━━━━ MANUAL PICKER (キャンバスから直接バルブ/機器を手順に追加) ━━━━━━━━ */
 const ManualPicker = {
-  active: false, _phase: 'iso', _count: 0, _banner: null,
+  active: false, _phase: 'iso', _count: 0, _banner: null, _assignStepId: null,
   _opTypes: [NODE_TYPE.VALVE, NODE_TYPE.SAFETY, NODE_TYPE.DRAIN],
+  // 選択中の手順の対象を図から指定するモード
+  startAssign: (stepId) => {
+    if (!OperationManual._modal) return;
+    OperationManual._syncInputs();
+    ManualPicker._assignStepId = stepId;
+    ManualPicker.active = true;
+    ManualPicker._showBanner(true);
+    Renderer.svgLayer.classList.add('manual-picking');
+  },
+  assign: (node) => {
+    const s = OperationManual._stepById(ManualPicker._assignStepId);
+    if (s) {
+      const nm = buildNameMap();
+      s.node = { id: node.id, name: nm.get(node.id) || node.type, type: node.type, state: node.state.valveState };
+      s.fromState = node.state.valveState;
+      if (!s.tag && node.ext && node.ext.tagNo) s.tag = node.ext.tagNo;
+    }
+    const g = document.getElementById(`node-grp-${node.id}`);
+    if (g) { g.classList.add('manual-picked-flash'); setTimeout(() => g.classList.remove('manual-picked-flash'), 400); }
+    ManualPicker._assignStepId = null;
+    ManualPicker.finish();
+  },
   start: (phase = 'iso') => {
     if (!OperationManual._modal) return;
     OperationManual._syncInputs();              // 編集中の入力を保持
@@ -4463,32 +4533,41 @@ const ManualPicker = {
     if (g) { g.classList.add('manual-picked-flash'); setTimeout(() => g.classList.remove('manual-picked-flash'), 400); }
   },
   finish: () => {
+    const added = ManualPicker._count;
     ManualPicker.active = false;
+    ManualPicker._assignStepId = null;
     Renderer.svgLayer.classList.remove('manual-picking');
     if (ManualPicker._banner) { ManualPicker._banner.remove(); ManualPicker._banner = null; }
     OperationManual._show();   // 再描画して追加された手順を反映
-    if (ManualPicker._count) Toast.show(`${ManualPicker._count}件の手順を図から追加しました`);
+    if (added) Toast.show(`${added}件の手順を図から追加しました`);
   },
-  _showBanner: () => {
+  _showBanner: (isAssign) => {
     if (ManualPicker._banner) ManualPicker._banner.remove();
     const b = document.createElement('div');
     b.id = 'manual-pick-banner'; b.className = 'glass';
-    b.innerHTML = `
-      <span class="mpick-ico">🖱</span>
-      <span class="mpick-msg">図のバルブ・機器をクリックして手順に追加</span>
-      <label class="mpick-phase">追加先:
-        <select id="mpick-phase-sel">
-          <option value="iso">🔒 隔離フェーズ</option>
-          <option value="res">🔓 復旧フェーズ</option>
-        </select>
-      </label>
-      <span class="mpick-count" id="mpick-count">0 件追加</span>
-      <button class="opm-btn primary" id="mpick-done">完了</button>`;
+    b.innerHTML = isAssign
+      ? `<span class="mpick-ico">🎯</span>
+         <span class="mpick-msg">対象にする機器を図でクリックしてください</span>
+         <button class="opm-btn ghost" id="mpick-cancel">キャンセル</button>`
+      : `<span class="mpick-ico">🖱</span>
+         <span class="mpick-msg">図のバルブ・機器をクリックして手順に追加</span>
+         <label class="mpick-phase">追加先:
+           <select id="mpick-phase-sel">
+             <option value="iso">🔒 隔離フェーズ</option>
+             <option value="res">🔓 復旧フェーズ</option>
+           </select>
+         </label>
+         <span class="mpick-count" id="mpick-count">0 件追加</span>
+         <button class="opm-btn primary" id="mpick-done">完了</button>`;
     document.body.appendChild(b);
     ManualPicker._banner = b;
-    b.querySelector('#mpick-phase-sel').value = ManualPicker._phase;
-    b.querySelector('#mpick-phase-sel').onchange = (e) => { ManualPicker._phase = e.target.value; };
-    b.querySelector('#mpick-done').onclick = ManualPicker.finish;
+    if (isAssign) {
+      b.querySelector('#mpick-cancel').onclick = () => { ManualPicker._assignStepId = null; ManualPicker.finish(); };
+    } else {
+      b.querySelector('#mpick-phase-sel').value = ManualPicker._phase;
+      b.querySelector('#mpick-phase-sel').onchange = (e) => { ManualPicker._phase = e.target.value; };
+      b.querySelector('#mpick-done').onclick = ManualPicker.finish;
+    }
   },
   _updateBanner: (lastName) => {
     if (!ManualPicker._banner) return;

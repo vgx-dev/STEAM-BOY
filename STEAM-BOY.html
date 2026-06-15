@@ -1242,8 +1242,9 @@ body.master-workspace #mt-resize-handle{display:block;}
 .opm-po-grid .opm-field{min-width:96px;}
 .opm-po-controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
 .opm-body{padding:0 20px 16px;overflow-y:auto;min-height:0;}
-.opm-phase{font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 8px;padding:6px 12px;background:rgba(0,122,255,0.06);border-radius:8px;display:flex;align-items:center;gap:6px;}
-.opm-phase.restore{color:var(--green);background:rgba(52,199,89,0.06);}
+/* フェーズは色で識別：隔離=橙（注意）/ 復旧=緑。図上の手順番号バッジ色と一致 */
+.opm-phase{font-size:12px;font-weight:700;color:#b3650a;margin:16px 0 8px;padding:6px 12px;background:rgba(255,149,0,0.08);border-radius:8px;display:flex;align-items:center;gap:6px;border-left:3px solid var(--orange);}
+.opm-phase.restore{color:#1f8a3b;background:rgba(52,199,89,0.08);border-left-color:var(--green);}
 .opm-table{width:100%;border-collapse:collapse;font-size:12px;}
 .opm-table th{text-align:left;font-size:10px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;padding:7px 7px;border-bottom:1.5px solid rgba(0,0,0,0.12);white-space:nowrap;position:sticky;top:0;z-index:1;background:var(--p-header-bg);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
 .opm-table td{padding:8px 7px;border-bottom:1px solid rgba(0,0,0,0.05);vertical-align:middle;}
@@ -1436,6 +1437,11 @@ body.master-workspace #mt-resize-handle{display:block;}
 .opm-help-pop ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
 .opm-help-pop li{font-size:11.5px;color:var(--text-2);line-height:1.5;}
 .opm-help-pop kbd{display:inline-block;padding:1px 6px;border:1px solid rgba(0,0,0,0.18);border-bottom-width:2px;border-radius:5px;background:#f7f7f8;font-size:10.5px;font-family:var(--font);color:var(--text-1);}
+/* B-5 状態プレビュー: ボタンアクティブ＋バナー */
+.opm-btn.info.active{background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(0,122,255,0.3);}
+#opm-preview-banner{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:610;display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:100px;font-size:13px;font-weight:600;color:var(--text-1);cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,0.18);}
+#opm-preview-banner .opb-ico{font-size:15px;}
+#opm-preview-banner .opb-exit{padding:3px 12px;border:none;border-radius:100px;background:var(--accent);color:#fff;font-size:12px;font-weight:700;font-family:var(--font);cursor:pointer;}
 .opm-pick-target{margin-left:4px;padding:1px 5px;border:none;border-radius:6px;background:rgba(0,122,255,0.12);color:var(--accent);font-size:11px;cursor:pointer;vertical-align:middle;}
 .opm-pick-target:hover{background:rgba(0,122,255,0.22);}
 /* マニュアル・ワークスペース（左：生キャンバス／右：編集パネルの2分割） */
@@ -4170,11 +4176,13 @@ const Persistence = {
   enableAutosave: () => { Persistence._loaded = true; },
   scheduleSave: () => {
     if (!Persistence._loaded) return;
+    if (Store._previewLock) return;   // B-5 状態プレビュー中は一時的な弁状態を保存しない
     if (Persistence._timer) clearTimeout(Persistence._timer);
     Persistence._timer = setTimeout(Persistence._write, 1200);
   },
   _write: () => {
     Persistence._timer = null;
+    if (Store._previewLock) return;   // B-5 状態プレビュー中は保存抑止（プロジェクト破壊防止）
     // 自動保存OFF時はlocalStorageへ書き込まない＝マスターJSONを保持し、リロードで操作を破棄
     if (!Store.config.autosaveEnabled) return;
     try { localStorage.setItem(Persistence.KEY, JSON.stringify(Persistence.snapshot())); } catch (_) {}
@@ -4381,6 +4389,9 @@ const OperationManual = {
   _selectedStepId: null,           // 図⇄手順リンクで選択中の手順ID
   _multiSel: new Set(),            // A-1 複数選択中の手順ID
   _selAnchor: null,                // A-1 範囲選択の起点
+  _previewMode: false,             // D-10 帳票プレビュー
+  _statePreview: false,            // B-5 状態プレビュー（弁状態を一時適用）
+  _statePreviewSnap: null,         // B-5 復元用スナップショット
   _autosaveTimer: null,            // 入力デバウンス autosave 用
   _savedAt: null,                  // 最終保存時刻（ステータス表示用）
   _meta: null,                     // { name, targetName, createdAt }
@@ -4864,6 +4875,7 @@ const OperationManual = {
         </div>
         <span class="opm-foot-sep"></span>
         <button class="opm-btn info" id="opm-pick" title="図のバルブ・機器をクリックして追加">🖱 図から選択</button>
+        <button class="opm-btn info${OperationManual._statePreview ? ' active' : ''}" id="opm-state-preview" title="ONにして手順をクリックすると、その手順まで実行した弁状態を図に反映（編集は保存されません）">🎬 状態プレビュー</button>
         <span class="opm-foot-sep"></span>
         <div class="opm-foot-grp" title="出力">
           <button class="opm-btn ghost" id="opm-preview" title="印刷時の見た目をその場で確認">👁 プレビュー</button>
@@ -4884,6 +4896,7 @@ const OperationManual = {
     m.querySelector('#opm-x').onclick = OperationManual.close;
     { const hb = m.querySelector('#opm-help'), hp = m.querySelector('#opm-help-pop'); if (hb && hp) hb.onclick = () => { hp.style.display = hp.style.display === 'none' ? 'block' : 'none'; }; }
     { const pv = m.querySelector('#opm-preview'); if (pv) { pv.classList.toggle('active', !!OperationManual._previewMode); pv.onclick = () => { OperationManual._syncInputs(); OperationManual._previewMode = !OperationManual._previewMode; OperationManual._render(); }; } }
+    { const sp = m.querySelector('#opm-state-preview'); if (sp) sp.onclick = () => OperationManual._toggleStatePreview(); }
     m.querySelector('#opm-split').onclick = OperationManual._toggleSplit;
     m.querySelector('#opm-pdf-open').onclick = OperationManual._openPdf;
     m.querySelector('#opm-cancel').onclick = OperationManual.close;
@@ -5271,6 +5284,7 @@ const OperationManual = {
     const s = OperationManual._stepById(id);
     if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, true);
     else OperationManual._clearCanvasFocus();
+    if (OperationManual._statePreview) OperationManual._applyStatePreview(id);   // B-5
   },
   // B-6: バルブ手順を上流→下流（Sourceからのグラフ距離）順に並べ替え。
   // 見出し・確認・連絡などの非バルブ行はスロット位置を保持し、バルブ行同士だけを経路順に再配置。
@@ -5346,6 +5360,55 @@ const OperationManual = {
     OperationManual._steps[other] = OperationManual._steps[other].filter(s => !OperationManual._multiSel.has(s.id));
     OperationManual._steps[target] = OperationManual._steps[target].concat(moving);
   }),
+  // ───── B-5 状態プレビュー（手順まで実行した弁状態を図に一時反映。保存はロックして破壊防止） ─────
+  _toggleStatePreview: () => {
+    if (OperationManual._statePreview) { OperationManual._endStatePreview(); return; }
+    OperationManual._syncInputs();
+    // 全ノードの弁状態をスナップショット＋保存ロック
+    const snap = new Map();
+    Store.nodes.forEach(n => { if (n.state && n.state.valveState != null) snap.set(n.id, n.state.valveState); });
+    OperationManual._statePreviewSnap = snap;
+    Store._previewLock = true;
+    OperationManual._statePreview = true;
+    OperationManual._applyStatePreview(OperationManual._selectedStepId);
+    OperationManual._render();
+    Toast.show('状態プレビュー: 手順をクリックするとその時点の弁状態を表示します');
+  },
+  _endStatePreview: () => {
+    if (!OperationManual._statePreview) return;
+    const snap = OperationManual._statePreviewSnap;
+    if (snap) snap.forEach((v, id) => { const n = Store.getNode(id); if (n && n.state) n.state.valveState = v; });
+    OperationManual._statePreview = false; OperationManual._statePreviewSnap = null;
+    Store._previewLock = false;
+    OperationManual._setPreviewBanner(null);
+    Simulator.run(() => Renderer.renderAll());
+    OperationManual._render();
+  },
+  _applyStatePreview: (uptoId) => {
+    if (!OperationManual._statePreview) return;
+    const snap = OperationManual._statePreviewSnap;
+    if (snap) snap.forEach((v, id) => { const n = Store.getNode(id); if (n && n.state) n.state.valveState = v; });
+    const seq = [...OperationManual._steps.iso, ...OperationManual._steps.res];
+    // ベース＝各バルブの作業前状態(fromState)
+    seq.forEach(s => { if (s.kind === 'valve' && s.node && s.fromState != null) { const n = Store.getNode(s.node.id); if (n && n.state) n.state.valveState = s.fromState; } });
+    // uptoId まで（含む）順に操作を適用。uptoId未指定/未発見なら全適用。
+    let count = 0, applied = 0, hit = !uptoId;
+    for (const s of seq) {
+      if (s.kind === 'section') continue;
+      count++;
+      if (s.kind === 'valve' && s.node && s.op != null) { const n = Store.getNode(s.node.id); if (n && n.state) n.state.valveState = s.op; }
+      if (s.id === uptoId) { applied = count; hit = true; break; }
+    }
+    Simulator.run(() => Renderer.renderAll());
+    OperationManual._setPreviewBanner(hit ? (uptoId ? applied : null) : null);
+  },
+  _setPreviewBanner: (stepNo) => {
+    let b = document.getElementById('opm-preview-banner');
+    if (!OperationManual._statePreview) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('div'); b.id = 'opm-preview-banner'; b.className = 'glass'; document.body.appendChild(b); b.onclick = () => OperationManual._endStatePreview(); }
+    b.innerHTML = `<span class="opb-ico">🎬</span><span>状態プレビュー${stepNo ? `：手順 ${stepNo} まで実行` : '（手順を選択）'}</span><button class="opb-exit">終了</button>`;
+    const ex = b.querySelector('.opb-exit'); if (ex) ex.onclick = (e) => { e.stopPropagation(); OperationManual._endStatePreview(); };
+  },
   // B-4: 図上に手順番号バッジを描画（隔離=オレンジ / 復旧=緑 で色分け。overlay-layer なのでズーム/パンに追従）
   _clearStepBadges: () => { const l = document.getElementById('opm-badge-layer'); if (l) l.remove(); },
   _drawStepBadges: () => {
@@ -5423,6 +5486,7 @@ const OperationManual = {
     else if (hasContent) { const mn = OperationManual._collect(); OperationManual._manualId = mn.id; OperationManual._upsert(mn); OperationManual._savedAt = Date.now(); }
   },
   close: () => {
+    if (OperationManual._statePreview) OperationManual._endStatePreview();   // B-5 復元してから閉じる
     OperationManual._syncInputs();
     OperationManual._autosaveIfContent();
     if (OperationManual._modal) OperationManual._modal.classList.remove('open');

@@ -1194,6 +1194,13 @@ g.node[data-active="1"] {
 .mlib-mini{padding:5px 10px;font-size:11px;font-weight:600;font-family:var(--font);border:none;border-radius:7px;background:rgba(0,0,0,0.06);color:var(--text-1);cursor:pointer;transition:background .15s;}
 .mlib-mini:hover{background:rgba(0,122,255,0.14);color:var(--accent);}
 .mlib-mini.danger:hover{background:rgba(255,59,48,0.14);color:var(--red);}
+/* ライブラリ内: インライン改名・削除確認（ネイティブ prompt/confirm を置換） */
+.mlib-rename-input{flex:1;min-width:0;font-family:var(--font);font-size:14px;font-weight:600;padding:5px 9px;border:1px solid var(--accent);border-radius:8px;background:#fff;color:var(--text-1);outline:none;}
+.mlib-mini.confirm{background:var(--accent);color:#fff;}
+.mlib-mini.confirm:hover{background:#0066d6;color:#fff;}
+.mlib-mini.danger.confirm{background:var(--red);color:#fff;}
+.mlib-mini.danger.confirm:hover{background:#d92c22;color:#fff;}
+.mlib-confirm-msg{font-size:11px;font-weight:700;color:var(--red);margin-right:2px;align-self:center;}
 .mlib-foot{padding:12px 20px 16px;display:flex;gap:10px;align-items:center;border-top:1px solid rgba(0,0,0,0.06);}
 /* マニュアル「図から選択」モード */
 #manual-pick-banner{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:650;display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:100px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,0.18);}
@@ -4521,6 +4528,8 @@ const OperationManual = {
 /* ━━━━━━━━ MANUAL LIBRARY (手動マニュアルの保存・再利用ライブラリ) ━━━━━━━━ */
 const ManualLibrary = {
   _overlay: null, _modal: null,
+  _editingId: null,        // インライン改名中のマニュアルID
+  _confirmDelId: null,     // インライン削除確認中のマニュアルID
   _esc: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
   _ensure: () => {
     if (ManualLibrary._modal) return;
@@ -4532,6 +4541,7 @@ const ManualLibrary = {
   },
   open: () => {
     ManualLibrary._ensure();
+    ManualLibrary._editingId = null; ManualLibrary._confirmDelId = null;
     ManualLibrary._render();
     ManualLibrary._overlay.classList.add('open');
     ManualLibrary._modal.classList.add('open');
@@ -4540,19 +4550,31 @@ const ManualLibrary = {
     const m = ManualLibrary._modal, esc = ManualLibrary._esc;
     const list = [...Store.manuals].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     const stepCount = mn => ((mn.steps && mn.steps.iso ? mn.steps.iso.length : 0) + (mn.steps && mn.steps.res ? mn.steps.res.length : 0));
-    const rows = list.length ? list.map(mn => `
-      <div class="mlib-item" data-id="${mn.id}">
-        <div class="mlib-item-main">
-          <div class="mlib-item-name">${esc(mn.name || '無題のマニュアル')}</div>
-          <div class="mlib-item-sub">${esc(mn.targetName || '対象未設定')} ・ ${stepCount(mn)}手順 ・ 更新 ${new Date(mn.updatedAt || mn.createdAt || Date.now()).toLocaleString()}</div>
-        </div>
-        <div class="mlib-item-acts">
-          <button class="mlib-mini" data-act="open" data-id="${mn.id}">開く</button>
-          <button class="mlib-mini" data-act="dup" data-id="${mn.id}">複製</button>
-          <button class="mlib-mini" data-act="rename" data-id="${mn.id}">改名</button>
-          <button class="mlib-mini danger" data-act="del" data-id="${mn.id}">削除</button>
-        </div>
-      </div>`).join('') : '<div class="mlib-empty">保存されたマニュアルはありません。<br>「＋ 白紙で新規作成」、または図で機器を右クリック →「この機器の操作マニュアル」から作成してください。</div>';
+    const rows = list.length ? list.map(mn => {
+      const editing = ManualLibrary._editingId === mn.id;
+      const confirming = ManualLibrary._confirmDelId === mn.id;
+      const main = editing
+        ? `<input type="text" class="mlib-rename-input" data-id="${mn.id}" value="${esc(mn.name || '')}" placeholder="マニュアル名">`
+        : `<div class="mlib-item-main">
+             <div class="mlib-item-name">${esc(mn.name || '無題のマニュアル')}</div>
+             <div class="mlib-item-sub">${esc(mn.targetName || '対象未設定')} ・ ${stepCount(mn)}手順 ・ 更新 ${new Date(mn.updatedAt || mn.createdAt || Date.now()).toLocaleString()}</div>
+           </div>`;
+      let acts;
+      if (editing) {
+        acts = `<button class="mlib-mini confirm" data-act="rename-ok" data-id="${mn.id}">✓ 保存</button>
+                <button class="mlib-mini" data-act="rename-cancel" data-id="${mn.id}">キャンセル</button>`;
+      } else if (confirming) {
+        acts = `<span class="mlib-confirm-msg">削除しますか？</span>
+                <button class="mlib-mini danger confirm" data-act="del-ok" data-id="${mn.id}">削除する</button>
+                <button class="mlib-mini" data-act="del-cancel" data-id="${mn.id}">キャンセル</button>`;
+      } else {
+        acts = `<button class="mlib-mini" data-act="open" data-id="${mn.id}">開く</button>
+                <button class="mlib-mini" data-act="dup" data-id="${mn.id}">複製</button>
+                <button class="mlib-mini" data-act="rename" data-id="${mn.id}">改名</button>
+                <button class="mlib-mini danger" data-act="del" data-id="${mn.id}">削除</button>`;
+      }
+      return `<div class="mlib-item" data-id="${mn.id}">${main}<div class="mlib-item-acts">${acts}</div></div>`;
+    }).join('') : '<div class="mlib-empty">保存されたマニュアルはありません。<br>「＋ 白紙で新規作成」、または図で機器を右クリック →「この機器の操作マニュアル」から作成してください。</div>';
 
     m.innerHTML = `
       <div class="mlib-head">
@@ -4571,29 +4593,45 @@ const ManualLibrary = {
     m.querySelector('#mlib-close').onclick = ManualLibrary.close;
     m.querySelector('#mlib-new').onclick = () => { ManualLibrary.close(); OperationManual.openBlank(); };
     m.querySelectorAll('.mlib-mini').forEach(b => b.onclick = () => ManualLibrary._action(b.dataset.act, b.dataset.id));
+    // インライン改名: 入力欄を自動フォーカス＆全選択／Enterで確定・Escでキャンセル
+    const ri = m.querySelector('.mlib-rename-input');
+    if (ri) {
+      ri.focus(); ri.select();
+      ri.onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); ManualLibrary._action('rename-ok', ri.dataset.id); }
+        else if (e.key === 'Escape') { e.preventDefault(); ManualLibrary._action('rename-cancel', ri.dataset.id); }
+      };
+    }
   },
   _action: (act, id) => {
     const mn = Store.manuals.find(x => x.id === id);
     if (!mn) return;
-    if (act === 'open') { ManualLibrary.close(); OperationManual.openSaved(mn); }
+    if (act === 'open') { ManualLibrary._editingId = null; ManualLibrary._confirmDelId = null; ManualLibrary.close(); OperationManual.openSaved(mn); }
     else if (act === 'dup') {
       const copy = JSON.parse(JSON.stringify(mn));
       copy.id = Store.generateId(); copy.name = `${mn.name || '無題'} のコピー`; copy.createdAt = Date.now(); copy.updatedAt = Date.now();
       Store.manuals.push(copy); Persistence.scheduleSave(); ManualLibrary._render();
     }
-    else if (act === 'rename') {
-      const n = prompt('新しいマニュアル名:', mn.name || '');
-      if (n != null) { mn.name = n.trim() || mn.name; mn.updatedAt = Date.now(); Persistence.scheduleSave(); ManualLibrary._render(); }
+    // ── インライン改名 ──
+    else if (act === 'rename') { ManualLibrary._confirmDelId = null; ManualLibrary._editingId = id; ManualLibrary._render(); }
+    else if (act === 'rename-ok') {
+      const inp = ManualLibrary._modal.querySelector(`.mlib-rename-input[data-id="${id}"]`);
+      if (inp) { const v = inp.value.trim(); if (v) mn.name = v; mn.updatedAt = Date.now(); Persistence.scheduleSave(); }
+      ManualLibrary._editingId = null; ManualLibrary._render();
     }
-    else if (act === 'del') {
-      if (confirm(`「${mn.name || '無題'}」を削除しますか？`)) {
-        const i = Store.manuals.findIndex(x => x.id === id);
-        if (i >= 0) Store.manuals.splice(i, 1);
-        Persistence.scheduleSave(); ManualLibrary._render();
-      }
+    else if (act === 'rename-cancel') { ManualLibrary._editingId = null; ManualLibrary._render(); }
+    // ── インライン削除確認 ──
+    else if (act === 'del') { ManualLibrary._editingId = null; ManualLibrary._confirmDelId = id; ManualLibrary._render(); }
+    else if (act === 'del-ok') {
+      const i = Store.manuals.findIndex(x => x.id === id);
+      if (i >= 0) Store.manuals.splice(i, 1);
+      ManualLibrary._confirmDelId = null;
+      Persistence.scheduleSave(); ManualLibrary._render();
     }
+    else if (act === 'del-cancel') { ManualLibrary._confirmDelId = null; ManualLibrary._render(); }
   },
   close: () => {
+    ManualLibrary._editingId = null; ManualLibrary._confirmDelId = null;
     if (ManualLibrary._overlay) ManualLibrary._overlay.classList.remove('open');
     if (ManualLibrary._modal) ManualLibrary._modal.classList.remove('open');
   }

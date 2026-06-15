@@ -1088,6 +1088,9 @@ g.node[data-active="1"] {
 .opm-head-title{font-size:15px;font-weight:700;flex:1;}
 .opm-meta{padding:10px 20px;font-size:11px;color:var(--text-2);display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid rgba(0,0,0,0.05);}
 .opm-meta strong{color:var(--text-1);}
+.opm-pdf-row{display:flex;align-items:center;gap:6px;}
+.opm-pdf-row .opm-name-input{min-width:200px;}
+.opm-pdf-row .opm-pdf-open{padding:5px 12px;font-size:12px;}
 .opm-body{padding:0 20px 16px;overflow-y:auto;min-height:0;}
 .opm-phase{font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 8px;padding:6px 12px;background:rgba(0,122,255,0.06);border-radius:8px;display:flex;align-items:center;gap:6px;}
 .opm-phase.restore{color:var(--green);background:rgba(52,199,89,0.06);}
@@ -1097,8 +1100,6 @@ g.node[data-active="1"] {
 .opm-table tr:hover{background:rgba(0,122,255,0.03);}
 .opm-num{font-weight:700;color:var(--text-3);width:32px;text-align:center;font-variant-numeric:tabular-nums;}
 .opm-target{font-weight:600;white-space:nowrap;}
-.opm-img-cell{width:36px;text-align:center;}
-.opm-img-cell svg{width:28px;height:28px;}
 .opm-op-badge{display:inline-block;padding:2px 10px;border-radius:8px;font-size:11px;font-weight:700;}
 .opm-op-badge.close{background:rgba(255,59,48,0.12);color:var(--red);}
 .opm-op-badge.open{background:rgba(52,199,89,0.12);color:var(--green);}
@@ -1126,8 +1127,6 @@ g.node[data-active="1"] {
 .opm-check-row{background:rgba(0,0,0,0.025);}
 .opm-check-row .opm-target{color:var(--text-3);font-style:italic;}
 .opm-check-tgt{color:var(--text-3);}
-.opm-check-ico{color:var(--text-3);}
-.opm-glyph{font-size:16px;color:var(--text-2);}
 .opm-state-cell{font-size:11px;color:var(--text-2);white-space:nowrap;text-align:center;}
 .opm-tag-input{width:100%;min-width:64px;border:none;background:transparent;font-size:11px;font-family:var(--font);color:var(--text-1);outline:none;padding:2px 4px;border-radius:4px;transition:background .15s;}
 .opm-tag-input:focus{background:rgba(0,122,255,0.06);}
@@ -1164,12 +1163,27 @@ g.node[data-active="1"] {
 .opm-row-untargeted .opm-target-sel{border-color:var(--orange,#ff9500);background:rgba(255,149,0,0.06);}
 .opm-warn-chip{font-size:10px;font-weight:700;padding:3px 9px;border-radius:100px;border:none;background:rgba(255,149,0,0.16);color:#b35900;cursor:pointer;margin-left:6px;transition:background .15s;}
 .opm-warn-chip:hover{background:rgba(255,149,0,0.28);}
-.opm-foot{padding:12px 20px 16px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid rgba(0,0,0,0.06);flex-shrink:0;flex-wrap:wrap;}
+.opm-foot{padding:12px 20px 16px;display:flex;gap:8px;align-items:center;justify-content:flex-start;border-top:1px solid rgba(0,0,0,0.06);flex-shrink:0;flex-wrap:wrap;}
 .opm-btn{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;border:none;transition:all .15s;display:flex;align-items:center;gap:5px;}
 .opm-btn.primary{background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(0,122,255,0.25);}
 .opm-btn.primary:hover{background:#0066d6;transform:translateY(-1px);}
+.opm-btn.save{background:var(--green);color:#fff;box-shadow:0 4px 14px rgba(52,199,89,0.28);}
+.opm-btn.save:hover{background:#2aa84a;transform:translateY(-1px);}
 .opm-btn.ghost{background:rgba(0,0,0,0.05);color:var(--text-1);}
 .opm-btn.ghost:hover{background:rgba(0,0,0,0.09);}
+.opm-btn:disabled{opacity:.38;cursor:not-allowed;}
+.opm-btn:disabled:hover{transform:none;}
+/* フッターのボタンを役割でグルーピングしコントラストを付与 */
+.opm-btn.icon{padding:9px 11px;background:rgba(0,0,0,0.05);color:var(--text-1);font-size:15px;}
+.opm-btn.icon:hover:not(:disabled){background:rgba(0,0,0,0.1);}
+.opm-btn.info{background:rgba(0,122,255,0.1);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(0,122,255,0.32);}
+.opm-btn.info:hover{background:rgba(0,122,255,0.18);}
+.opm-btn.quiet{background:transparent;color:var(--text-2);}
+.opm-btn.quiet:hover{background:rgba(0,0,0,0.06);color:var(--text-1);}
+.opm-foot-sep{width:1px;height:24px;background:rgba(0,0,0,0.12);margin:0 3px;align-self:center;flex-shrink:0;}
+.opm-foot-grp{display:flex;gap:4px;padding:3px;background:rgba(0,0,0,0.035);border-radius:13px;}
+.opm-foot-grp .opm-btn{box-shadow:none;}
+.opm-foot-spacer{flex:1;min-width:8px;}
 .opm-name-input{font-family:var(--font);font-size:12px;padding:3px 8px;border:1px solid rgba(0,0,0,0.14);border-radius:7px;min-width:160px;background:#fff;}
 .opm-name-input:focus{outline:none;border-color:var(--accent);}
 .opm-saved-badge,.opm-draft-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;}
@@ -1228,13 +1242,21 @@ body.manual-workspace #zoom-controls{right:calc(var(--manual-w,46vw) + 16px);}
 #opm-resize-handle::after{content:"";position:absolute;top:50%;left:2px;width:3px;height:42px;margin-top:-21px;border-radius:3px;background:rgba(0,0,0,0.18);}
 #opm-resize-handle:hover{background:rgba(0,122,255,0.15);}
 body.manual-workspace #opm-resize-handle{display:block;}
+/* 上下分割（明示選択時）: 画面幅に関係なく下ドック。入力欄が全幅化して手入力しやすい */
+body.manual-workspace.manual-split-v #op-manual-modal{top:auto;left:0;right:0;bottom:0;width:100vw;height:var(--manual-h,52vh);box-shadow:0 -8px 28px rgba(0,0,0,0.14);}
+body.manual-workspace.manual-split-v #workspace{right:0;bottom:var(--manual-h,52vh);}
+body.manual-workspace.manual-split-v #toolbar{left:50%;}
+body.manual-workspace.manual-split-v #zoom-controls{right:16px;bottom:calc(var(--manual-h,52vh) + 16px);}
+body.manual-workspace.manual-split-v #opm-resize-handle{top:auto;right:0;bottom:var(--manual-h,52vh);left:0;width:100vw;height:7px;cursor:row-resize;}
+body.manual-workspace.manual-split-v #opm-resize-handle::after{top:2px;left:50%;margin-top:0;margin-left:-21px;width:42px;height:3px;}
+/* 狭い画面では未指定時のみ自動で上下分割（明示選択があればそちらを優先） */
 @media (max-width:900px){
-  body.manual-workspace #op-manual-modal{top:auto;left:0;right:0;bottom:0;width:100vw;height:var(--manual-h,52vh);box-shadow:0 -8px 28px rgba(0,0,0,0.14);}
-  body.manual-workspace #workspace{right:0;bottom:var(--manual-h,52vh);}
-  body.manual-workspace #toolbar{left:50%;}
-  body.manual-workspace #zoom-controls{right:16px;bottom:calc(var(--manual-h,52vh) + 16px);}
-  #opm-resize-handle{top:auto;right:0;bottom:var(--manual-h,52vh);left:0;width:100vw;height:7px;cursor:row-resize;}
-  #opm-resize-handle::after{top:2px;left:50%;margin-top:0;margin-left:-21px;width:42px;height:3px;}
+  body.manual-workspace:not(.manual-split-h):not(.manual-split-v) #op-manual-modal{top:auto;left:0;right:0;bottom:0;width:100vw;height:var(--manual-h,52vh);box-shadow:0 -8px 28px rgba(0,0,0,0.14);}
+  body.manual-workspace:not(.manual-split-h):not(.manual-split-v) #workspace{right:0;bottom:var(--manual-h,52vh);}
+  body.manual-workspace:not(.manual-split-h):not(.manual-split-v) #toolbar{left:50%;}
+  body.manual-workspace:not(.manual-split-h):not(.manual-split-v) #zoom-controls{right:16px;bottom:calc(var(--manual-h,52vh) + 16px);}
+  body.manual-workspace:not(.manual-split-h):not(.manual-split-v) #opm-resize-handle{top:auto;right:0;bottom:var(--manual-h,52vh);left:0;width:100vw;height:7px;cursor:row-resize;}
+  body.manual-workspace:not(.manual-split-h):not(.manual-split-v) #opm-resize-handle::after{top:2px;left:50%;margin-top:0;margin-left:-21px;width:42px;height:3px;}
 }
 @media print{
   @page{size:A4 portrait;margin:14mm 11mm 16mm;}
@@ -1261,7 +1283,6 @@ body.manual-workspace #opm-resize-handle{display:block;}
   /* 操作バッジはモノクロでも判読できるよう枠線を付与 */
   .opm-op-badge{border:1px solid #888!important;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
   .opm-reason-input,.opm-memo-input,.opm-tag-input,.opm-goal-input,.opm-measured-input{border:none!important;border-bottom:1px solid #ccc!important;background:#fff!important;color:#000!important;-webkit-text-fill-color:#000;opacity:1!important;}
-  .opm-img-cell img{max-width:22px!important;max-height:22px!important;}
   .opm-check{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
   .opm-foot{display:none!important;}
   .opm-print-footer{display:block!important;margin-top:18px;padding-top:10px;border-top:1px solid #ccc;font-size:10.5px;color:#333;}
@@ -1320,7 +1341,7 @@ const buildNameMap=()=>{const c={source:1,valve:1,trap:1,drain:1,split:1,merge:1
 /* ━━━━━━━━ STORE ━━━━━━━━ */
 const Store={
   nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],sequences:[],manuals:[],
-  config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false, autosaveEnabled:true},
+  config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false, autosaveEnabled:true, pdfUrl:''},
   dragState:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
   multiDrag:{active:false,nodes:[],gEl:null,startSvgX:0,startSvgY:0,startClientX:0,startClientY:0,hasDragged:false,pointerId:null,preSnapshot:null},
   labelDrag:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,startX:0,startY:0,startOffsetX:0,startOffsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
@@ -3634,7 +3655,8 @@ const Persistence = {
     edges: Store.edges.map(e => ({ id: e.id, from: e.from, to: e.to, ext: e.ext })),
     sequences: Store.sequences,  // Phase 4: 記録済み操作シーケンス
     manuals: Store.manuals,      // 手動作成・保存された操作マニュアル群（図JSONに内包）
-    manualColumnOpts: OperationManual._opts
+    manualColumnOpts: OperationManual._opts,
+    pdfUrl: Store.config.pdfUrl || ''   // プロジェクト共通の関連PDF URL（大元JSONに紐付け）
   }),
   // ファイル読込・自動復元の共通復元ロジック
   apply: (d) => {
@@ -3654,6 +3676,7 @@ const Persistence = {
     Store.sequences = Array.isArray(d.sequences) ? d.sequences : [];  // Phase 4
     Store.manuals = Array.isArray(d.manuals) ? d.manuals : [];        // 保存済み操作マニュアル
     if(d.manualColumnOpts && typeof OperationManual !== 'undefined') OperationManual._opts = { showState: true, showTag: true, ...d.manualColumnOpts };
+    Store.config.pdfUrl = (typeof d.pdfUrl === 'string') ? d.pdfUrl : '';
     Store.invalidateIndex();
     Store.history = [];
     Store.selection.clear();
@@ -3883,6 +3906,8 @@ const Onboarding = {
 /* ━━━━━━━━ OPERATION MANUAL ━━━━━━━━ */
 const OperationManual = {
   _modal: null,
+  _split: null,                    // 分割方向 'h'=左右 / 'v'=上下（null=未決定→画面幅で既定）
+  SPLIT_KEY: 'steamboy_manual_split',
   _manualId: null,                 // 保存済みマニュアルのID（null=未保存の下書き）
   _targetId: null,                 // 対象機器のノードID（対象につき1冊の紐付けキー）
   _selectedStepId: null,           // 図⇄手順リンクで選択中の手順ID
@@ -3908,13 +3933,6 @@ const OperationManual = {
               : { label: '開放', cls: 'open' },
   // 行のバッジ表示（種別 or バルブ操作）
   _badgeFor: s => s.kind === 'valve' ? OperationManual._opMeta(s.op) : (OperationManual.KINDS[s.kind] || OperationManual.KINDS.note).badge,
-  _iconFor: (node) => {
-    if (!node) return '<span class="opm-check-ico">✔</span>';
-    const live = Store.getNode(node.id);
-    if (live && live.ext && live.ext.imageUrl) return `<img src="${OperationManual._esc(live.ext.imageUrl)}" style="max-width:24px;max-height:24px">`;
-    const g = { valve: '⊗', safety: '⊕', drain: '⊘', trap: '◇' };
-    return `<span class="opm-glyph">${g[node.type] || '⊗'}</span>`;
-  },
   // 機器を対象としたマニュアルを開く（対象につき1冊。既存があればそれを開く）
   openForTarget: (nodeId) => {
     const existing = Store.manuals.find(mn => mn.targetId === nodeId);
@@ -3959,11 +3977,41 @@ const OperationManual = {
   },
   _show: () => {
     OperationManual._ensure();
+    // 分割方向を確定（保存設定→なければ画面幅で既定: 狭ければ上下、広ければ左右）
+    if (OperationManual._split == null) {
+      let saved = null;
+      try { saved = localStorage.getItem(OperationManual.SPLIT_KEY); } catch (_) {}
+      OperationManual._split = (saved === 'h' || saved === 'v') ? saved
+        : (window.matchMedia('(max-width:900px)').matches ? 'v' : 'h');
+    }
     OperationManual._render();
     OperationManual._modal.classList.add('open');
     document.body.classList.add('manual-workspace'); // 左：生キャンバス／右：編集パネルの2分割
     document.body.classList.add('opm-active');       // 印刷時に他要素を完全に除外しページ分割を正常化
+    OperationManual._applySplit();
+  },
+  // 分割方向をbodyクラスへ反映＋ズーム再計算
+  _applySplit: () => {
+    document.body.classList.toggle('manual-split-v', OperationManual._split === 'v');
+    document.body.classList.toggle('manual-split-h', OperationManual._split === 'h');
     if (typeof Renderer !== 'undefined' && Renderer.updateZoom) Renderer.updateZoom();
+  },
+  // 左右⇄上下をトグルして設定を保存
+  _toggleSplit: () => {
+    OperationManual._split = OperationManual._split === 'v' ? 'h' : 'v';
+    try { localStorage.setItem(OperationManual.SPLIT_KEY, OperationManual._split); } catch (_) {}
+    OperationManual._applySplit();
+    const btn = OperationManual._modal && OperationManual._modal.querySelector('#opm-split');
+    if (btn) btn.innerHTML = OperationManual._split === 'v' ? '⬌ 左右に分割' : '⬍ 上下に分割';
+  },
+  // 関連PDFを新規タブで開く（http/https のみ許可＝不正スキームによるXSSを防止）
+  _openPdf: () => {
+    const raw = (Store.config.pdfUrl || '').trim();
+    if (!raw) { Toast.show('関連PDFのURLが未設定です'); return; }
+    let url;
+    try { url = new URL(raw); } catch (_) { Toast.show('URLの形式が正しくありません'); return; }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') { Toast.show('http/https のURLのみ開けます'); return; }
+    window.open(url.href, '_blank', 'noopener');
   },
   _ensure: () => {
     if (OperationManual._modal) return;
@@ -3998,6 +4046,14 @@ const OperationManual = {
     const el = e.target; if (!el) return;
     if (el.id === 'opm-name-input') { if (OperationManual._meta) OperationManual._meta.name = el.value; }
     else if (el.id === 'opm-target-input') { if (OperationManual._meta) OperationManual._meta.targetName = el.value; }
+    else if (el.id === 'opm-pdf-url') {
+      // プロジェクト共通の関連PDF URL（大元JSONに保存）。開くボタンの有効/無効を即時更新。
+      Store.config.pdfUrl = el.value.trim();
+      const ob = OperationManual._modal && OperationManual._modal.querySelector('#opm-pdf-open');
+      if (ob) ob.disabled = !Store.config.pdfUrl;
+      Persistence.scheduleSave();
+      return;
+    }
     else if (el.dataset && el.dataset.id) {
       const s = OperationManual._stepById(el.dataset.id); if (!s) return;
       if (el.classList.contains('opm-reason-input')) s.reason = el.value;
@@ -4021,7 +4077,7 @@ const OperationManual = {
     const el = OperationManual._modal && OperationManual._modal.querySelector('#opm-autosave-status');
     if (el) el.textContent = OperationManual._savedAt ? '✓ 保存済み ' + new Date(OperationManual._savedAt).toLocaleTimeString() : '';
   },
-  // 分割比を変えるドラッグハンドル（縦/横はメディアクエリで切替）
+  // 分割比を変えるドラッグハンドル（縦/横は分割方向 _split に追従）
   _ensureResizeHandle: () => {
     if (document.getElementById('opm-resize-handle')) return;
     const h = document.createElement('div'); h.id = 'opm-resize-handle';
@@ -4029,8 +4085,8 @@ const OperationManual = {
     let dragging = false;
     const onMove = (e) => {
       if (!dragging) return;
-      const narrow = window.matchMedia('(max-width:900px)').matches;
-      if (narrow) {
+      const vertical = OperationManual._split === 'v';
+      if (vertical) {
         const hgt = Math.min(window.innerHeight * 0.85, Math.max(220, window.innerHeight - e.clientY));
         document.body.style.setProperty('--manual-h', hgt + 'px');
       } else {
@@ -4079,7 +4135,6 @@ const OperationManual = {
       <th class="opm-dnd-col opm-no-print"></th>
       <th>操作対象</th>
       ${o.showTag ? '<th>タグ番号</th>' : ''}
-      <th>画像</th>
       <th>操作</th>
       ${o.showState ? '<th>現在の状態</th>' : ''}
       ${o.showGauge ? '<th>目標値</th><th>実測値</th>' : ''}
@@ -4103,8 +4158,6 @@ const OperationManual = {
       const o2 = (v, l) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`;
       return `<select class="opm-op-sel" data-id="${s.id}">${o2('0', '閉止')}${o2('1', '微開')}${o2('2', '開放')}</select>`;
     };
-    const kindGlyph = { contact: '📞', gauge: '📊', note: '✎' };
-
     // インライン・クイック手順追加バー（種別ボタンは1クリックで追加／🖱でその場から図ピック）
     const quickAdd = (phase) => `<div class="opm-quickadd opm-no-print" data-phase="${phase}">
       <span class="opm-qa-label">＋ 手順:</span>
@@ -4130,8 +4183,6 @@ const OperationManual = {
         targetCell = s.node ? esc(s.node.name) : (s.targetText ? esc(s.targetText) : '<span class="opm-check-tgt">全系統</span>');
       }
       const opCell = (s.editable && isValve) ? opOptions(s) : `<span class="opm-op-badge ${badge.cls}">${badge.label}</span>`;
-      const imgCell = isValve ? OperationManual._iconFor(s.node)
-        : (s.kind === 'check' ? '<span class="opm-check-ico">✔</span>' : `<span class="opm-glyph">${kindGlyph[s.kind] || ''}</span>`);
       const gaugeCells = o.showGauge
         ? `<td><input type="text" class="opm-goal-input" data-id="${s.id}" value="${esc(s.goal || '')}" ${s.kind === 'gauge' ? '' : 'disabled'} placeholder="${s.kind === 'gauge' ? '目標値' : '—'}"></td>
            <td><input type="text" class="opm-measured-input" data-id="${s.id}" value="${esc(s.measured || '')}" ${s.kind === 'gauge' ? '' : 'disabled'} placeholder="${s.kind === 'gauge' ? '実測値' : '—'}"></td>`
@@ -4142,7 +4193,6 @@ const OperationManual = {
         <td class="opm-dnd-col opm-no-print"><span class="opm-drag" title="ドラッグで並べ替え">⠿</span></td>
         <td class="opm-target">${targetCell}</td>
         ${o.showTag ? `<td><input type="text" class="opm-tag-input" data-id="${s.id}" value="${esc(s.tag || '')}" placeholder="—" ${s.node ? '' : 'disabled'}></td>` : ''}
-        <td class="opm-img-cell">${imgCell}</td>
         <td>${opCell}</td>
         ${o.showState ? `<td class="opm-state-cell">${stateLbl}</td>` : ''}
         ${gaugeCells}
@@ -4174,7 +4224,8 @@ const OperationManual = {
         ${OperationManual._manualId ? '<span class="opm-saved-badge">保存済み</span>' : '<span class="opm-draft-badge">未保存</span>'}
         <span id="opm-autosave-status" class="opm-autosave-status opm-no-print"></span>
         ${untargetedCount ? `<button class="opm-warn-chip opm-no-print" id="opm-warn-jump" title="対象未設定の手順へ移動">⚠ 対象未設定 ${untargetedCount}件</button>` : ''}
-        <button class="opm-btn ghost" id="opm-library" style="margin-left:auto;padding:6px 12px">📚 ライブラリ</button>
+        <button class="opm-btn quiet opm-no-print" id="opm-split" style="margin-left:auto;padding:6px 12px" title="編集パネルの分割方向を切替（手入力時は上下が広い）">${OperationManual._split === 'v' ? '⬌ 左右に分割' : '⬍ 上下に分割'}</button>
+        <button class="opm-btn ghost" id="opm-library" style="padding:6px 12px">📚 ライブラリ</button>
         <button class="iso-close-x" id="opm-x">✕</button>
       </div>
       <div class="opm-meta">
@@ -4183,6 +4234,10 @@ const OperationManual = {
         <div class="opm-no-print">対象: <input type="text" id="opm-target-input" class="opm-name-input" value="${esc(OperationManual._meta.targetName || '')}" placeholder="対象機器名"></div>
         <div class="opm-print-only">対象: <strong>${esc(OperationManual._meta.targetName || '')}</strong></div>
         <div>作成日時: <strong>${new Date(OperationManual._meta.createdAt || Date.now()).toLocaleString()}</strong></div>
+        <div class="opm-no-print opm-pdf-row" title="プロジェクト全体で共通の関連PDF。保存時に大元のJSONへ一緒に記録されます。">📄 関連PDF:
+          <input type="url" id="opm-pdf-url" class="opm-name-input" value="${esc(Store.config.pdfUrl || '')}" placeholder="https://… のPDF URL">
+          <button class="opm-btn info opm-pdf-open" id="opm-pdf-open" ${Store.config.pdfUrl ? '' : 'disabled'} title="関連PDFを新しいタブで開く">開く</button>
+        </div>
         <div class="opm-print-footer">作成者: ____________________</div>
       </div>
       <div class="opm-col-opts opm-no-print">
@@ -4208,15 +4263,21 @@ const OperationManual = {
         ${quickAdd('res')}
       </div>
       <div class="opm-foot">
-        <button class="opm-btn primary" id="opm-save" style="background:var(--green);box-shadow:0 4px 14px rgba(52,199,89,.25)">💾 保存</button>
-        <button class="opm-btn ghost" id="opm-undo" title="元に戻す (Ctrl+Z)" ${OperationManual._historyIndex <= 0 ? 'disabled' : ''}>↩ 元に戻す</button>
-        <button class="opm-btn ghost" id="opm-redo" title="やり直し (Ctrl+Y)" ${OperationManual._historyIndex >= OperationManual._history.length - 1 ? 'disabled' : ''}>↪ やり直し</button>
-        <button class="opm-btn ghost" id="opm-pick">🖱 図から選択</button>
-        <button class="opm-btn ghost" id="opm-csv">📥 CSV</button>
-        <button class="opm-btn ghost" id="opm-print">🖨 印刷</button>
-        <button class="opm-btn ghost" id="opm-pdf">📄 PDF</button>
-        <div style="flex:1"></div>
-        <button class="opm-btn ghost" id="opm-cancel">閉じる</button>
+        <div class="opm-foot-grp" title="編集の取り消し / やり直し">
+          <button class="opm-btn icon" id="opm-undo" title="元に戻す (Ctrl+Z)" ${OperationManual._historyIndex <= 0 ? 'disabled' : ''}>↩</button>
+          <button class="opm-btn icon" id="opm-redo" title="やり直し (Ctrl+Y)" ${OperationManual._historyIndex >= OperationManual._history.length - 1 ? 'disabled' : ''}>↪</button>
+        </div>
+        <span class="opm-foot-sep"></span>
+        <button class="opm-btn info" id="opm-pick" title="図のバルブ・機器をクリックして追加">🖱 図から選択</button>
+        <span class="opm-foot-sep"></span>
+        <div class="opm-foot-grp" title="出力">
+          <button class="opm-btn ghost" id="opm-csv">📥 CSV</button>
+          <button class="opm-btn ghost" id="opm-print">🖨 印刷</button>
+          <button class="opm-btn ghost" id="opm-pdf">📄 PDF</button>
+        </div>
+        <span class="opm-foot-spacer"></span>
+        <button class="opm-btn quiet" id="opm-cancel">閉じる</button>
+        <button class="opm-btn save" id="opm-save">💾 保存</button>
         <button class="opm-btn primary" id="opm-seq">▶ シーケンサ連携</button>
       </div>
       <div class="opm-print-footer" style="margin:20px 20px 0; padding-bottom:20px; display:none;">
@@ -4225,6 +4286,8 @@ const OperationManual = {
     `;
 
     m.querySelector('#opm-x').onclick = OperationManual.close;
+    m.querySelector('#opm-split').onclick = OperationManual._toggleSplit;
+    m.querySelector('#opm-pdf-open').onclick = OperationManual._openPdf;
     m.querySelector('#opm-cancel').onclick = OperationManual.close;
     m.querySelector('#opm-save').onclick = () => OperationManual.save();
     m.querySelector('#opm-undo').onclick = OperationManual._undo;
@@ -4518,7 +4581,7 @@ const OperationManual = {
     OperationManual._autosaveIfContent();
     if (OperationManual._modal) OperationManual._modal.classList.remove('open');
     document.body.classList.remove('opm-active');
-    document.body.classList.remove('manual-workspace');
+    document.body.classList.remove('manual-workspace', 'manual-split-v', 'manual-split-h');
     OperationManual._selectedStepId = null;
     OperationManual._clearCanvasFocus();
     if (typeof Renderer !== 'undefined' && Renderer.updateZoom) Renderer.updateZoom();

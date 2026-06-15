@@ -197,6 +197,9 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 
 /* ── Connect Banner ── */
 #connect-banner{position:fixed;top:58px;left:50%;transform:translateX(-50%);z-index:210;padding:6px 18px;border-radius:100px;font-size:12px;font-weight:600;color:#fff;display:none;pointer-events:none;white-space:nowrap;background:rgba(255,149,0,0.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 2px 12px rgba(255,149,0,0.25);}
+#autosave-off-badge{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:205;padding:5px 14px;border-radius:100px;font-size:11px;font-weight:600;color:#fff;display:none;pointer-events:none;white-space:nowrap;background:rgba(90,100,115,0.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 2px 12px rgba(0,0,0,0.18);}
+body.autosave-off #autosave-off-badge{display:block;}
+body.zen-mode #autosave-off-badge{display:none;}
 
 /* ── Selection Toolbar ── */
 #selection-toolbar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:200;padding:6px 14px;border-radius:100px;font-size:12px;display:none;align-items:center;gap:10px;white-space:nowrap;background:rgba(29,29,31,0.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.15);}
@@ -907,6 +910,8 @@ g.node[data-active="1"] {
 
   <div class="sp-section">
     <div class="sp-section-title">データ管理</div>
+    <label class="sp-toggle"><input type="checkbox" id="toggleAutosave" checked><span>自動保存</span></label>
+    <div class="sp-hint" id="autosave-hint">ON: 操作はこのブラウザに自動保存されます</div>
     <div class="sp-buttons">
       <button class="sp-btn" id="btn-save">保存</button>
       <button class="sp-btn" id="btn-load">読込</button>
@@ -949,6 +954,7 @@ g.node[data-active="1"] {
 </aside>
 
 <div id="connect-banner"></div>
+<div id="autosave-off-badge" title="設定 → データ管理 で自動保存を切替">🔒 閲覧モード（自動保存OFF・変更は保存されません）</div>
 
 <div id="floating-matrix" class="glass">
   <div class="matrix-header" id="matrix-header">
@@ -1297,7 +1303,7 @@ const buildNameMap=()=>{const c={source:1,valve:1,trap:1,drain:1,split:1,merge:1
 /* ━━━━━━━━ STORE ━━━━━━━━ */
 const Store={
   nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],sequences:[],manuals:[],
-  config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false},  
+  config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', showReducerLabels: false, autosaveEnabled:true},
   dragState:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
   multiDrag:{active:false,nodes:[],gEl:null,startSvgX:0,startSvgY:0,startClientX:0,startClientY:0,hasDragged:false,pointerId:null,preSnapshot:null},
   labelDrag:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,startX:0,startY:0,startOffsetX:0,startOffsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
@@ -2856,6 +2862,13 @@ const Controller={
     document.getElementById('gridOffsetY').addEventListener('input',ev=>{Store.config.gridOffsetY=Math.max(0,Math.min(parseInt(ev.target.value)||0,Store.config.gridSize-1));ev.target.value=Store.config.gridOffsetY;_updateGridBg();});   
     document.getElementById('toggleAutoElbow').addEventListener('change',ev=>{Store.config.autoElbow=ev.target.checked;});
     document.getElementById('toggleSealedAnim').addEventListener('change',ev=>{Store.config.showSealedAnim=ev.target.checked;Renderer.renderAll();});
+    document.getElementById('toggleAutosave').addEventListener('change',ev=>{
+      Store.config.autosaveEnabled=ev.target.checked;
+      Persistence.savePref();
+      Controller._refreshAutosaveHint();
+      if(ev.target.checked){Persistence.scheduleSave();Toast.show('自動保存をONにしました（現在の状態を保存します）');}
+      else{Toast.show('自動保存をOFFにしました。これ以降の操作は保存されず、リロードでマスター状態に戻ります');}
+    });
 
     document.getElementById('btn-zoom-in').addEventListener('click',()=>Controller.setZoom(Store.config.currentZoom+.1));
     document.getElementById('btn-zoom-out').addEventListener('click',()=>Controller.setZoom(Store.config.currentZoom-.1));
@@ -3032,6 +3045,8 @@ const Controller={
     // Phase 4: 共有リンク(#d=)があれば最優先で復元 → 無ければ前回セッション復元
     //          → どちらも無ければ初回オンボーディング（共有/復元は非同期のため async で順序保証）
     (async()=>{
+      Persistence.loadPref();                 // 自動保存ON/OFF設定を先に読み込みUIへ反映
+      Controller._refreshAutosaveHint();
       let loaded=false;
       if(Share.hasLink()) loaded=await Share.loadFromHash();
       if(!loaded) loaded=Persistence.restore();
@@ -3041,6 +3056,19 @@ const Controller={
     })();
   },
 
+  // 自動保存トグルのUI（チェック状態・説明文・OFFバッジ）を現在の設定に同期
+  _refreshAutosaveHint:()=>{
+    const on=Store.config.autosaveEnabled;
+    const cb=document.getElementById('toggleAutosave'); if(cb) cb.checked=on;
+    const hint=document.getElementById('autosave-hint');
+    if(hint){
+      hint.textContent=on?'ON: 操作はこのブラウザに自動保存されます'
+                          :'OFF: 操作は保存されません。リロードでマスター状態に戻ります（保存はファイル「保存」を使用）';
+      hint.style.color=on?'':'var(--red, #d23)';
+      hint.style.fontWeight=on?'':'600';
+    }
+    document.body.classList.toggle('autosave-off',!on);
+  },
   setZoom:(z)=>{Store.config.currentZoom=Math.max(.2,Math.min(z,3.0));Renderer.updateZoom();requestAnimationFrame(()=>{Minimap.draw();Culling.scheduleApply();/*Epic7*/});},
   undo:()=>{if(!Store.history.length)return;Store.restore(Store.history.pop());Store.selection.clear();Store.config.selectedNodeIdForConnection=null;Simulator.run(Renderer.renderAll);},
   deleteSelected:()=>{if(!Store.selection.size)return;Store.pushHistory();const _n=Store.selection.size;const del=new Set(Store.selection);Store.nodes=Store.nodes.filter(n=>!del.has(n.id));Store.edges=Store.edges.filter(e=>!del.has(e.from)&&!del.has(e.to));Store.invalidateIndex();Store.selection.clear();Simulator.run(Renderer.renderAll);Toast.show(`${_n}件を削除しました`,{actionLabel:'元に戻す',onAction:Controller.undo});},
@@ -3572,6 +3600,7 @@ const MasterTable = {
 /* ━━━━━━━━ PERSISTENCE (Phase 1: 自動保存 / クラッシュ復帰) ━━━━━━━━ */
 const Persistence = {
   KEY: 'steamboy_session_v1',
+  PREF_KEY: 'steamboy_autosave_pref',   // 自動保存ON/OFFはセッションデータと別キーで常に即時保存（OFF中も設定だけは残す）
   _loaded: false, _timer: null,
   // 保存形式は手動保存(saveData)のJSONと完全互換
   snapshot: () => ({
@@ -3638,7 +3667,19 @@ const Persistence = {
   },
   _write: () => {
     Persistence._timer = null;
+    // 自動保存OFF時はlocalStorageへ書き込まない＝マスターJSONを保持し、リロードで操作を破棄
+    if (!Store.config.autosaveEnabled) return;
     try { localStorage.setItem(Persistence.KEY, JSON.stringify(Persistence.snapshot())); } catch (_) {}
+  },
+  // 自動保存のON/OFF設定だけは専用キーへ即時保存（OFF中も設定自体は記憶する）
+  loadPref: () => {
+    let v = null;
+    try { v = localStorage.getItem(Persistence.PREF_KEY); } catch (_) {}
+    Store.config.autosaveEnabled = (v !== '0'); // 既定ON。明示的に'0'のときだけOFF
+    return Store.config.autosaveEnabled;
+  },
+  savePref: () => {
+    try { localStorage.setItem(Persistence.PREF_KEY, Store.config.autosaveEnabled ? '1' : '0'); } catch (_) {}
   }
 };
 

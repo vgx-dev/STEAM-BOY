@@ -439,6 +439,8 @@ g.node[data-gauge-state="empty"] .pgauge-face{fill:#34C759;stroke:#2aa84a;}
 /* ── Epic 7: Viewport Culling — 画面外エッジのアニメーション停止 ── */
 g.edge-grp[data-culled="1"] .flow-dash{animation-play-state:paused;}
 g.edge-grp[data-culled="1"] .flow-base{animation-play-state:paused;}
+g.edge-grp[data-culled="1"] .edge-sealed,
+g.edge-grp[data-culled="1"] .edge-sealed-bg{animation-play-state:paused;}
 
 /* ── Epic 6-2: ドラッグ中GPU昇格ヒント ── */
 .node-dragging{will-change:transform;}
@@ -2621,7 +2623,10 @@ const Culling={
 
   // 画面外エッジに data-culled="1" を付与してアニメーションを停止
   // Phase 3: この要素数を超えたら画面外要素を display:none で描画ツリーから除外
-  DISPLAY_THRESHOLD:800,
+  // 軽量化: この要素数を超えたら画面外要素を display:none で描画ツリーから完全に除外
+  // （アニメ停止だけでなくレイアウト/ペイント自体を省き、レイヤーラスタライズを軽くする）。
+  // 50%ビューポートのバッファ＋スクロール後200msスロットルでポップインを抑制。
+  DISPLAY_THRESHOLD:300,
   _displayCulled:false,
   apply:()=>{
     // ドラッグ操作中はカリングしない（掴んでいる要素が消えるのを防ぐ）
@@ -2838,7 +2843,7 @@ const Renderer={
     // 最適化1: ループ前に O(1) 参照用マップを取得（Storeの遅延キャッシュを共用）
     const _nodeMap=Store.nodeMap();
     // Phase 3: 差分レンダリング — 見た目を決める入力のシグネチャが前回と一致する要素はDOM更新を丸ごとスキップ
-    const _edgeSigBase=esw+'|';
+    const _edgeSigBase=esw+'|'+(_lite?1:0)+'|';
     Store.edges.forEach(edge=>{
       activeEdges.add(edge.id);
       const nF=_nodeMap.get(edge.from),nT=_nodeMap.get(edge.to);if(!nF||!nT)return;
@@ -2898,7 +2903,9 @@ const Renderer={
         setAttr(base,'stroke-opacity',(0.12+0.2*Math.max(.1,dRate)).toFixed(3));
         if(isBk)base.classList.add('backward');else base.classList.remove('backward');
         // Feature 4: Thermal gradient for steam edges
-        if(ds===FLUID.STEAM&&Renderer.svgDefs){
+        // 軽量化: perf-lite（大規模図面）ではエッジ毎の userSpaceOnUse グラデーション塗りを
+        // 単色（CSSの data-fluid 色）に切替。多数の蒸気配管でのグラデーション再塗りコストを削減。
+        if(ds===FLUID.STEAM&&Renderer.svgDefs&&!_lite){
           const gid=`tg-${edge.id}`;
           let grad=document.getElementById(gid);
           if(!grad){
@@ -2912,6 +2919,8 @@ const Renderer={
           base.style.stroke=`url(#${gid})`;
         }else{
           base.style.stroke='';
+          // lite化や非蒸気化で不要になったグラデーション定義を掃除
+          if(Renderer.svgDefs){const _g=document.getElementById(`tg-${edge.id}`);if(_g)_g.remove();}
         }
       }else if(base)base.remove();
 

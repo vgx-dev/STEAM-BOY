@@ -425,8 +425,10 @@ g.node[data-valve-state="2"] .node-shape{fill:rgba(52,199,89,.2);}
 .pgauge-face{fill:#34C759;stroke:#2aa84a;stroke-width:2;transition:fill .2s,stroke .2s;}
 .pgauge-needle{stroke:#1d1d1f;stroke-opacity:.85;}
 g.node[data-gauge-state="steam"] .pgauge-face{fill:#FF3B30;stroke:#c92a20;}
-g.node[data-gauge-state="uncertain"] .pgauge-face{fill:#FFCC00;stroke:#c29a00;}
+g.node[data-gauge-state="uncertain"] .pgauge-face{fill:#FFCC00;stroke:#c29a00;animation:gaugeUncertainPulse 2.4s ease-in-out infinite;}
 g.node[data-gauge-state="empty"] .pgauge-face{fill:#34C759;stroke:#2aa84a;}
+/* 残圧・残液（不確定）と同じ、黄のゆるやかな点滅 */
+@keyframes gaugeUncertainPulse{0%,100%{fill:#FFCC00;}50%{fill:#FFE066;}}
 
 /* ── Epic 7: Viewport Culling — 画面外エッジのアニメーション停止 ── */
 g.edge-grp[data-culled="1"] .flow-dash{animation-play-state:paused;}

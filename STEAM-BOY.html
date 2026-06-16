@@ -1620,6 +1620,18 @@ const NODE_TYPE={SOURCE:'source',VALVE:'valve',TRAP:'trap',DRAIN:'drain',SPLIT:'
 const VALVE_STATE={CLOSED:0,PARTIAL:1,OPEN:2};
 const COLOR_MAP={0:'#8E8E93',1:'#007AFF',2:'#AF52DE',3:'#FF3B30'};
 const VALVE_STATE_LABEL={0:'閉止',1:'微開',2:'開放'};
+/* ━━━ Phase 1: 圧力モデル定数（絶対圧 MPa） ━━━
+   _sim.pres に絶対圧(MPa)を新規伝播。rate(0..1)は従来どおり流量強度として温存し、
+   pres は rate と同じ縮約で各ノードを通過する（Source/Reducer のみ独立に設定値で上書き）。
+   ※ SimulatorCore.compute は Worker へ関数ソースごと注入されるため、compute 内では
+     これらの定数を「インラインのリテラル」で持つ（注入漏れによる ReferenceError を防止）。
+     ここで定義する PRESSURE は Anomaly 判定・UI 表示など「メインスレッド側」専用。 */
+const PRESSURE={
+  DEFAULT_SOURCE_MPA:1.0,   // Source 既定の元圧（rate=1 と整合）
+  DEFAULT_REDUCER_RATE:0.45,// 減圧弁 既定の絞り率（既存 limitRate 既定値）
+  HEATEX_DANGER_MPA:0.45,   // 熱交換器: 既定の過圧（高圧蒸気直撃）閾値
+  DRAIN_DANGER_MPA:0.1      // ドレン管: 既定の過圧閾値
+};
 /* 共有の表示名ロジック（renderAll と同一カウンタ順）— Master/Isolation/Sequencer で共用 */
 const NAMING_LABELS={source:'Source',valve:'Valve',trap:'Trap',drain:'Drain',split:'Split',merge:'Merge',reducer:'Reducer',heatex:'Heat Exchanger',safety:'Safety Valve',pgauge:'Pressure Gauge'};
 const buildNameMap=()=>{const c={source:1,valve:1,trap:1,drain:1,split:1,merge:1,reducer:1,heatex:1,safety:1,pgauge:1};const m=new Map();Store.nodes.forEach(n=>{const num=c[n.type]!==undefined?c[n.type]++:1;m.set(n.id,n.ext.customName||`${NAMING_LABELS[n.type]||n.type} ${num}`);});return m;};
@@ -1635,8 +1647,8 @@ const Store={
   rectSelect:{active:false,startSvgX:0,startSvgY:0,currentSvgX:0,currentSvgY:0,pointerId:null},
   matrixDrag:{isDragging:false,offsetX:0,offsetY:0,pointerId:null,isMap:false},
   generateId:()=>Date.now().toString(36)+Math.random().toString(36).substr(2,5),
-  createNode:(type,x,y,p={})=>({id:p.id||Store.generateId(),type,x,y,rotation:p.rotation||0,state:p.state||{valveState:VALVE_STATE.OPEN},labelOffset:p.labelOffset||{x:35,y:-25},ext:p.ext||{},_sim:{fIn:0,fOut:0,rateIn:0,rateOut:0}}),
-  createEdge:(fromId,toId,p={})=>({id:p.id||Store.generateId(),from:fromId,to:toId,ext:Object.assign({waypoints:[]},p.ext||{}),_sim:{f:0,b:0,rate:0,brate:0}}),
+  createNode:(type,x,y,p={})=>({id:p.id||Store.generateId(),type,x,y,rotation:p.rotation||0,state:p.state||{valveState:VALVE_STATE.OPEN},labelOffset:p.labelOffset||{x:35,y:-25},ext:p.ext||{},_sim:{fIn:0,fOut:0,rateIn:0,rateOut:0,presIn:0,presOut:0,srcPresIn:0,srcPresOut:0}}),
+  createEdge:(fromId,toId,p={})=>({id:p.id||Store.generateId(),from:fromId,to:toId,ext:Object.assign({waypoints:[]},p.ext||{}),_sim:{f:0,b:0,rate:0,brate:0,pres:0,bpres:0,srcPres:0,bsrcPres:0}}),
   serialize:()=>JSON.stringify({nodes:Store.nodes.map(n=>({id:n.id,type:n.type,x:n.x,y:n.y,rotation:n.rotation,state:n.state,ext:n.ext,labelOffset:n.labelOffset})),edges:Store.edges.map(e=>({id:e.id,from:e.from,to:e.to,ext:e.ext}))}),
   // 最適化4: 履歴スナップショット戦略。structuredClone() への置換を実測比較した結果、
   // V8ではこのデータ形状だと stringify 単体より約4.6倍遅かったため、
@@ -1687,8 +1699,11 @@ const SimulatorCore={
     edges.forEach(e=>{const a=inEdgesMap.get(e.to);if(a)a.push(e);});
     const EMPTY_EDGES=[];
 
-    edges.forEach(e=>{e._sim.f=0;e._sim.b=0;e._sim.rate=0;e._sim.brate=0;});
-    nodes.forEach(n=>{n._sim.fIn=0;n._sim.fOut=0;n._sim.rateIn=0;n._sim.rateOut=0;});
+    // Phase 1: 圧力定数（Worker注入漏れ防止のため compute 内にインライン定義）
+    const DEF_SRC=1.0;        // PRESSURE.DEFAULT_SOURCE_MPA と一致させること
+    const DEF_RED_RATE=0.45;  // PRESSURE.DEFAULT_REDUCER_RATE と一致させること
+    edges.forEach(e=>{e._sim.f=0;e._sim.b=0;e._sim.rate=0;e._sim.brate=0;e._sim.pres=0;e._sim.bpres=0;e._sim.srcPres=0;e._sim.bsrcPres=0;});
+    nodes.forEach(n=>{n._sim.fIn=0;n._sim.fOut=0;n._sim.rateIn=0;n._sim.rateOut=0;n._sim.presIn=0;n._sim.presOut=0;n._sim.srcPresIn=0;n._sim.srcPresOut=0;});
 
     let changed=true,iter=0;
     while(changed&&iter<100){changed=false;
@@ -1696,7 +1711,11 @@ const SimulatorCore={
         const inE=inEdgesMap.get(n.id)||EMPTY_EDGES;let mxF=0,rateIn=0;
         inE.forEach(e=>{if(e._sim.f>mxF)mxF=e._sim.f;});
         inE.forEach(e=>{if(e._sim.f===mxF&&e._sim.rate>rateIn)rateIn=e._sim.rate;});
-        n._sim.fIn=mxF;n._sim.rateIn=rateIn;let fOut=mxF,rOut=rateIn;
+        // Phase 1: 支配的な流入エッジから絶対圧(pres)とソース帰属圧(srcPres)を取得
+        let presIn=0,srcPresIn=0;
+        inE.forEach(e=>{if(e._sim.f===mxF&&(e._sim.pres||0)>presIn){presIn=e._sim.pres||0;srcPresIn=e._sim.srcPres||0;}});
+        n._sim.fIn=mxF;n._sim.rateIn=rateIn;n._sim.presIn=presIn;n._sim.srcPresIn=srcPresIn;
+        let fOut=mxF,rOut=rateIn;
         if(n.type===NODE_TYPE.SOURCE){fOut=FLUID.STEAM;rOut=1;}
         else if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)){
           if(n.state.valveState===VALVE_STATE.CLOSED){fOut=FLUID.EMPTY;rOut=0;}
@@ -1708,15 +1727,38 @@ const SimulatorCore={
           else{fOut=FLUID.EMPTY;rOut=0;}
         }
         else if(n.type===NODE_TYPE.DRAIN){fOut=(n._sim.fIn===FLUID.DRAIN)?FLUID.WATER:n._sim.fIn;}
-        else if(n.type===NODE_TYPE.REDUCER){fOut=n._sim.fIn;rOut=Math.min(rateIn, n.ext.limitRate ?? 0.45);}
+        else if(n.type===NODE_TYPE.REDUCER){fOut=n._sim.fIn;rOut=Math.min(rateIn, n.ext.limitRate ?? DEF_RED_RATE);}
         else if(n.type===NODE_TYPE.HEATEX){fOut=n._sim.fIn;rOut=rateIn;}
         else if(n.type===NODE_TYPE.PGAUGE){fOut=FLUID.EMPTY;rOut=0;}  // 圧力計は末端センサー（下流へ流さない）
         if(fOut===FLUID.EMPTY)rOut=0;
-        if(n._sim.fOut!==fOut||n._sim.rateOut!==rOut){n._sim.fOut=fOut;n._sim.rateOut=rOut;changed=true;}
+        // Phase 1: 絶対圧 presOut / ソース帰属圧 srcPresOut の算出
+        let presOut,srcPresOut;
+        if(n.type===NODE_TYPE.SOURCE){
+          const sp=(n.ext.pressureMPa!=null)?n.ext.pressureMPa:DEF_SRC;
+          presOut=sp;srcPresOut=sp;
+        }else{
+          srcPresOut=srcPresIn; // ソース帰属はそのまま下流へ受け渡し
+          if(n.type===NODE_TYPE.REDUCER){
+            const src=srcPresIn>0?srcPresIn:DEF_SRC;
+            // 出口圧(MPa)を優先。未設定（旧データ）は limitRate×ソース圧から換算。
+            const outMPa=(n.ext.outletMPa!=null)?n.ext.outletMPa:src*(n.ext.limitRate??DEF_RED_RATE);
+            presOut=Math.min(presIn,outMPa);
+          }else{
+            // 弁の微開/閉止など、rate と同じ縮約で pres を通過させる
+            const factor=rateIn>0?(rOut/rateIn):(rOut>0?1:0);
+            presOut=presIn*factor;
+          }
+        }
+        if(fOut===FLUID.EMPTY){presOut=0;srcPresOut=0;}
+        if(n._sim.fOut!==fOut||n._sim.rateOut!==rOut||Math.abs((n._sim.presOut||0)-presOut)>1e-9||Math.abs((n._sim.srcPresOut||0)-srcPresOut)>1e-9){
+          n._sim.fOut=fOut;n._sim.rateOut=rOut;n._sim.presOut=presOut;n._sim.srcPresOut=srcPresOut;changed=true;
+        }
       });
       edges.forEach(e=>{
         const fn=nodeMap.get(e.from);
-        if(fn&&(e._sim.f!==fn._sim.fOut||e._sim.rate!==fn._sim.rateOut)){e._sim.f=fn._sim.fOut;e._sim.rate=fn._sim.rateOut;changed=true;}
+        if(fn&&(e._sim.f!==fn._sim.fOut||e._sim.rate!==fn._sim.rateOut||Math.abs((e._sim.pres||0)-(fn._sim.presOut||0))>1e-9||Math.abs((e._sim.srcPres||0)-(fn._sim.srcPresOut||0))>1e-9)){
+          e._sim.f=fn._sim.fOut;e._sim.rate=fn._sim.rateOut;e._sim.pres=fn._sim.presOut;e._sim.srcPres=fn._sim.srcPresOut;changed=true;
+        }
       });
       iter++;
     }
@@ -1726,21 +1768,24 @@ const SimulatorCore={
       const inE=inEdgesMap.get(n.id)||EMPTY_EDGES;if(inE.length<=1)return;
       const mxF=n._sim.fIn;
       // 合流する中で最も強い流体(mxF)を持つ配管の最大圧力を求める
-      let mxRateForMxF=0;
+      let mxRateForMxF=0,mxPresForMxF=0,srcPresForMxF=0;
       inE.forEach(e=>{if(e._sim.f===mxF&&e._sim.rate>mxRateForMxF)mxRateForMxF=e._sim.rate;});
+      inE.forEach(e=>{if(e._sim.f===mxF&&(e._sim.pres||0)>mxPresForMxF){mxPresForMxF=e._sim.pres||0;srcPresForMxF=e._sim.srcPres||0;}});
       inE.forEach(e=>{
         // 自分の流体が最強流体より弱い、または同じ流体でも圧力が負けている場合に逆流発生
         if(e._sim.f<mxF||(e._sim.f===mxF&&e._sim.rate<mxRateForMxF)){
           e._sim.b=mxF;
           e._sim.brate=mxRateForMxF;
-          SimulatorCore._backflow(e.from,mxF,mxRateForMxF,nodeMap,inEdgesMap);
+          e._sim.bpres=mxPresForMxF;
+          e._sim.bsrcPres=srcPresForMxF;
+          SimulatorCore._backflow(e.from,mxF,mxRateForMxF,nodeMap,inEdgesMap,mxPresForMxF,srcPresForMxF);
         }
       });
     });
     return{nodes,edges};
   },
   // 最適化3: 隣接リスト(inEdgesMap)を引数で受け取り、再帰内の edges.filter を排除
-  _backflow:(nid,val,rate,nodeMap,inEdgesMap)=>{
+  _backflow:(nid,val,rate,nodeMap,inEdgesMap,pres,srcPres)=>{
     const n=nodeMap.get(nid);
     // TRAPとSOURCEは一律ブロック。REDUCER・HEATEXは透過。
     if(!n||[NODE_TYPE.TRAP,NODE_TYPE.SOURCE].includes(n.type))return;
@@ -1755,7 +1800,9 @@ const SimulatorCore={
       if(e._sim.b<val||(e._sim.b===val&&e._sim.brate<rate)){
         e._sim.b=val;
         e._sim.brate=rate;
-        SimulatorCore._backflow(e.from,val,rate,nodeMap,inEdgesMap);
+        e._sim.bpres=pres||0;
+        e._sim.bsrcPres=srcPres||0;
+        SimulatorCore._backflow(e.from,val,rate,nodeMap,inEdgesMap,pres,srcPres);
       }
     });
   }
@@ -1983,12 +2030,17 @@ const Anomaly={
       if(inN+outN===0&&n.type!==NODE_TYPE.SOURCE)Store.anomalies.push({type:'isolated',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 孤立（配管未接続）`});
       if(![NODE_TYPE.DRAIN,NODE_TYPE.SOURCE,NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(n.type))if(n._sim.fIn>0&&outN===0)Store.anomalies.push({type:'deadend',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 流体の行き止まり`});
 
-      // 熱交換器に高圧蒸気直撃の危険検出
-      if(n.type===NODE_TYPE.HEATEX&&n._sim.fIn===FLUID.STEAM&&n._sim.rateIn>0.45){
-        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 熱交換器（高圧蒸気流入）'});
+      // 熱交換器に高圧蒸気直撃の危険検出（Phase 1: 絶対圧 MPa 判定。未設定はソース既定で rate 同等）
+      if(n.type===NODE_TYPE.HEATEX&&n._sim.fIn===FLUID.STEAM){
+        const lim=(n.ext.maxMPa!=null)?n.ext.maxMPa:PRESSURE.HEATEX_DANGER_MPA;
+        if((n._sim.presIn||0)>lim)Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 熱交換器（高圧蒸気流入）'});
       }
-      // ドレン管（ピット）に高圧蒸気放出の危険検出
-      if(n.type===NODE_TYPE.DRAIN&&n._sim.fIn===FLUID.STEAM&&n._sim.rateIn>0.1){
+      // 安全弁の設定リリーフ圧 超過検出（手動弁のまま・挙動は変えず判定のみ）
+      if(n.type===NODE_TYPE.SAFETY&&n.ext.reliefMPa!=null&&(n._sim.presIn||0)>n.ext.reliefMPa){
+        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 安全弁（設定リリーフ圧 超過）'});
+      }
+      // ドレン管（ピット）に高圧蒸気放出の危険検出（Phase 1: 絶対圧 MPa 判定）
+      if(n.type===NODE_TYPE.DRAIN&&n._sim.fIn===FLUID.STEAM&&(n._sim.presIn||0)>PRESSURE.DRAIN_DANGER_MPA){
         Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: ドレン管（高圧蒸気流入）'});
       }
     });
@@ -2321,15 +2373,22 @@ const SealedDetector={
       Store.nodes.forEach(n=>{
         if(n.type!==NODE_TYPE.PGAUGE)return;
         let st='empty';
+        // Phase 1: 接続配管の絶対圧（順流・逆流の最大）を計器値として採取し、対ソース%を併記
+        let presVal=0,srcRef=0;
         const es=edgesByNode.get(n.id)||EMPTY_EDGES;
         for(const e of es){
           const active=Math.max(e._sim.f||0, e._sim.b||0);
           const r=e.ext.hasResidual?e.ext.residualType:0;
           const unc=!!e.ext.residualUncertain;
-          if((active===FLUID.STEAM)||(r===FLUID.STEAM&&!unc)){st='steam';break;}
-          if(unc||r===FLUID.WATER||r===FLUID.DRAIN||active===FLUID.WATER||active===FLUID.DRAIN)st='uncertain';
+          if((active===FLUID.STEAM)||(r===FLUID.STEAM&&!unc)){st='steam';}
+          else if(unc||r===FLUID.WATER||r===FLUID.DRAIN||active===FLUID.WATER||active===FLUID.DRAIN){if(st!=='steam')st='uncertain';}
+          const fp=e._sim.pres||0,bp=e._sim.bpres||0;
+          if(fp>presVal){presVal=fp;srcRef=e._sim.srcPres||0;}
+          if(bp>presVal){presVal=bp;srcRef=e._sim.bsrcPres||0;}
         }
         n._sim.gauge=st;
+        n._sim.presVal=presVal;
+        n._sim.pct=srcRef>0?Math.round(presVal/srcRef*100):0;
       });
     }
   }
@@ -2817,7 +2876,7 @@ const Renderer={
       const hasAnomaly=_anomalyNodeSet.has(n.id);
 
       // Phase 3: シグネチャ（位置・回転・選択・流体・弁開度・ラベル・異常・名前）が一致したらスキップ
-      const sig=_nodeSigBase+n.x+','+n.y+','+(n.rotation||0)+'|'+(n.id===Store.config.selectedNodeIdForConnection?1:0)+(Store.selection.has(n.id)?1:0)+'|'+n._sim.fOut+','+((n._sim.fOut>0||n._sim.rateOut>0)?1:0)+'|'+n.state.valveState+'|'+n.labelOffset.x+','+n.labelOffset.y+'|'+(isPinned?1:0)+(hasAnomaly?1:0)+'|'+(n.ext.limitRate??'')+'|'+(n._sim.gauge||'')+'|'+dispName;
+      const sig=_nodeSigBase+n.x+','+n.y+','+(n.rotation||0)+'|'+(n.id===Store.config.selectedNodeIdForConnection?1:0)+(Store.selection.has(n.id)?1:0)+'|'+n._sim.fOut+','+((n._sim.fOut>0||n._sim.rateOut>0)?1:0)+'|'+n.state.valveState+'|'+n.labelOffset.x+','+n.labelOffset.y+'|'+(isPinned?1:0)+(hasAnomaly?1:0)+'|'+(n.ext.limitRate??'')+'|'+(n.ext.outletMPa??'')+'|'+(n._sim.gauge||'')+'|'+((n._sim.presVal!=null)?n._sim.presVal.toFixed(3):'')+','+(n._sim.pct??'')+'|'+((n._sim.presOut!=null)?n._sim.presOut.toFixed(3):'')+','+((n._sim.srcPresIn!=null)?n._sim.srcPresIn.toFixed(3):'')+'|'+dispName;
 
       let g=document.getElementById(`node-grp-${n.id}`);
       if(g&&Renderer._nodeSig.get(n.id)===sig){
@@ -2957,12 +3016,39 @@ const Renderer={
           rLbl.setAttribute('fill', 'var(--text-2)');
           g.appendChild(rLbl);
         }
-        const rTxt = `${Math.round((n.ext.limitRate ?? 0.45) * 100)}%`;
+        // Phase 1: 出口圧(MPa) ＋ 対ソース% を併記
+        const _src = n._sim.srcPresIn>0 ? n._sim.srcPresIn : PRESSURE.DEFAULT_SOURCE_MPA;
+        const _setMPa = (n.ext.outletMPa!=null) ? n.ext.outletMPa : _src*(n.ext.limitRate??PRESSURE.DEFAULT_REDUCER_RATE);
+        const rTxt = `${_setMPa.toFixed(2)}MPa (${Math.round(_setMPa/_src*100)}%)`;
         if (rLbl.textContent !== rTxt) rLbl.textContent = rTxt;
       } else if (rLbl) {
         rLbl.remove();
       }
       // ▲▲▲ 追加ここまで ▲▲▲
+
+      // ▼▼▼ Phase 1: 圧力計の数値表示（MPa ＋ 対ソース%） ▼▼▼
+      let pLbl = g.querySelector('.pgauge-label');
+      if (n.type === NODE_TYPE.PGAUGE) {
+        if (!pLbl) {
+          pLbl = createNS('text'); pLbl.classList.add('pgauge-label');
+          pLbl.setAttribute('x', '0'); pLbl.setAttribute('y', '20');
+          pLbl.setAttribute('text-anchor', 'middle');
+          pLbl.setAttribute('font-size', '9');
+          pLbl.setAttribute('font-weight', '600');
+          pLbl.setAttribute('fill', 'var(--text-1)');
+          pLbl.setAttribute('paint-order', 'stroke');
+          pLbl.setAttribute('stroke', 'white');
+          pLbl.setAttribute('stroke-width', '2.5');
+          pLbl.setAttribute('stroke-linejoin', 'round');
+          g.appendChild(pLbl);
+        }
+        const _pv = n._sim.presVal || 0;
+        const pTxt = `${_pv.toFixed(2)}MPa (${n._sim.pct||0}%)`;
+        if (pLbl.textContent !== pTxt) pLbl.textContent = pTxt;
+      } else if (pLbl) {
+        pLbl.remove();
+      }
+      // ▲▲▲ Phase 1 ここまで ▲▲▲
 
       // hasAnomaly はシグネチャ算出時に取得済み
       let aRing=g.querySelector('.anomaly-ring'),aIco=g.querySelector('.anomaly-icon');
@@ -3109,6 +3195,28 @@ const ValveSelector={
     checkWrap.appendChild(document.createTextNode('マトリクスに表示しない'));
     el.appendChild(checkWrap);
 
+    // Phase 1: 安全弁は手動弁のまま。設定リリーフ圧(MPa)は「過圧判定」専用（挙動は変えない）。
+    if(node.type===NODE_TYPE.SAFETY){
+      const reliefWrap=document.createElement('label');
+      reliefWrap.style.cssText='display:flex;align-items:center;gap:6px;font-size:11px;padding:4px 8px;font-weight:500;color:var(--text-1);';
+      reliefWrap.appendChild(document.createTextNode('リリーフ圧'));
+      const ri=document.createElement('input');
+      ri.type='number';ri.min='0';ri.step='0.05';ri.placeholder='未設定';
+      if(node.ext.reliefMPa!=null)ri.value=node.ext.reliefMPa;
+      ri.style.cssText='width:64px;padding:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:7px;font-size:12px;font-family:var(--font);text-align:center;';
+      ri.addEventListener('pointerdown',ev=>ev.stopPropagation());
+      const _commitRelief=()=>{
+        Store.pushHistory();
+        const v=parseFloat(ri.value);
+        if(ri.value===''||isNaN(v)||v<0)delete node.ext.reliefMPa;else node.ext.reliefMPa=v;
+        Simulator.run(Renderer.renderAll);
+      };
+      ri.addEventListener('change',_commitRelief);
+      reliefWrap.appendChild(ri);
+      reliefWrap.appendChild(document.createTextNode('MPa'));
+      el.appendChild(reliefWrap);
+    }
+
     // Phase 2: What-if 警告バー（フロー外の絶対配置でポップアップ直下に表示）
     const _warn=document.createElement('div');
     _warn.className='vs-warn';
@@ -3203,24 +3311,32 @@ const ReducerSelector={
     const el=document.createElement('div');
     el.id='reducer-selector';el.className='glass vs-pop rs-pop';
     
-    const currentVal = Math.round((node.ext.limitRate ?? 0.45) * 100);
-    
+    // Phase 1: 出口圧を絶対圧(MPa)で設定し、対ソース%を併記。
+    const srcPres = (node._sim.srcPresIn>0 ? node._sim.srcPresIn : PRESSURE.DEFAULT_SOURCE_MPA);
+    const curMPa = (node.ext.outletMPa!=null) ? node.ext.outletMPa : srcPres*(node.ext.limitRate??PRESSURE.DEFAULT_REDUCER_RATE);
+    const sliderMax = Math.max(srcPres, curMPa, 0.05);
+    const _pct = (v)=>Math.round(v/srcPres*100);
+    const _fmt = (v)=>`${v.toFixed(2)} MPa (${_pct(v)}%)`;
+
     const display = document.createElement('div');
     display.className = 'rs-val-display';
-    display.textContent = `${currentVal}%`;
-    
+    display.textContent = _fmt(curMPa);
+
     const slider = document.createElement('input');
     slider.type = 'range'; slider.className = 'rs-slider';
-    slider.min = '0'; slider.max = '100'; slider.step = '5';
-    slider.value = currentVal;
-    
+    slider.min = '0'; slider.max = sliderMax.toFixed(2); slider.step = '0.05';
+    slider.value = Math.min(curMPa, sliderMax).toFixed(2);
+
     slider.addEventListener('input', (ev) => {
-      display.textContent = `${ev.target.value}%`;
+      display.textContent = _fmt(parseFloat(ev.target.value));
     });
-    
+
     slider.addEventListener('change', (ev) => {
       Store.pushHistory();
-      node.ext.limitRate = parseInt(ev.target.value, 10) / 100;
+      const mpa = parseFloat(ev.target.value);
+      node.ext.outletMPa = mpa;
+      // 流量強度(rate)表示との整合のため limitRate も対ソース比で同期保持
+      node.ext.limitRate = srcPres>0 ? Math.max(0, Math.min(1, mpa/srcPres)) : (node.ext.limitRate??PRESSURE.DEFAULT_REDUCER_RATE);
       Simulator.run(Renderer.renderAll);
     });
 
@@ -3254,6 +3370,95 @@ const ReducerSelector={
     if(ReducerSelector._el){ReducerSelector._el.remove();ReducerSelector._el=null;}
     ReducerSelector._node=null;
     if(ReducerSelector._outsideHandler){document.removeEventListener('pointerdown',ReducerSelector._outsideHandler,{capture:true});ReducerSelector._outsideHandler=null;}
+  }
+};
+
+/* ━━━━━━━━ PRESSURE SELECTOR (Phase 1: Source 元圧 / Heat Exchanger 耐圧閾値) ━━━━━━━━ */
+// 絶対圧(MPa)の構成値を編集する汎用ポップアップ。field でノードの ext.* を切り替える。
+const PressureSelector={
+  _el:null,_node:null,_outsideHandler:null,
+  // 編集対象の定義: ノード種別 → { field, title, def, allowDefault }
+  _SPEC:{
+    source:{field:'pressureMPa', title:'元圧 (MPa)', def:PRESSURE.DEFAULT_SOURCE_MPA, allowDefault:false},
+    heatex:{field:'maxMPa',      title:'耐圧／警報閾値 (MPa)', def:PRESSURE.HEATEX_DANGER_MPA, allowDefault:true}
+  },
+  open:(node)=>{
+    PressureSelector.close();
+    const spec=PressureSelector._SPEC[node.type];
+    if(!spec)return;
+    PressureSelector._node=node;
+    const r=Renderer.svgLayer.getBoundingClientRect();
+    const pos={x:node.x*Store.config.currentZoom+r.left,y:node.y*Store.config.currentZoom+r.top};
+
+    const el=document.createElement('div');
+    el.id='pressure-selector';el.className='glass vs-pop rs-pop';
+
+    const title=document.createElement('div');
+    title.style.cssText='font-size:11px;font-weight:600;color:var(--text-2);text-align:center;margin-bottom:4px;';
+    title.textContent=spec.title;
+
+    const curVal=(node.ext[spec.field]!=null)?node.ext[spec.field]:spec.def;
+    const display=document.createElement('div');
+    display.className='rs-val-display';
+    const _set=(node.ext[spec.field]!=null);
+    display.textContent=`${curVal.toFixed(2)} MPa${(!_set&&spec.allowDefault)?'（既定）':''}`;
+
+    const input=document.createElement('input');
+    input.type='number';input.min='0';input.step='0.05';input.value=curVal.toFixed(2);
+    input.style.cssText='width:100%;padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:13px;font-family:var(--font);text-align:center;box-sizing:border-box;';
+
+    const commit=()=>{
+      const v=parseFloat(input.value);
+      if(isNaN(v)||v<0)return;
+      Store.pushHistory();
+      node.ext[spec.field]=v;
+      Simulator.run(Renderer.renderAll);
+      display.textContent=`${v.toFixed(2)} MPa`;
+    };
+    input.addEventListener('change',commit);
+    input.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();commit();PressureSelector.close();}});
+
+    el.appendChild(title);
+    el.appendChild(display);
+    el.appendChild(input);
+
+    if(spec.allowDefault){
+      const resetBtn=document.createElement('div');
+      resetBtn.className='vs-opt';
+      resetBtn.style.cssText='justify-content:center;font-size:11px;padding:5px;margin-top:4px;border-top:1px solid rgba(0,0,0,0.06);color:var(--text-2);';
+      resetBtn.textContent='既定値に戻す';
+      resetBtn.addEventListener('click',()=>{
+        Store.pushHistory();
+        delete node.ext[spec.field];
+        Simulator.run(Renderer.renderAll);
+        PressureSelector.close();
+      });
+      el.appendChild(resetBtn);
+    }
+
+    const renameBtn=document.createElement('div');
+    renameBtn.className='vs-opt';
+    renameBtn.style.cssText='justify-content:center;font-size:12px;font-weight:600;padding:6px;margin-top:4px;border-top:1px solid rgba(0,0,0,0.06);';
+    renameBtn.textContent='✎ 名前変更';
+    renameBtn.addEventListener('click',()=>{
+      PressureSelector.close();
+      const currentName=node.ext.customName||'';
+      const newName=prompt('名前を入力してください（空でリセット）:',currentName);
+      if(newName!==null){Store.pushHistory();if(newName.trim()==='')delete node.ext.customName;else node.ext.customName=newName.trim();Renderer.renderAll();}
+    });
+    el.appendChild(renameBtn);
+
+    el.style.cssText=`position:fixed; left:${pos.x}px; top:${pos.y+22}px; transform:translateX(-50%); z-index:350; min-width:160px;`;
+    document.body.appendChild(el);PressureSelector._el=el;
+    requestAnimationFrame(()=>{input.focus();input.select();});
+
+    PressureSelector._outsideHandler=(ev)=>{if(PressureSelector._el&&!PressureSelector._el.contains(ev.target))PressureSelector.close();};
+    setTimeout(()=>document.addEventListener('pointerdown',PressureSelector._outsideHandler,{capture:true}),50);
+  },
+  close:()=>{
+    if(PressureSelector._el){PressureSelector._el.remove();PressureSelector._el=null;}
+    PressureSelector._node=null;
+    if(PressureSelector._outsideHandler){document.removeEventListener('pointerdown',PressureSelector._outsideHandler,{capture:true});PressureSelector._outsideHandler=null;}
   }
 };
 
@@ -3607,7 +3812,7 @@ const Controller={
       Renderer.hideSnapGuides();let mutated=false;
       if(Store.config.isConnectMode){if(!dragged&&node){if(!Store.config.selectedNodeIdForConnection){Store.config.selectedNodeIdForConnection=node.id;}else{if(Store.config.selectedNodeIdForConnection!==node.id&&!Store.edges.some(e=>e.from===Store.config.selectedNodeIdForConnection&&e.to===node.id)){Store.pushHistory();const newEdge=Store.createEdge(Store.config.selectedNodeIdForConnection,node.id);if(Store.config.autoElbow){const fn=Store.getNode(Store.config.selectedNodeIdForConnection);if(fn){const dx=Math.abs(node.x-fn.x),dy=Math.abs(node.y-fn.y);if(dx>25&&dy>25)newEdge.ext.waypoints=[{x:node.x,y:fn.y}];}}Store.edges.push(newEdge);Store.invalidateIndex();mutated=true;}Store.config.selectedNodeIdForConnection=null;}}}
 
-      else{const tool=Store.config.currentTool;if(!dragged&&node){if(tool===NODE_TYPE.ROTATE){Store.pushHistory();node.rotation=((node.rotation||0)+90)%360;mutated=true;}else if(tool===NODE_TYPE.POINTER&&[NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(node.type)){ValveSelector.open(node);Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};return;}else if(tool===NODE_TYPE.POINTER&&node.type===NODE_TYPE.REDUCER){ReducerSelector.open(node);Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};return;}}
+      else{const tool=Store.config.currentTool;if(!dragged&&node){if(tool===NODE_TYPE.ROTATE){Store.pushHistory();node.rotation=((node.rotation||0)+90)%360;mutated=true;}else if(tool===NODE_TYPE.POINTER&&[NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(node.type)){ValveSelector.open(node);Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};return;}else if(tool===NODE_TYPE.POINTER&&node.type===NODE_TYPE.REDUCER){ReducerSelector.open(node);Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};return;}else if(tool===NODE_TYPE.POINTER&&[NODE_TYPE.SOURCE, NODE_TYPE.HEATEX].includes(node.type)){PressureSelector.open(node);Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};return;}}
               else if(dragged&&node){if(Store.dragState.preSnapshot)Store.pushSnapshot(Store.dragState.preSnapshot);const deltaX=node.x-Store.dragState.preNodeX,deltaY=node.y-Store.dragState.preNodeY;if(Math.abs(deltaX)>0.5||Math.abs(deltaY)>0.5){Store.edgesByNode(node.id).forEach(edge=>{if(edge.ext.waypoints?.length){edge.ext.waypoints.forEach(wp=>{wp.x+=deltaX;wp.y+=deltaY;});}});}mutated=true;}}
             Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};if(mutated)Simulator.run(Renderer.renderAll);else Renderer.renderAll();}
 

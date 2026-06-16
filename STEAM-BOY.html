@@ -295,13 +295,15 @@ body.zen-mode #autosave-off-badge{display:none;}
 .node.selected .node-shape{stroke-dasharray:4;animation:dash 1s linear infinite;}
 .node.multi-selected .node-shape{stroke:var(--accent)!important;stroke-width:3;filter:drop-shadow(0 0 4px rgba(0,122,255,0.4));}
 .selection-ring{animation:dash .8s linear infinite;pointer-events:none;}
-.node-label{cursor:grab;pointer-events:auto;user-select:none;touch-action:none;opacity:0;transition:opacity .18s ease;}
-.node-label:active{cursor:grabbing;}
-.node:hover .node-label{opacity:1;}
-.leader-line{stroke:var(--text-3);stroke-width:1;stroke-dasharray:3,3;pointer-events:none;opacity:0;transition:opacity .18s ease;}
-.node:hover .leader-line{opacity:1;}
+.node-label,.pgauge-label{cursor:grab;pointer-events:auto;user-select:none;touch-action:none;opacity:0;transition:opacity .18s ease;}
+.node-label:active,.pgauge-label:active{cursor:grabbing;}
+.node:hover .node-label,.node:hover .pgauge-label{opacity:1;}
+.leader-line,.pgauge-leader{stroke:var(--text-3);stroke-width:1;stroke-dasharray:3,3;pointer-events:none;opacity:0;transition:opacity .18s ease;}
+.node:hover .leader-line,.node:hover .pgauge-leader{opacity:1;}
 #svg-layer.always-show-labels .node-label,
-#svg-layer.always-show-labels .leader-line {
+#svg-layer.always-show-labels .leader-line,
+#svg-layer.always-show-labels .pgauge-label,
+#svg-layer.always-show-labels .pgauge-leader {
   opacity: 1 !important;
 }
 .state-0{stroke:var(--color-0);} .state-1{stroke:var(--color-1);} .state-2{stroke:var(--color-2);} .state-3{stroke:var(--color-3);}
@@ -3133,13 +3135,18 @@ const Renderer={
       }
       // ▲▲▲ 追加ここまで ▲▲▲
 
-      // ▼▼▼ Phase 1: 圧力計の数値表示（MPa ＋ 対ソース%） ▼▼▼
-      let pLbl = g.querySelector('.pgauge-label');
-      if (n.type === NODE_TYPE.PGAUGE) {
+      // ▼▼▼ Phase 1: 圧力計の数値ラベル（MPa ＋ 対ソース%）。
+      //     バルブ名ラベル同様に「バルブ名ラベル」トグルで表示制御し、ホバー/「常に表示」で出現、
+      //     labelOffset でドラッグ移動可能・リーダー線付き（クラスは衝突回避のため pgauge 専用） ▼▼▼
+      let pLbl = g.querySelector('.pgauge-label'), pLl = g.querySelector('.pgauge-leader');
+      if (n.type === NODE_TYPE.PGAUGE && Store.config.showValveLabels) {
+        if (!pLl) { pLl = createNS('line'); pLl.classList.add('pgauge-leader'); pLl.setAttribute('x1','0'); pLl.setAttribute('y1','0'); g.appendChild(pLl); }
+        setAttr(pLl,'x2',n.labelOffset.x); setAttr(pLl,'y2',n.labelOffset.y);
         if (!pLbl) {
           pLbl = createNS('text'); pLbl.classList.add('pgauge-label');
-          pLbl.setAttribute('x', '0'); pLbl.setAttribute('y', '20');
+          // 不変属性は生成時に1度だけ設定
           pLbl.setAttribute('text-anchor', 'middle');
+          pLbl.setAttribute('dominant-baseline', 'central');
           pLbl.setAttribute('font-size', '9');
           pLbl.setAttribute('font-weight', '600');
           pLbl.setAttribute('fill', 'var(--text-1)');
@@ -3149,11 +3156,13 @@ const Renderer={
           pLbl.setAttribute('stroke-linejoin', 'round');
           g.appendChild(pLbl);
         }
+        setAttr(pLbl,'x',n.labelOffset.x); setAttr(pLbl,'y',n.labelOffset.y);
         const _pv = n._sim.presVal || 0;
         const pTxt = `${_pv.toFixed(2)}MPa (${n._sim.pct||0}%)`;
         if (pLbl.textContent !== pTxt) pLbl.textContent = pTxt;
-      } else if (pLbl) {
-        pLbl.remove();
+      } else {
+        if (pLbl) pLbl.remove();
+        if (pLl) pLl.remove();
       }
       // ▲▲▲ Phase 1 ここまで ▲▲▲
 
@@ -3885,7 +3894,7 @@ const Controller={
     }
     if(Store.multiDrag.active&&ev.pointerId===Store.multiDrag.pointerId){const _mdx=ev.clientX-Store.multiDrag.startClientX,_mdy=ev.clientY-Store.multiDrag.startClientY,moved=Math.sqrt(_mdx*_mdx+_mdy*_mdy);if(!Store.multiDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.multiDrag.hasDragged=true;if(!Store.multiDrag.preSnapshot)Store.multiDrag.preSnapshot=Store.snapshot();}if(Store.multiDrag.hasDragged){const coords=Renderer.getMouseSvgCoords(ev),dx=coords.x-Store.multiDrag.startSvgX,dy=coords.y-Store.multiDrag.startSvgY;Store.multiDrag.nodes.forEach(item=>{item.node.x=item.startX+dx;item.node.y=item.startY+dy;const gEl=Renderer.nodesGroup.querySelector(`[data-id="${item.node.id}"]`);if(gEl)Renderer.updateNodeLive(item.node,gEl);});}}
     if(Store.dragState.isDragging&&Store.dragState.targetNode&&ev.pointerId===Store.dragState.pointerId){const _ddx=ev.clientX-Store.dragState.startClientX,_ddy=ev.clientY-Store.dragState.startClientY,moved=Math.sqrt(_ddx*_ddx+_ddy*_ddy);if(!Store.dragState.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.dragState.hasDragged=true;if(!Store.dragState.preSnapshot)Store.dragState.preSnapshot=Store.snapshot();}if(Store.dragState.hasDragged&&!Store.config.isConnectMode){const raw=Renderer.getMouseSvgCoords(ev),sn=Controller.applySnap(raw.x-Store.dragState.offsetX,raw.y-Store.dragState.offsetY,Store.dragState.targetNode.id);Store.dragState.targetNode.x=sn.x;Store.dragState.targetNode.y=sn.y;Renderer.updateNodeLive(Store.dragState.targetNode,Store.dragState.gEl);Renderer.showSnapGuides(sn.gX,sn.gY);}}
-    if(Store.labelDrag.isDragging&&Store.labelDrag.targetNode&&ev.pointerId===Store.labelDrag.pointerId){const _ldx=ev.clientX-Store.labelDrag.startClientX,_ldy=ev.clientY-Store.labelDrag.startClientY,moved=Math.sqrt(_ldx*_ldx+_ldy*_ldy);if(!Store.labelDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.labelDrag.hasDragged=true;if(!Store.labelDrag.preSnapshot)Store.labelDrag.preSnapshot=Store.snapshot();}if(Store.labelDrag.hasDragged){const c=Renderer.getMouseSvgCoords(ev),nx=Store.labelDrag.startOffsetX+(c.x-Store.labelDrag.startX),ny=Store.labelDrag.startOffsetY+(c.y-Store.labelDrag.startY);Store.labelDrag.targetNode.labelOffset={x:nx,y:ny};const lEl=Store.labelDrag.gEl;if(lEl){lEl.setAttribute('x',nx);lEl.setAttribute('y',ny);}const g=lEl?.closest('g.node');if(g){const ll=g.querySelector('.leader-line');if(ll){ll.setAttribute('x2',nx);ll.setAttribute('y2',ny);}}}}
+    if(Store.labelDrag.isDragging&&Store.labelDrag.targetNode&&ev.pointerId===Store.labelDrag.pointerId){const _ldx=ev.clientX-Store.labelDrag.startClientX,_ldy=ev.clientY-Store.labelDrag.startClientY,moved=Math.sqrt(_ldx*_ldx+_ldy*_ldy);if(!Store.labelDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.labelDrag.hasDragged=true;if(!Store.labelDrag.preSnapshot)Store.labelDrag.preSnapshot=Store.snapshot();}if(Store.labelDrag.hasDragged){const c=Renderer.getMouseSvgCoords(ev),nx=Store.labelDrag.startOffsetX+(c.x-Store.labelDrag.startX),ny=Store.labelDrag.startOffsetY+(c.y-Store.labelDrag.startY);Store.labelDrag.targetNode.labelOffset={x:nx,y:ny};const lEl=Store.labelDrag.gEl;if(lEl){lEl.setAttribute('x',nx);lEl.setAttribute('y',ny);}const g=lEl?.closest('g.node');if(g){const ll=g.querySelector('.leader-line, .pgauge-leader');if(ll){ll.setAttribute('x2',nx);ll.setAttribute('y2',ny);}}}}
     if(Store.waypointDrag.active&&ev.pointerId===Store.waypointDrag.pointerId){const _wdx=ev.clientX-Store.waypointDrag.startClientX,_wdy=ev.clientY-Store.waypointDrag.startClientY,moved=Math.sqrt(_wdx*_wdx+_wdy*_wdy);if(!Store.waypointDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.waypointDrag.hasDragged=true;if(!Store.waypointDrag.preSnapshot)Store.waypointDrag.preSnapshot=Store.snapshot();}if(Store.waypointDrag.hasDragged){const c=Renderer.getMouseSvgCoords(ev);Store.waypointDrag.edge.ext.waypoints[Store.waypointDrag.index]={x:c.x,y:c.y};Renderer.updateEdgePathLive(Store.waypointDrag.edge);if(Store.waypointDrag.wpEl){Store.waypointDrag.wpEl.setAttribute('cx',c.x);Store.waypointDrag.wpEl.setAttribute('cy',c.y);}}}
     if(Store.rectSelect.active&&ev.pointerId===Store.rectSelect.pointerId){const c=Renderer.getMouseSvgCoords(ev);Store.rectSelect.currentSvgX=c.x;Store.rectSelect.currentSvgY=c.y;const x=Math.min(Store.rectSelect.startSvgX,c.x),y=Math.min(Store.rectSelect.startSvgY,c.y),w=Math.abs(c.x-Store.rectSelect.startSvgX),h=Math.abs(c.y-Store.rectSelect.startSvgY);Renderer.selectRectEl.setAttribute('x',x);Renderer.selectRectEl.setAttribute('y',y);Renderer.selectRectEl.setAttribute('width',w);Renderer.selectRectEl.setAttribute('height',h);Renderer.selectRectEl.removeAttribute('display');}
     if(Store.config.isConnectMode&&Store.config.selectedNodeIdForConnection){const c=Renderer.getMouseSvgCoords(ev);Renderer.connectPreviewLine.setAttribute('x2',c.x);Renderer.connectPreviewLine.setAttribute('y2',c.y);}
@@ -3960,8 +3969,8 @@ const Controller={
       return;
     }
 
-  // 1. ラベルがクリックされたか？
-    if(ev.target.classList.contains('node-label')) {
+  // 1. ラベルがクリックされたか？（バルブ名ラベル／圧力計の数値ラベル）
+    if(ev.target.classList.contains('node-label') || ev.target.classList.contains('pgauge-label')) {
         const g = ev.target.closest('g.node');
         const nodeId = g?.getAttribute('data-id');
         const node = Store.getNode(nodeId);

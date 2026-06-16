@@ -356,8 +356,8 @@ body.zen-mode #autosave-off-badge{display:none;}
   animation: sealedBgPulse 2.4s ease-in-out infinite !important;
 }
 /* ④ 不確定残留（密閉空間の広がり）＝黄。赤/紫の点滅を黄の点滅へ上書き */
-@keyframes uncertainPulse { 0%,100%{stroke:#FFCC00;opacity:1;} 50%{stroke:#FFE066;opacity:1;} }
-@keyframes uncertainBgPulse { 0%,100%{stroke:#FFCC00;opacity:.3;} 50%{stroke:#FFE066;opacity:.3;} }
+@keyframes uncertainPulse { 0%,100%{stroke:#FFCC00;opacity:1;} 50%{stroke:#FFCC00;opacity:.25;} }
+@keyframes uncertainBgPulse { 0%,100%{stroke:#FFCC00;opacity:.4;} 50%{stroke:#FFCC00;opacity:.08;} }
 g.edge-grp[data-uncertain="1"] .edge-path,
 g.edge-grp[data-uncertain="1"] .flow-base:not(.edge-sealed-bg){stroke:#FFCC00 !important;}
 g.edge-grp[data-uncertain="1"] .edge-sealed{animation:uncertainPulse 2.4s ease-in-out infinite !important;}
@@ -425,8 +425,10 @@ g.node[data-valve-state="2"] .node-shape{fill:rgba(52,199,89,.2);}
 .pgauge-face{fill:#34C759;stroke:#2aa84a;stroke-width:2;transition:fill .2s,stroke .2s;}
 .pgauge-needle{stroke:#1d1d1f;stroke-opacity:.85;}
 g.node[data-gauge-state="steam"] .pgauge-face{fill:#FF3B30;stroke:#c92a20;}
-g.node[data-gauge-state="uncertain"] .pgauge-face{fill:#FFCC00;stroke:#c29a00;}
+g.node[data-gauge-state="uncertain"] .pgauge-face{fill:#FFCC00;stroke:#c29a00;animation:gaugeUncertainPulse 2.4s ease-in-out infinite;}
 g.node[data-gauge-state="empty"] .pgauge-face{fill:#34C759;stroke:#2aa84a;}
+/* 残圧・残液（不確定）と同じ、黄のゆるやかな点滅（不透明度を揺らす） */
+@keyframes gaugeUncertainPulse{0%,100%{opacity:1;}50%{opacity:.45;}}
 
 /* ── Epic 7: Viewport Culling — 画面外エッジのアニメーション停止 ── */
 g.edge-grp[data-culled="1"] .flow-dash{animation-play-state:paused;}
@@ -1385,7 +1387,11 @@ body.master-workspace #mt-resize-handle{display:block;}
 /* タイトルブロックは印刷時のみ表示 */
 .opm-titleblock{display:none;}
 /* インライン・クイック手順追加バー（1クリックで種別ごとに追加） */
-.opm-quickadd{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 0 4px;}
+.opm-quickadd{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 0 4px;}
+.opm-qa-add{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1px solid rgba(0,122,255,0.28);border-radius:9px;background:rgba(0,122,255,0.10);color:var(--accent);font-size:12.5px;font-weight:700;font-family:var(--font);cursor:pointer;transition:all .12s;}
+.opm-qa-add:hover{background:rgba(0,122,255,0.18);transform:translateY(-1px);}
+.opm-qa-add:active{transform:translateY(0);}
+.opm-qa-caret{font-size:10px;opacity:.8;}
 .opm-qa-label{font-size:11px;font-weight:700;color:var(--text-2);margin-right:2px;}
 .opm-qa-btn{padding:6px 11px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;background:var(--surface,#fff);color:var(--text-1);font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;transition:all .12s;}
 .opm-qa-btn:hover{background:rgba(0,122,255,0.08);border-color:var(--accent);color:var(--accent);transform:translateY(-1px);}
@@ -5205,13 +5211,9 @@ const OperationManual = {
       const b = (v, l, cls) => `<button type="button" class="opm-op-tg ${cls}${cur === v ? ' active' : ''}" data-id="${s.id}" data-op="${v}" title="${cls === 'close' ? '閉止' : cls === 'partial' ? '微開' : '開放'}">${l}</button>`;
       return `<div class="opm-op-toggle" data-id="${s.id}">${b('0', '閉', 'close')}${b('1', '微', 'partial')}${b('2', '開', 'open')}</div>`;
     };
-    // インライン・クイック手順追加バー（種別ボタンは1クリックで追加／🖱でその場から図ピック）
+    // インライン・クイック手順追加（1ボタンに集約。クリックでメニュー＝種別＋図から追加）
     const quickAdd = (phase) => `<div class="opm-quickadd opm-no-print" data-phase="${phase}">
-      <span class="opm-qa-label">＋ 手順:</span>
-      ${Object.entries(OperationManual.KINDS).map(([k, v]) => `<button class="opm-qa-btn" data-phase="${phase}" data-kind="${k}">${v.menu}</button>`).join('')}
-      <button class="opm-qa-btn opm-qa-section" data-phase="${phase}" data-kind="section" title="区切り見出しを挿入">▸ 見出し</button>
-      <span class="opm-qa-sep"></span>
-      <button class="opm-qa-pick" data-phase="${phase}" title="図のバルブ・機器をクリックして追加">🖱 図から追加</button>
+      <button class="opm-qa-add" data-phase="${phase}" title="手順を追加（種別を選択）">＋ 手順を追加 <span class="opm-qa-caret">▾</span></button>
       <button class="opm-qa-route" data-phase="${phase}" title="バルブ手順を上流→下流の経路順に並べ替え（見出し・確認は位置を保持）">🧭 経路順</button>
     </div>`;
     // 表の総列数（セクション行の colspan 用）
@@ -5526,8 +5528,7 @@ const OperationManual = {
     if (logoClear) logoClear.onclick = () => { Store.config.logoUrl = ''; Persistence.scheduleSave(); OperationManual._render(); };
 
     // 手順の追加（インライン・クイック追加：1クリックで種別ごとに追加）・削除・複製
-    m.querySelectorAll('.opm-qa-btn').forEach(b => b.onclick = () => OperationManual._addStep(b.dataset.phase, b.dataset.kind));
-    m.querySelectorAll('.opm-qa-pick').forEach(b => b.onclick = () => ManualPicker.start(b.dataset.phase));
+    m.querySelectorAll('.opm-qa-add').forEach(b => b.onclick = (e) => { e.stopPropagation(); const r = b.getBoundingClientRect(); OperationManual._openAddMenu(b.dataset.phase, r.left, r.bottom + 4); });
     m.querySelectorAll('.opm-qa-route').forEach(b => b.onclick = () => OperationManual._sortPhaseByRoute(b.dataset.phase));
     // フェーズの追加・削除・並べ替え
     { const ap = m.querySelector('#opm-add-phase'); if (ap) ap.onclick = () => OperationManual._addPhase(); }
@@ -5866,6 +5867,14 @@ const OperationManual = {
     if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, true);
     else OperationManual._clearCanvasFocus();
     if (OperationManual._statePreview) OperationManual._applyStatePreview(id);   // B-5
+  },
+  // 手順追加メニュー（1ボタンに集約した種別選択ポップオーバー）
+  _openAddMenu: (phase, x, y) => {
+    const items = Object.entries(OperationManual.KINDS).map(([k, v]) => ({ label: v.menu, onClick: () => OperationManual._addStep(phase, k) }));
+    items.push({ label: '▸ 見出し', onClick: () => OperationManual._addStep(phase, 'section') });
+    items.push({ separator: true });
+    items.push({ icon: '🖱', label: '図から追加', onClick: () => ManualPicker.start(phase) });
+    ContextMenu.open(x, y, items);
   },
   // B-6: バルブ手順を上流→下流（Sourceからのグラフ距離）順に並べ替え。
   // 見出し・確認・連絡などの非バルブ行はスロット位置を保持し、バルブ行同士だけを経路順に再配置。

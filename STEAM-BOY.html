@@ -1770,7 +1770,13 @@ const SimulatorCore={
           else{fOut=FLUID.EMPTY;rOut=0;}
         }
         else if(n.type===NODE_TYPE.DRAIN){fOut=(n._sim.fIn===FLUID.DRAIN)?FLUID.WATER:n._sim.fIn;}
-        else if(n.type===NODE_TYPE.REDUCER){fOut=n._sim.fIn;rOut=Math.min(rateIn, n.ext.limitRate ?? DEF_RED_RATE);}
+        else if(n.type===NODE_TYPE.REDUCER){
+          fOut=n._sim.fIn;
+          // 流量強度(rate)も出口圧(MPa)から導出して pres と整合させる（outletMPa 未設定時のみ旧 limitRate）
+          const _rsrc=srcPresIn>0?srcPresIn:DEF_SRC;
+          const _eff=(n.ext.outletMPa!=null)?Math.min(1,n.ext.outletMPa/_rsrc):(n.ext.limitRate??DEF_RED_RATE);
+          rOut=Math.min(rateIn,_eff);
+        }
         else if(n.type===NODE_TYPE.HEATEX){fOut=n._sim.fIn;rOut=rateIn;}
         else if(n.type===NODE_TYPE.PGAUGE){fOut=FLUID.EMPTY;rOut=0;}  // 圧力計は末端センサー（下流へ流さない）
         if(fOut===FLUID.EMPTY)rOut=0;
@@ -3375,11 +3381,14 @@ const ReducerSelector={
     });
 
     slider.addEventListener('change', (ev) => {
-      Store.pushHistory();
       const mpa = parseFloat(ev.target.value);
+      const from = curMPa;
+      Store.pushHistory();
       node.ext.outletMPa = mpa;
       // 流量強度(rate)表示との整合のため limitRate も対ソース比で同期保持
       node.ext.limitRate = srcPres>0 ? Math.max(0, Math.min(1, mpa/srcPres)) : (node.ext.limitRate??PRESSURE.DEFAULT_REDUCER_RATE);
+      // Phase 3: 出口圧変更を操作手順として記録
+      Sequencer.onPressureChange(node.id,'outletMPa',from,mpa);
       Simulator.run(Renderer.renderAll);
     });
 
@@ -3453,8 +3462,11 @@ const PressureSelector={
     const commit=()=>{
       const v=parseFloat(input.value);
       if(isNaN(v)||v<0)return;
+      const from=(node.ext[spec.field]!=null)?node.ext[spec.field]:spec.def;
       Store.pushHistory();
       node.ext[spec.field]=v;
+      // Phase 3: 元圧変更は操作手順として記録（耐圧閾値=構成値は記録しない）
+      if(node.type===NODE_TYPE.SOURCE)Sequencer.onPressureChange(node.id,'pressureMPa',from,v);
       Simulator.run(Renderer.renderAll);
       display.textContent=`${v.toFixed(2)} MPa`;
     };
@@ -4470,6 +4482,11 @@ const MasterTable = {
       // Phase 2: 圧力閾値の編集（ソース別マスター）
       if (ev.target.classList.contains('mt-pres-input')) {
         const field = ev.target.dataset.field;
+        const srcRef = (node._sim && node._sim.srcPresIn > 0) ? node._sim.srcPresIn : PRESSURE.DEFAULT_SOURCE_MPA;
+        // Phase 3: 操作手順の from（記録対象は元圧/出口圧のみ）
+        const fromVal = (node.ext[field] != null) ? node.ext[field]
+          : (field === 'pressureMPa' ? PRESSURE.DEFAULT_SOURCE_MPA
+            : field === 'outletMPa' ? srcRef * (node.ext.limitRate ?? PRESSURE.DEFAULT_REDUCER_RATE) : null);
         Store.pushHistory();
         const v = parseFloat(ev.target.value);
         if (ev.target.value === '' || isNaN(v) || v < 0) {
@@ -4478,9 +4495,10 @@ const MasterTable = {
           node.ext[field] = v;
           // 減圧弁は流量強度(rate)表示との整合のため limitRate も対ソース比で同期
           if (node.type === NODE_TYPE.REDUCER) {
-            const srcRef = (node._sim && node._sim.srcPresIn > 0) ? node._sim.srcPresIn : PRESSURE.DEFAULT_SOURCE_MPA;
             node.ext.limitRate = Math.max(0, Math.min(1, v / srcRef));
           }
+          // Phase 3: 元圧／出口圧の変更は操作手順として記録
+          if (field === 'pressureMPa' || field === 'outletMPa') Sequencer.onPressureChange(node.id, field, fromVal, v);
         }
         Simulator.run(() => { Renderer.renderAll(); MasterTable._renderPressure(); });
         return;
@@ -6295,6 +6313,24 @@ const Sequencer = {
     Sequencer.refresh();
   },
 
+  // Phase 3: 圧力操作（Source 元圧 / Reducer 出口圧）変更時にフック（記録中のみ手順へ追加）
+  onPressureChange: (nodeId, field, from, to) => {
+    if (!Sequencer.recording || from === to || from == null || to == null) return;
+    const n = Store.getNode(nodeId); if (!n) return;
+    const name = buildNameMap().get(nodeId) || (field === 'pressureMPa' ? 'Source' : 'Reducer');
+    const label = field === 'pressureMPa' ? '元圧' : '出口圧';
+    Sequencer._active.steps.push({ kind: 'pressure', nodeId, name, field, from, to, label });
+    Sequencer._index = Sequencer._active.steps.length;
+    Sequencer.refresh();
+  },
+
+  // 手順の説明テキスト（バルブ／圧力 両対応）
+  _stepDesc: (s) => {
+    const nm = `<span class="seq-cur">${(s.name || '').replace(/</g, '&lt;')}</span>`;
+    if (s.kind === 'pressure') return `${nm} の${s.label}を ${Number(s.to).toFixed(2)}MPa`;
+    return `${nm} を ${VALVE_STATE_LABEL[s.to]}`;
+  },
+
   togglePlay: () => { if (Sequencer.playing) Sequencer.pause(); else Sequencer.play(); },
 
   play: () => {
@@ -6332,13 +6368,25 @@ const Sequencer = {
     Sequencer.pause();
     k = Math.max(0, Math.min(k, a.steps.length));
     Store.restore(a.base);
-    for (let i = 0; i < k; i++) { const s = a.steps[i]; const n = Store.getNode(s.valveId); if (n) n.state.valveState = s.to; }
+    for (let i = 0; i < k; i++) {
+      const s = a.steps[i];
+      if (s.kind === 'pressure') { const n = Store.getNode(s.nodeId); if (n) n.ext[s.field] = s.to; }
+      else { const n = Store.getNode(s.valveId); if (n) n.state.valveState = s.to; }
+    }
     Sequencer._index = k;
     Simulator.run(() => { Renderer.renderAll(); Sequencer.refresh(); });
   },
 
   // 1ステップをアニメーション付きで適用
   _applyStep: (step, animate, done) => {
+    // Phase 3: 圧力操作ステップ（弁アニメーションなし・値を反映して再計算）
+    if (step.kind === 'pressure') {
+      const pn = Store.getNode(step.nodeId);
+      if (!pn) { if (done) done(); return; }
+      pn.ext[step.field] = step.to;
+      Simulator.run(() => { Renderer.renderAll(); if (done) done(); });
+      return;
+    }
     const node = Store.getNode(step.valveId);
     if (!node) { if (done) done(); return; }
     const prevStates = animate ? new Map(Store.edges.map(e => [e.id, { f: e._sim.f, b: e._sim.b || 0 }])) : null;
@@ -6415,13 +6463,11 @@ const Sequencer = {
     } else {
       const i = Sequencer._index;
       if (Sequencer.playing && i > 0 && i <= steps) {
-        const s = a.steps[i - 1];
-        lbl.innerHTML = `<span class="seq-playing">▶ 再生中</span> ${i}. <span class="seq-cur">${(s.name || '').replace(/</g, '&lt;')}</span> を ${VALVE_STATE_LABEL[s.to]}`;
+        lbl.innerHTML = `<span class="seq-playing">▶ 再生中</span> ${i}. ${Sequencer._stepDesc(a.steps[i - 1])}`;
       } else if (i >= steps) {
         lbl.innerHTML = `完了（全${steps}手順）— ⏮ で先頭へ`;
       } else {
-        const s = a.steps[i];
-        lbl.innerHTML = `次の手順 ${i + 1}. <span class="seq-cur">${(s.name || '').replace(/</g, '&lt;')}</span> を ${VALVE_STATE_LABEL[s.to]}`;
+        lbl.innerHTML = `次の手順 ${i + 1}. ${Sequencer._stepDesc(a.steps[i])}`;
       }
     }
   }

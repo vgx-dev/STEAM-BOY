@@ -695,6 +695,45 @@ body.master-workspace #mt-resize-handle{display:block;}
   color: var(--text-2); transition: background .15s;
 }
 .mt-close:hover { background: rgba(0,0,0,0.12); }
+.mt-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 18px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  flex-shrink: 0;
+}
+.mt-tab {
+  padding: 7px 14px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font);
+  color: var(--text-2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.mt-tab:hover { color: var(--text-1); }
+.mt-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+[data-theme="dark"] .mt-tab.active { color: var(--accent); }
+.mt-group td {
+  background: rgba(0,122,255,0.06);
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--text-1);
+  padding: 7px 12px !important;
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+.mt-pres-input {
+  width: 80px; padding: 5px 7px;
+  border: 1px solid rgba(0,0,0,0.12); border-radius: 7px;
+  font-size: 12px; font-family: var(--font); text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.mt-pres-input:focus { border-color: var(--accent); outline: none; }
+.mt-pct { font-size: 11px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.mt-pres-unit { font-size: 10px; color: var(--text-3); margin-left: 3px; }
 .mt-search-row {
   padding: 10px 18px;
   border-bottom: 1px solid rgba(0,0,0,0.06);
@@ -1153,12 +1192,16 @@ body.master-workspace #mt-resize-handle{display:block;}
     <span class="mt-title">機器・画像マスター管理</span>
     <button class="mt-close" id="mt-close">✕</button>
   </div>
+  <div class="mt-tabs" id="mt-tabs">
+    <button class="mt-tab active" data-view="devices">機器・画像</button>
+    <button class="mt-tab" data-view="pressure">圧力閾値</button>
+  </div>
   <div class="mt-search-row">
     <input type="text" class="mt-search-input" id="mt-search" placeholder="IDまたは名前でフィルター...">
   </div>
   <div class="mt-body">
     <table class="mt-table" id="mt-table">
-      <thead>
+      <thead id="mt-thead">
         <tr>
           <th style="width:90px;">ID / 種別</th>
           <th>名前</th>
@@ -4184,6 +4227,9 @@ const MasterTable = {
     document.body.classList.add('master-workspace');
     document.getElementById('master-table-modal').classList.add('open');
     document.getElementById('mt-search').value = '';
+    // 現在のビューに合わせてタブ・タイトルを同期
+    document.querySelectorAll('#mt-tabs .mt-tab').forEach(b => b.classList.toggle('active', b.dataset.view === MasterTable._view));
+    document.querySelector('.mt-title').textContent = (MasterTable._view === 'pressure') ? '圧力閾値マスター（ソース別）' : '機器・画像マスター管理';
     MasterTable.render();
     if (typeof Renderer !== 'undefined' && Renderer.updateZoom) Renderer.updateZoom();
     requestAnimationFrame(() => { if (typeof Minimap !== 'undefined') Minimap.draw(); if (typeof Culling !== 'undefined') Culling.scheduleApply(); });
@@ -4240,13 +4286,26 @@ const MasterTable = {
     return result;
   },
 
+  _view: 'devices',                              // 'devices' | 'pressure'
+  // 圧力閾値タブの対象（設定値を持つ機器のみ）
+  _PRES_TYPES: [NODE_TYPE.SOURCE, NODE_TYPE.REDUCER, NODE_TYPE.SAFETY, NODE_TYPE.HEATEX],
+
   render: () => {
+    if (MasterTable._view === 'pressure') MasterTable._renderPressure();
+    else MasterTable._renderDevices();
+  },
+
+  _renderDevices: () => {
+    document.getElementById('mt-thead').innerHTML =
+      '<tr><th style="width:90px;">ID / 種別</th><th>名前</th><th>画像URL</th></tr>';
+    document.querySelector('.mt-search-row').style.display = '';
     const all = MasterTable._collectNodes();
     const tbody = document.getElementById('mt-tbody');
     const empty = document.getElementById('mt-empty');
 
     if (!all.length) {
       tbody.innerHTML = '';
+      empty.textContent = '対象機器がありません';
       empty.style.display = 'block';
       return;
     }
@@ -4263,6 +4322,94 @@ const MasterTable = {
         <td><input type="text" class="mt-url-input" data-node-id="${node.id}" placeholder="https://..." value="${escapedUrl}"></td>
       </tr>`;
     }).join('');
+    // 検索フィルターを再適用
+    const q = (document.getElementById('mt-search').value || '').toLowerCase();
+    if (q) tbody.querySelectorAll('tr').forEach(tr => { tr.style.display = tr.dataset.search.includes(q) ? '' : 'none'; });
+  },
+
+  // 各ソースから順流方向に到達できるノード集合を求め、機器をソース別に帰属させる（トポロジ基準）
+  _sourceGroups: () => {
+    const adj = new Map();   // from → [to]
+    Store.edges.forEach(e => { let a = adj.get(e.from); if (!a) adj.set(e.from, a = []); a.push(e.to); });
+    const dispMap = buildNameMap();
+    const sources = Store.nodes.filter(n => n.type === NODE_TYPE.SOURCE);
+    const reachBySource = new Map();   // sourceId → Set(nodeId)
+    sources.forEach(src => {
+      const seen = new Set(), q = [src.id];
+      while (q.length) {
+        const id = q.shift();
+        (adj.get(id) || []).forEach(to => { if (!seen.has(to)) { seen.add(to); q.push(to); } });
+      }
+      reachBySource.set(src.id, seen);
+    });
+    // 各圧力機器がどのソースに帰属するか
+    const groups = sources.map(src => ({ srcId: src.id, srcNode: src, srcName: dispMap.get(src.id), devices: [] }));
+    const groupOf = new Map(groups.map(g => [g.srcId, g]));
+    const orphan = { srcId: null, srcNode: null, srcName: 'ソース未接続', devices: [] };
+    Store.nodes.forEach(n => {
+      if (!MasterTable._PRES_TYPES.includes(n.type)) return;
+      if (n.type === NODE_TYPE.SOURCE) { groupOf.get(n.id).devices.push(n); return; }
+      let placed = false;
+      groups.forEach(g => { if (reachBySource.get(g.srcId).has(n.id)) { g.devices.push(n); placed = true; } });
+      if (!placed) orphan.devices.push(n);
+    });
+    const out = groups.filter(g => g.devices.length);
+    if (orphan.devices.length) out.push(orphan);
+    return out;
+  },
+
+  _renderPressure: () => {
+    document.getElementById('mt-thead').innerHTML =
+      '<tr><th>機器</th><th style="width:96px;">種別</th><th style="width:130px;">設定圧 (MPa)</th><th style="width:88px;">対ソース%</th></tr>';
+    document.querySelector('.mt-search-row').style.display = 'none';
+    const tbody = document.getElementById('mt-tbody');
+    const empty = document.getElementById('mt-empty');
+    const groups = MasterTable._sourceGroups();
+    if (!groups.length) {
+      tbody.innerHTML = '';
+      empty.textContent = '圧力設定を持つ機器がありません';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+
+    // 機器種別 → { field, def, isSet } の定義
+    const fieldSpec = {
+      source:  { field: 'pressureMPa', def: PRESSURE.DEFAULT_SOURCE_MPA },
+      reducer: { field: 'outletMPa',   def: null },
+      safety:  { field: 'reliefMPa',   def: null },
+      heatex:  { field: 'maxMPa',      def: PRESSURE.HEATEX_DANGER_MPA }
+    };
+    const nm = buildNameMap();
+    let html = '';
+    groups.forEach(g => {
+      const srcMPa = g.srcNode ? ((g.srcNode.ext.pressureMPa != null) ? g.srcNode.ext.pressureMPa : PRESSURE.DEFAULT_SOURCE_MPA) : 0;
+      const srcRef = srcMPa > 0 ? srcMPa : PRESSURE.DEFAULT_SOURCE_MPA;
+      html += `<tr class="mt-group"><td colspan="4">▼ ${g.srcName}${g.srcNode ? `（元圧 ${srcMPa.toFixed(2)} MPa）` : ''}</td></tr>`;
+      g.devices.forEach(n => {
+        const spec = fieldSpec[n.type];
+        const name = (n.ext.customName || nm.get(n.id) || n.id);
+        const escName = name.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        const raw = n.ext[spec.field];
+        // 表示値: 減圧弁は未設定なら limitRate×ソース圧から換算した実効値を表示
+        let shownVal = raw;
+        if (raw == null && n.type === NODE_TYPE.REDUCER) shownVal = srcRef * (n.ext.limitRate ?? PRESSURE.DEFAULT_REDUCER_RATE);
+        else if (raw == null && spec.def != null) shownVal = spec.def;
+        const valStr = (shownVal != null) ? Number(shownVal).toFixed(2) : '';
+        const placeholder = (spec.def != null) ? `既定 ${spec.def.toFixed(2)}` : '未設定';
+        // 対ソース%（Source 自身は 100%）
+        let pct = '—';
+        if (n.type === NODE_TYPE.SOURCE) pct = '100%';
+        else if (shownVal != null) pct = Math.round(shownVal / srcRef * 100) + '%';
+        html += `<tr data-id="${n.id}">
+          <td>${escName}</td>
+          <td style="font-size:11px;color:var(--text-2);">${MasterTable._LABELS[n.type] || n.type}</td>
+          <td><input type="number" class="mt-pres-input" data-node-id="${n.id}" data-field="${spec.field}" min="0" step="0.05" value="${valStr}" placeholder="${placeholder}"><span class="mt-pres-unit">MPa</span></td>
+          <td class="mt-pct">${pct}</td>
+        </tr>`;
+      });
+    });
+    tbody.innerHTML = html;
   },
 
   init: () => {
@@ -4317,7 +4464,39 @@ const MasterTable = {
         Store.pushHistory();
         if (parsed) node.ext.imageUrl = parsed;
         else delete node.ext.imageUrl;
+        return;
       }
+
+      // Phase 2: 圧力閾値の編集（ソース別マスター）
+      if (ev.target.classList.contains('mt-pres-input')) {
+        const field = ev.target.dataset.field;
+        Store.pushHistory();
+        const v = parseFloat(ev.target.value);
+        if (ev.target.value === '' || isNaN(v) || v < 0) {
+          delete node.ext[field];
+        } else {
+          node.ext[field] = v;
+          // 減圧弁は流量強度(rate)表示との整合のため limitRate も対ソース比で同期
+          if (node.type === NODE_TYPE.REDUCER) {
+            const srcRef = (node._sim && node._sim.srcPresIn > 0) ? node._sim.srcPresIn : PRESSURE.DEFAULT_SOURCE_MPA;
+            node.ext.limitRate = Math.max(0, Math.min(1, v / srcRef));
+          }
+        }
+        Simulator.run(() => { Renderer.renderAll(); MasterTable._renderPressure(); });
+        return;
+      }
+    });
+
+    // Phase 2: タブ切替（機器・画像 / 圧力閾値）
+    document.getElementById('mt-tabs').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.mt-tab');
+      if (!btn) return;
+      const view = btn.dataset.view;
+      if (view === MasterTable._view) return;
+      MasterTable._view = view;
+      document.querySelectorAll('#mt-tabs .mt-tab').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelector('.mt-title').textContent = (view === 'pressure') ? '圧力閾値マスター（ソース別）' : '機器・画像マスター管理';
+      MasterTable.render();
     });
 
     // Escキーでモーダルを閉じる

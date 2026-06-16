@@ -356,8 +356,8 @@ body.zen-mode #autosave-off-badge{display:none;}
   animation: sealedBgPulse 2.4s ease-in-out infinite !important;
 }
 /* ④ 不確定残留（密閉空間の広がり）＝黄。赤/紫の点滅を黄の点滅へ上書き */
-@keyframes uncertainPulse { 0%,100%{stroke:#FFCC00;opacity:1;} 50%{stroke:#FFE066;opacity:1;} }
-@keyframes uncertainBgPulse { 0%,100%{stroke:#FFCC00;opacity:.3;} 50%{stroke:#FFE066;opacity:.3;} }
+@keyframes uncertainPulse { 0%,100%{stroke:#FFCC00;opacity:1;} 50%{stroke:#FFCC00;opacity:.25;} }
+@keyframes uncertainBgPulse { 0%,100%{stroke:#FFCC00;opacity:.4;} 50%{stroke:#FFCC00;opacity:.08;} }
 g.edge-grp[data-uncertain="1"] .edge-path,
 g.edge-grp[data-uncertain="1"] .flow-base:not(.edge-sealed-bg){stroke:#FFCC00 !important;}
 g.edge-grp[data-uncertain="1"] .edge-sealed{animation:uncertainPulse 2.4s ease-in-out infinite !important;}
@@ -427,8 +427,8 @@ g.node[data-valve-state="2"] .node-shape{fill:rgba(52,199,89,.2);}
 g.node[data-gauge-state="steam"] .pgauge-face{fill:#FF3B30;stroke:#c92a20;}
 g.node[data-gauge-state="uncertain"] .pgauge-face{fill:#FFCC00;stroke:#c29a00;animation:gaugeUncertainPulse 2.4s ease-in-out infinite;}
 g.node[data-gauge-state="empty"] .pgauge-face{fill:#34C759;stroke:#2aa84a;}
-/* 残圧・残液（不確定）と同じ、黄のゆるやかな点滅 */
-@keyframes gaugeUncertainPulse{0%,100%{fill:#FFCC00;}50%{fill:#FFE066;}}
+/* 残圧・残液（不確定）と同じ、黄のゆるやかな点滅（不透明度を揺らす） */
+@keyframes gaugeUncertainPulse{0%,100%{opacity:1;}50%{opacity:.45;}}
 
 /* ── Epic 7: Viewport Culling — 画面外エッジのアニメーション停止 ── */
 g.edge-grp[data-culled="1"] .flow-dash{animation-play-state:paused;}

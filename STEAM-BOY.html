@@ -1843,6 +1843,8 @@ const SimulatorCore={
     nodes.forEach(n=>{
       const inE=inEdgesMap.get(n.id)||EMPTY_EDGES;if(inE.length<=1)return;
       const mxF=n._sim.fIn;
+      // REQ-2: 復水(蒸気ドレン)は排出方向のみ。ドレン主体の合流点から上流へ逆流を発生させない。
+      if(mxF===FLUID.DRAIN)return;
       // 合流する中で最も強い流体(mxF)を持つ配管の最大圧力を求める
       let mxRateForMxF=0,mxPresForMxF=0,srcPresForMxF=0;
       inE.forEach(e=>{if(e._sim.f===mxF&&e._sim.rate>mxRateForMxF)mxRateForMxF=e._sim.rate;});
@@ -1850,6 +1852,9 @@ const SimulatorCore={
       inE.forEach(e=>{
         // 自分の流体が最強流体より弱い、または同じ流体でも圧力が負けている場合に逆流発生
         if(e._sim.f<mxF||(e._sim.f===mxF&&e._sim.rate<mxRateForMxF)){
+          // REQ-1a: 一方向デバイス(トラップ/ソース/閉弁)の二次側エッジには逆流を書き込まない
+          const _fn=nodeMap.get(e.from);
+          if(_fn&&(_fn.type===NODE_TYPE.TRAP||_fn.type===NODE_TYPE.SOURCE||((_fn.type===NODE_TYPE.VALVE||_fn.type===NODE_TYPE.SAFETY)&&_fn.state.valveState===VALVE_STATE.CLOSED)))return;
           e._sim.b=mxF;
           e._sim.brate=mxRateForMxF;
           e._sim.bpres=mxPresForMxF;
@@ -1867,11 +1872,16 @@ const SimulatorCore={
     if(!n||[NODE_TYPE.TRAP,NODE_TYPE.SOURCE].includes(n.type))return;
     // VALVEとSAFETYはCLOSED時のみブロック（PARTIAL/OPENは逆流を通す）
     if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)&&n.state.valveState===VALVE_STATE.CLOSED)return;
+    // REQ-2: 復水(蒸気ドレン)の逆流は伝播させない（排出方向のみ）
+    if(val===FLUID.DRAIN)return;
     (inEdgesMap.get(nid)||[]).forEach(e=>{
       // 拮抗条件: 「同じ流体」かつ「順方向の圧力が逆流の圧力以上」の場合のみストップ
       if(val===e._sim.f&&rate<=e._sim.rate)return;
       // 万が一逆流の流体のほうが弱い場合は進めない
       if(val<e._sim.f)return;
+      // REQ-1a: 一方向デバイス(トラップ/ソース/閉弁)の二次側エッジには逆流を書き込まない
+      const _fn=nodeMap.get(e.from);
+      if(_fn&&(_fn.type===NODE_TYPE.TRAP||_fn.type===NODE_TYPE.SOURCE||((_fn.type===NODE_TYPE.VALVE||_fn.type===NODE_TYPE.SAFETY)&&_fn.state.valveState===VALVE_STATE.CLOSED)))return;
       // より強い逆流で上書きする判定
       if(e._sim.b<val||(e._sim.b===val&&e._sim.brate<rate)){
         e._sim.b=val;

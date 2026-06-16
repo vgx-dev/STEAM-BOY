@@ -306,6 +306,10 @@ body.zen-mode #autosave-off-badge{display:none;}
 #svg-layer.always-show-labels .pgauge-leader {
   opacity: 1 !important;
 }
+/* 減圧弁の数値ラベル: 「減圧弁の数値表示」トグルON時は常時表示のまま、ドラッグ移動とリーダー線を追加 */
+.reducer-label{cursor:grab;pointer-events:auto;user-select:none;touch-action:none;}
+.reducer-label:active{cursor:grabbing;}
+.reducer-leader{stroke:var(--text-3);stroke-width:1;stroke-dasharray:3,3;pointer-events:none;}
 .state-0{stroke:var(--color-0);} .state-1{stroke:var(--color-1);} .state-2{stroke:var(--color-2);} .state-3{stroke:var(--color-3);}
 .anomaly-ring{animation:anomalyPulse 1.6s ease-in-out infinite;pointer-events:none;}
 .anomaly-icon{animation:anomalyBlink 1.6s ease-in-out infinite;pointer-events:none;}
@@ -1981,7 +1985,13 @@ const Simulator={
   // 大規模時（SimWorker.THRESHOLD超）は Worker にオフロードしメインスレッドをブロックしない。
   run:(done)=>{
     // シミュレーション直前の流体状態をスナップ（SealedDetector用）
-    Store.edges.forEach(e=>{e._sim._prevF=e._sim.f;e._sim._prevB=e._sim.b||0;});
+    // 併せて直前フレームの絶対圧もスナップ（密閉時の残圧 = 閉じ込められた圧力の保持に使用）
+    Store.edges.forEach(e=>{
+      e._sim._prevF=e._sim.f;e._sim._prevB=e._sim.b||0;
+      const _fp=e._sim.pres||0,_bp=e._sim.bpres||0;
+      if(_fp>=_bp){e._sim._prevPres=_fp;e._sim._prevSrcPres=e._sim.srcPres||0;}
+      else{e._sim._prevPres=_bp;e._sim._prevSrcPres=e._sim.bsrcPres||0;}
+    });
     if((Store.nodes.length+Store.edges.length)>SimWorker.THRESHOLD&&SimWorker.ensure()){
       SimWorker.dispatch(done);
       return;
@@ -2269,9 +2279,11 @@ const SealedDetector={
 
       const prevF=e._sim._prevF||0,prevB=e._sim._prevB||0;
       let evalFluid=prevF>0?prevF:(prevB>0?prevB:0);
+      // 残留圧力（密閉トラップ圧）。直前フレームの実流圧、無ければ既存の残圧を引き継ぐ。
+      let evalPres=e._sim._prevPres||0, evalSrcPres=e._sim._prevSrcPres||0;
 
       // ★修正: 動的流量が0でも、既に残圧がある場合はそれを評価対象にする
-      if(evalFluid===0&&e.ext.hasResidual) evalFluid=e.ext.residualType;
+      if(evalFluid===0&&e.ext.hasResidual){evalFluid=e.ext.residualType;evalPres=e.ext.residualPres||0;evalSrcPres=e.ext.residualSrcPres||0;}
 
       if(evalFluid===0)return;
 
@@ -2279,20 +2291,24 @@ const SealedDetector={
         if(!steamDrainableSet.has(e.id)){
           e.ext.hasResidual=true;
           e.ext.residualType=FLUID.STEAM;
+          e.ext.residualPres=evalPres;e.ext.residualSrcPres=evalSrcPres;
           if(e._anim)e._anim.sealed=Store.config.showSealedAnim;
         }else{
           e.ext.hasResidual=false;
           e.ext.residualType=0;
+          e.ext.residualPres=0;e.ext.residualSrcPres=0;
           if(e._anim)e._anim.sealed=false;
         }
       }else{
         if(!liquidDrainableSet.has(e.id)){
           e.ext.hasResidual=true;
           e.ext.residualType=evalFluid;
+          e.ext.residualPres=evalPres;e.ext.residualSrcPres=evalSrcPres;
           if(e._anim)e._anim.sealed=false;
         }else{
           e.ext.hasResidual=false;
           e.ext.residualType=0;
+          e.ext.residualPres=0;e.ext.residualSrcPres=0;
           if(e._anim)e._anim.sealed=false;
         }
       }
@@ -2365,11 +2381,11 @@ const SealedDetector={
             if(!nd)return;
             if(nd.type===NODE_TYPE.TRAP)return;
             if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(nd.type)&&nd.state.valveState===VALVE_STATE.CLOSED)return;
-            lq.push({nodeId:nid,srcFluid:e.ext.residualType});
+            lq.push({nodeId:nid,srcFluid:e.ext.residualType,srcPres:e.ext.residualPres||0,srcSrcPres:e.ext.residualSrcPres||0});
           });
         });
         while(lq.length){
-          const{nodeId,srcFluid}=lq.shift();
+          const{nodeId,srcFluid,srcPres,srcSrcPres}=lq.shift();
           (edgesByNode.get(nodeId)||EMPTY_EDGES).forEach(e=>{
             if(!comp.edges.has(e.id))return;
             if(liqVis.has(e.id))return;
@@ -2386,12 +2402,13 @@ const SealedDetector={
             if(!canGo)return;
             liqVis.add(e.id);
             e.ext.hasResidual=true;e.ext.residualType=srcFluid;
+            e.ext.residualPres=srcPres;e.ext.residualSrcPres=srcSrcPres;
             if(!e._anim)e._anim={};
             e._anim.sealed=false;
             // 次のノードが壁でなければ探索継続
             if(en.type===NODE_TYPE.TRAP)return;
             if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(en.type)&&en.state.valveState===VALVE_STATE.CLOSED)return;
-            lq.push({nodeId:isOut?e.to:e.from,srcFluid});
+            lq.push({nodeId:isOut?e.to:e.from,srcFluid,srcPres,srcSrcPres});
           });
         }
       });
@@ -2400,10 +2417,10 @@ const SealedDetector={
       // 成分内に残圧(STEAM)があり排出口がなければ、液体残留以外の全エッジに蒸気を充填。
       // 5-3 で液体伝播済みのため、液体エッジは自然にスキップされる（5-4 混在処理）。
       components.forEach(comp=>{
-        let hasSteam=false,isDrainable=false;
+        let hasSteam=false,isDrainable=false,compPres=0,compSrcPres=0;
         comp.edges.forEach(eid=>{
           const e=edgeMap.get(eid);if(!e)return;
-          if(e.ext.hasResidual&&e.ext.residualType===FLUID.STEAM)hasSteam=true;
+          if(e.ext.hasResidual&&e.ext.residualType===FLUID.STEAM){hasSteam=true;const rp=e.ext.residualPres||0;if(rp>compPres){compPres=rp;compSrcPres=e.ext.residualSrcPres||0;}}
           if(steamDrainableSet.has(eid))isDrainable=true;
         });
         if(!hasSteam||isDrainable)return;
@@ -2412,6 +2429,8 @@ const SealedDetector={
           // 既に液体残留があるエッジはスキップ（液体表示を維持）
           if(e.ext.hasResidual&&(e.ext.residualType===FLUID.WATER||e.ext.residualType===FLUID.DRAIN))return;
           e.ext.hasResidual=true;e.ext.residualType=FLUID.STEAM;
+          // 圧力均一化: 密閉成分内の残圧を全エッジへ充填
+          e.ext.residualPres=compPres;e.ext.residualSrcPres=compSrcPres;
           if(!e._anim)e._anim={};
           e._anim.sealed=Store.config.showSealedAnim;
         });
@@ -2455,6 +2474,8 @@ const SealedDetector={
           const fp=e._sim.pres||0,bp=e._sim.bpres||0;
           if(fp>presVal){presVal=fp;srcRef=e._sim.srcPres||0;}
           if(bp>presVal){presVal=bp;srcRef=e._sim.bsrcPres||0;}
+          // 密閉時（実流ゼロ）は閉じ込められた残圧を計器値として採取（赤なのに0MPa表示の不具合を解消）
+          if(active===0&&e.ext.hasResidual){const rp=e.ext.residualPres||0;if(rp>presVal){presVal=rp;srcRef=e.ext.residualSrcPres||0;}}
         }
         n._sim.gauge=st;
         n._sim.presVal=presVal;
@@ -3112,28 +3133,33 @@ const Renderer={
       if(!ttl){ttl=createNS('title');g.appendChild(ttl);}
       if(ttl.textContent!==dispName)ttl.textContent=dispName;
 
-      // ▼▼▼ 追加：減圧弁の数値ラベル（デフォルト非表示） ▼▼▼
-      let rLbl = g.querySelector('.reducer-label');
+      // ▼▼▼ 減圧弁の数値ラベル（デフォルト非表示）。バルブ名ラベル同様に
+      //     labelOffset でドラッグ移動可能・リーダー線付き・ホバー/「常に表示」で出現 ▼▼▼
+      let rLbl = g.querySelector('.reducer-label'), rLl = g.querySelector('.reducer-leader');
       if (n.type === NODE_TYPE.REDUCER && Store.config.showReducerLabels) {
+        if (!rLl) { rLl = createNS('line'); rLl.classList.add('reducer-leader'); rLl.setAttribute('x1','0'); rLl.setAttribute('y1','0'); g.appendChild(rLl); }
+        setAttr(rLl,'x2',n.labelOffset.x); setAttr(rLl,'y2',n.labelOffset.y);
         if (!rLbl) {
           rLbl = createNS('text'); rLbl.classList.add('reducer-label');
           // 不変属性は生成時に1度だけ設定
-          rLbl.setAttribute('x', '0'); rLbl.setAttribute('y', '18');
           rLbl.setAttribute('text-anchor', 'middle');
+          rLbl.setAttribute('dominant-baseline', 'central');
           rLbl.setAttribute('font-size', '10');
           rLbl.setAttribute('font-weight', '600');
           rLbl.setAttribute('fill', 'var(--text-2)');
           g.appendChild(rLbl);
         }
+        setAttr(rLbl,'x',n.labelOffset.x); setAttr(rLbl,'y',n.labelOffset.y);
         // Phase 1: 出口圧(MPa) ＋ 対ソース% を併記
         const _src = n._sim.srcPresIn>0 ? n._sim.srcPresIn : PRESSURE.DEFAULT_SOURCE_MPA;
         const _setMPa = (n.ext.outletMPa!=null) ? n.ext.outletMPa : _src*(n.ext.limitRate??PRESSURE.DEFAULT_REDUCER_RATE);
         const rTxt = `${_setMPa.toFixed(2)}MPa (${Math.round(_setMPa/_src*100)}%)`;
         if (rLbl.textContent !== rTxt) rLbl.textContent = rTxt;
-      } else if (rLbl) {
-        rLbl.remove();
+      } else {
+        if (rLbl) rLbl.remove();
+        if (rLl) rLl.remove();
       }
-      // ▲▲▲ 追加ここまで ▲▲▲
+      // ▲▲▲ ここまで ▲▲▲
 
       // ▼▼▼ Phase 1: 圧力計の数値ラベル（MPa ＋ 対ソース%）。
       //     バルブ名ラベル同様に「バルブ名ラベル」トグルで表示制御し、ホバー/「常に表示」で出現、
@@ -3894,7 +3920,7 @@ const Controller={
     }
     if(Store.multiDrag.active&&ev.pointerId===Store.multiDrag.pointerId){const _mdx=ev.clientX-Store.multiDrag.startClientX,_mdy=ev.clientY-Store.multiDrag.startClientY,moved=Math.sqrt(_mdx*_mdx+_mdy*_mdy);if(!Store.multiDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.multiDrag.hasDragged=true;if(!Store.multiDrag.preSnapshot)Store.multiDrag.preSnapshot=Store.snapshot();}if(Store.multiDrag.hasDragged){const coords=Renderer.getMouseSvgCoords(ev),dx=coords.x-Store.multiDrag.startSvgX,dy=coords.y-Store.multiDrag.startSvgY;Store.multiDrag.nodes.forEach(item=>{item.node.x=item.startX+dx;item.node.y=item.startY+dy;const gEl=Renderer.nodesGroup.querySelector(`[data-id="${item.node.id}"]`);if(gEl)Renderer.updateNodeLive(item.node,gEl);});}}
     if(Store.dragState.isDragging&&Store.dragState.targetNode&&ev.pointerId===Store.dragState.pointerId){const _ddx=ev.clientX-Store.dragState.startClientX,_ddy=ev.clientY-Store.dragState.startClientY,moved=Math.sqrt(_ddx*_ddx+_ddy*_ddy);if(!Store.dragState.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.dragState.hasDragged=true;if(!Store.dragState.preSnapshot)Store.dragState.preSnapshot=Store.snapshot();}if(Store.dragState.hasDragged&&!Store.config.isConnectMode){const raw=Renderer.getMouseSvgCoords(ev),sn=Controller.applySnap(raw.x-Store.dragState.offsetX,raw.y-Store.dragState.offsetY,Store.dragState.targetNode.id);Store.dragState.targetNode.x=sn.x;Store.dragState.targetNode.y=sn.y;Renderer.updateNodeLive(Store.dragState.targetNode,Store.dragState.gEl);Renderer.showSnapGuides(sn.gX,sn.gY);}}
-    if(Store.labelDrag.isDragging&&Store.labelDrag.targetNode&&ev.pointerId===Store.labelDrag.pointerId){const _ldx=ev.clientX-Store.labelDrag.startClientX,_ldy=ev.clientY-Store.labelDrag.startClientY,moved=Math.sqrt(_ldx*_ldx+_ldy*_ldy);if(!Store.labelDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.labelDrag.hasDragged=true;if(!Store.labelDrag.preSnapshot)Store.labelDrag.preSnapshot=Store.snapshot();}if(Store.labelDrag.hasDragged){const c=Renderer.getMouseSvgCoords(ev),nx=Store.labelDrag.startOffsetX+(c.x-Store.labelDrag.startX),ny=Store.labelDrag.startOffsetY+(c.y-Store.labelDrag.startY);Store.labelDrag.targetNode.labelOffset={x:nx,y:ny};const lEl=Store.labelDrag.gEl;if(lEl){lEl.setAttribute('x',nx);lEl.setAttribute('y',ny);}const g=lEl?.closest('g.node');if(g){const ll=g.querySelector('.leader-line, .pgauge-leader');if(ll){ll.setAttribute('x2',nx);ll.setAttribute('y2',ny);}}}}
+    if(Store.labelDrag.isDragging&&Store.labelDrag.targetNode&&ev.pointerId===Store.labelDrag.pointerId){const _ldx=ev.clientX-Store.labelDrag.startClientX,_ldy=ev.clientY-Store.labelDrag.startClientY,moved=Math.sqrt(_ldx*_ldx+_ldy*_ldy);if(!Store.labelDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.labelDrag.hasDragged=true;if(!Store.labelDrag.preSnapshot)Store.labelDrag.preSnapshot=Store.snapshot();}if(Store.labelDrag.hasDragged){const c=Renderer.getMouseSvgCoords(ev),nx=Store.labelDrag.startOffsetX+(c.x-Store.labelDrag.startX),ny=Store.labelDrag.startOffsetY+(c.y-Store.labelDrag.startY);Store.labelDrag.targetNode.labelOffset={x:nx,y:ny};const lEl=Store.labelDrag.gEl;if(lEl){lEl.setAttribute('x',nx);lEl.setAttribute('y',ny);}const g=lEl?.closest('g.node');if(g){const ll=g.querySelector('.leader-line, .pgauge-leader, .reducer-leader');if(ll){ll.setAttribute('x2',nx);ll.setAttribute('y2',ny);}}}}
     if(Store.waypointDrag.active&&ev.pointerId===Store.waypointDrag.pointerId){const _wdx=ev.clientX-Store.waypointDrag.startClientX,_wdy=ev.clientY-Store.waypointDrag.startClientY,moved=Math.sqrt(_wdx*_wdx+_wdy*_wdy);if(!Store.waypointDrag.hasDragged&&moved>Controller.DRAG_THRESHOLD){Store.waypointDrag.hasDragged=true;if(!Store.waypointDrag.preSnapshot)Store.waypointDrag.preSnapshot=Store.snapshot();}if(Store.waypointDrag.hasDragged){const c=Renderer.getMouseSvgCoords(ev);Store.waypointDrag.edge.ext.waypoints[Store.waypointDrag.index]={x:c.x,y:c.y};Renderer.updateEdgePathLive(Store.waypointDrag.edge);if(Store.waypointDrag.wpEl){Store.waypointDrag.wpEl.setAttribute('cx',c.x);Store.waypointDrag.wpEl.setAttribute('cy',c.y);}}}
     if(Store.rectSelect.active&&ev.pointerId===Store.rectSelect.pointerId){const c=Renderer.getMouseSvgCoords(ev);Store.rectSelect.currentSvgX=c.x;Store.rectSelect.currentSvgY=c.y;const x=Math.min(Store.rectSelect.startSvgX,c.x),y=Math.min(Store.rectSelect.startSvgY,c.y),w=Math.abs(c.x-Store.rectSelect.startSvgX),h=Math.abs(c.y-Store.rectSelect.startSvgY);Renderer.selectRectEl.setAttribute('x',x);Renderer.selectRectEl.setAttribute('y',y);Renderer.selectRectEl.setAttribute('width',w);Renderer.selectRectEl.setAttribute('height',h);Renderer.selectRectEl.removeAttribute('display');}
     if(Store.config.isConnectMode&&Store.config.selectedNodeIdForConnection){const c=Renderer.getMouseSvgCoords(ev);Renderer.connectPreviewLine.setAttribute('x2',c.x);Renderer.connectPreviewLine.setAttribute('y2',c.y);}
@@ -3969,8 +3995,8 @@ const Controller={
       return;
     }
 
-  // 1. ラベルがクリックされたか？（バルブ名ラベル／圧力計の数値ラベル）
-    if(ev.target.classList.contains('node-label') || ev.target.classList.contains('pgauge-label')) {
+  // 1. ラベルがクリックされたか？（バルブ名ラベル／圧力計・減圧弁の数値ラベル）
+    if(ev.target.classList.contains('node-label') || ev.target.classList.contains('pgauge-label') || ev.target.classList.contains('reducer-label')) {
         const g = ev.target.closest('g.node');
         const nodeId = g?.getAttribute('data-id');
         const node = Store.getNode(nodeId);

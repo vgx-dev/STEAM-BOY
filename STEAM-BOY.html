@@ -528,6 +528,11 @@ body.zen-mode #btn-master-table {
 g.node[data-active="1"] {
   animation: nodeBreath 2.5s ease-in-out infinite;
 }
+/* 軽量化: 大規模図面では breathing(drop-shadowフィルタの常時アニメ) を停止。
+   drop-shadow の filter アニメは要素ごとに毎フレーム再ラスタライズが発生し、
+   通電ノードが数百個になると主要なジャンク要因になるため、規模に応じて自動で無効化する。
+   ノードはアニメ休止状態（filter:none）に落ちるだけでレイアウト・配置は不変。 */
+#svg-layer.perf-lite g.node[data-active="1"] { animation: none; }
 
 /* ── Feature 7: Kinetic Ripple ── */
 @keyframes rippleExpand {
@@ -2462,10 +2467,23 @@ const Minimap={
   canvas:null,
   _rafId:null,
   _ctx:null,
-  draw:()=>{
-    if(!Minimap.canvas)return;
-    // 最適化3: 2Dコンテキストをメモ化（毎フレームの getContext 呼び出しを排除）
-    const c=Minimap.canvas,ctx=Minimap._ctx||(Minimap._ctx=c.getContext('2d')),W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;
+  // 軽量化: 静的グラフ（背景・配管・ノード）はオフスクリーンcanvasにキャッシュし、
+  // 異常レーダー波紋のrAFループでは再描画せず drawImage で合成するだけにする。
+  // これにより「異常発生中は毎フレーム全ノード/エッジを再描画」していた O(N+E)×60fps
+  // のコストを排除。スクロール/ズーム時もベースを再利用しビューポート枠のみ再合成する。
+  _base:null,_bctx:null,_ms:1,_ox:0,_oy:0,_anomalyNodes:[],
+  _ensureBase:()=>{
+    const c=Minimap.canvas;
+    if(!Minimap._base)Minimap._base=document.createElement('canvas');
+    if(Minimap._base.width!==c.width)Minimap._base.width=c.width;
+    if(Minimap._base.height!==c.height)Minimap._base.height=c.height;
+    return Minimap._base;
+  },
+  // 静的グラフをオフスクリーンへ描画（スクロール非依存。データ/流体/異常の変化時のみ更新）
+  _renderBase:()=>{
+    const c=Minimap.canvas,off=Minimap._ensureBase();
+    const ctx=Minimap._bctx||(Minimap._bctx=off.getContext('2d')),W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;
+    Minimap._ms=ms;Minimap._ox=ox;Minimap._oy=oy;
     ctx.clearRect(0,0,W,H);ctx.fillStyle='#F0F0F5';ctx.fillRect(0,0,W,H);ctx.fillStyle='rgba(255,255,255,0.6)';ctx.fillRect(ox,oy,Store.config.baseWidth*ms,Store.config.baseHeight*ms);
     // 最適化1: ループ前に O(1) 参照用マップ・Set を生成（nodeMapはStoreの遅延キャッシュを共用）
     const _mmNodeMap=Store.nodeMap();
@@ -2473,9 +2491,20 @@ const Minimap={
     Store.edges.forEach(edge=>{const nF=_mmNodeMap.get(edge.from),nT=_mmNodeMap.get(edge.to);if(!nF||!nT)return;const ds=Math.max(edge._sim.f,edge._sim.b);ctx.strokeStyle=COLOR_MAP[ds]||'#8E8E93';ctx.lineWidth=ds>0?0.8:.4;ctx.globalAlpha=ds>0?.8:.35;ctx.beginPath();const pts=[nF,...(edge.ext.waypoints||[]),nT];ctx.moveTo(ox+pts[0].x*ms,oy+pts[0].y*ms);pts.slice(1).forEach(p=>ctx.lineTo(ox+p.x*ms,oy+p.y*ms));ctx.stroke();});
     ctx.globalAlpha=1;
     Store.nodes.forEach(n=>{ctx.fillStyle=COLOR_MAP[n._sim.fOut]||'#8E8E93';ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,1.5,0,Math.PI*2);ctx.fill();if(_mmAnomalySet.has(n.id)){ctx.strokeStyle='#FF3B30';ctx.lineWidth=1;ctx.beginPath();ctx.arc(ox+n.x*ms,oy+n.y*ms,2.5,0,Math.PI*2);ctx.stroke();}});
-    // Feature 8: Radar ripple for anomaly nodes
+    // Feature 8: Radar ripple 対象ノードを確定（波紋自体は _composite で毎フレーム描画）
     // 最適化3: O(N×A) の some を、生成済み Set の O(1) 参照に変更
-    const anomalyNodes=Store.nodes.filter(n=>_mmAnomalySet.has(n.id));
+    Minimap._anomalyNodes=Store.nodes.filter(n=>_mmAnomalySet.has(n.id));
+  },
+  // キャッシュ済みベース＋異常レーダー波紋＋ビューポート枠を合成（毎フレーム軽量）
+  _composite:()=>{
+    if(!Minimap.canvas)return;
+    if(!Minimap._base)Minimap._renderBase();
+    // 最適化3: 2Dコンテキストをメモ化（毎フレームの getContext 呼び出しを排除）
+    const c=Minimap.canvas,ctx=Minimap._ctx||(Minimap._ctx=c.getContext('2d')),W=c.width,H=c.height,ms=Minimap._ms,ox=Minimap._ox,oy=Minimap._oy;
+    ctx.clearRect(0,0,W,H);
+    ctx.drawImage(Minimap._base,0,0);
+    // Feature 8: Radar ripple for anomaly nodes
+    const anomalyNodes=Minimap._anomalyNodes;
     if(anomalyNodes.length){
       const t=Date.now()/1000,PERIOD=1.8,MAX_R=11;
       anomalyNodes.forEach(n=>{
@@ -2488,12 +2517,20 @@ const Minimap={
           ctx.lineWidth=1.5;ctx.stroke();
         }
       });
-      if(!Minimap._rafId)Minimap._rafId=requestAnimationFrame(()=>{Minimap._rafId=null;Minimap.draw();});
+      if(!Minimap._rafId)Minimap._rafId=requestAnimationFrame(()=>{Minimap._rafId=null;Minimap._composite();});
     }else{
       if(Minimap._rafId){cancelAnimationFrame(Minimap._rafId);Minimap._rafId=null;}
     }
     const ws=$id('workspace');if(ws){const z=Store.config.currentZoom,vx=ws.scrollLeft/z,vy=ws.scrollTop/z,vw=ws.clientWidth/z,vh=ws.clientHeight/z;ctx.strokeStyle='rgba(0,122,255,.7)';ctx.lineWidth=1.5;ctx.strokeRect(ox+vx*ms,oy+vy*ms,vw*ms,vh*ms);}
   },
+  // 状態変化時のフル更新（ベース再構築→合成）
+  draw:()=>{
+    if(!Minimap.canvas)return;
+    Minimap._renderBase();
+    Minimap._composite();
+  },
+  // スクロール/ズーム時の軽量更新（ベースは再利用しビューポート枠と波紋のみ再合成）
+  drawViewport:()=>{Minimap._composite();},
   panTo:(mx,my)=>{const c=Minimap.canvas,W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;const svgX=Math.max(0,Math.min((mx-ox)/ms,Store.config.baseWidth)),svgY=Math.max(0,Math.min((my-oy)/ms,Store.config.baseHeight));Renderer.centerOnSvg(svgX,svgY);}
 };
 
@@ -2668,7 +2705,7 @@ const Renderer={
   
   getMouseSvgCoords:(ev)=>{const r=Renderer.svgLayer.getBoundingClientRect();return{x:(ev.clientX-r.left)/Store.config.currentZoom,y:(ev.clientY-r.top)/Store.config.currentZoom};},
   // SVG座標(x,y)をビューポート中央へスクロール（Minimap.panTo / マニュアルのオートパンで共用）
-  centerOnSvg:(x,y)=>{const ws=$id('workspace');if(!ws)return;const z=Store.config.currentZoom;ws.scrollLeft=x*z-ws.clientWidth/2;ws.scrollTop=y*z-ws.clientHeight/2;if(typeof Minimap!=='undefined'&&Minimap.draw)Minimap.draw();},
+  centerOnSvg:(x,y)=>{const ws=$id('workspace');if(!ws)return;const z=Store.config.currentZoom;ws.scrollLeft=x*z-ws.clientWidth/2;ws.scrollTop=y*z-ws.clientHeight/2;if(typeof Minimap!=='undefined'&&Minimap.drawViewport)Minimap.drawViewport();},
   buildTrimmedPath:(nFrom,edge,nTo)=>{
     const ELBOW=2;
     const wps=edge.ext.waypoints||[],allPts=[nFrom,...wps,nTo],trim=Store.config.nodeRadius;
@@ -2751,12 +2788,19 @@ const Renderer={
     requestAnimationFrame(()=>{Renderer._renderQueued=false;Renderer.renderAll();});
   },
   _lastEsw:null,
+  // 軽量化: ノード数+エッジ数がこの閾値を超えたら perf-lite モードに切り替え、
+  // 最も重い常時アニメ（ノードの drop-shadow breathing）を停止して描画負荷を抑える。
+  PERF_LITE_THRESHOLD:500,
+  _perfLite:null,
   // Phase 3: 差分レンダリング — 要素ID → 前回描画時のシグネチャ
   _edgeSig:new Map(),_nodeSig:new Map(),
   renderAll:()=>{
     if(!Renderer.edgesGroup)Renderer.init();
     // 最適化3: 直前の操作で構造が変わった可能性があるため、ここでインデックスを無効化→遅延再構築
     Store.invalidateIndex();
+    // 軽量化: 規模に応じて perf-lite クラスを切替（変化時のみ DOM 書き込み）
+    const _lite=(Store.nodes.length+Store.edges.length)>Renderer.PERF_LITE_THRESHOLD;
+    if(Renderer._perfLite!==_lite){Renderer._perfLite=_lite;Renderer.svgLayer.classList.toggle('perf-lite',_lite);}
 
     const esw=Math.max(2,Store.config.nodeRadius*.3);
     const scale=Store.config.nodeRadius/10;
@@ -3607,7 +3651,7 @@ const Controller={
         _minimapUpdatePending=true;
         requestAnimationFrame(()=>{
           _minimapUpdatePending=false;
-          Minimap.draw();
+          Minimap.drawViewport();
         });
       }
     },{passive:true});
@@ -3800,7 +3844,7 @@ const Controller={
     }
     document.body.classList.toggle('autosave-off',!on);
   },
-  setZoom:(z)=>{Store.config.currentZoom=Math.max(.2,Math.min(z,3.0));Renderer.updateZoom();requestAnimationFrame(()=>{Minimap.draw();Culling.scheduleApply();/*Epic7*/});},
+  setZoom:(z)=>{Store.config.currentZoom=Math.max(.2,Math.min(z,3.0));Renderer.updateZoom();requestAnimationFrame(()=>{Minimap.drawViewport();Culling.scheduleApply();/*Epic7*/});},
   // 全ノードが収まるようズーム＋センタリング（⤢ Fit）
   fitToContent:()=>{
     const ws=$id('workspace');if(!ws)return;

@@ -1759,19 +1759,16 @@ const Store={
 // DOM・Store への副作用ゼロ。将来的に worker.postMessage({ nodes, edges }) で呼び出せる設計。
 const SimulatorCore={
   compute:(inputNodes,inputEdges)=>{
-    // _sim のみシャロウコピーして副作用ゼロの計算を行う
     const nodes=inputNodes.map(n=>({...n,_sim:{...n._sim}}));
     const edges=inputEdges.map(e=>({...e,_sim:{...e._sim}}));
     const nodeMap=new Map(nodes.map(n=>[n.id,n]));
-    // 最適化3: 流入エッジの隣接リストを1度だけ構築し、反復ループ内の O(N×E) filter を排除
     const inEdgesMap=new Map();
     nodes.forEach(n=>inEdgesMap.set(n.id,[]));
     edges.forEach(e=>{const a=inEdgesMap.get(e.to);if(a)a.push(e);});
     const EMPTY_EDGES=[];
 
-    // Phase 1: 圧力定数（Worker注入漏れ防止のため compute 内にインライン定義）
-    const DEF_SRC=1.0;        // PRESSURE.DEFAULT_SOURCE_MPA と一致させること
-    const DEF_RED_RATE=0.45;  // PRESSURE.DEFAULT_REDUCER_RATE と一致させること
+    const DEF_SRC=1.0;
+    const DEF_RED_RATE=0.45;
     edges.forEach(e=>{e._sim.f=0;e._sim.b=0;e._sim.rate=0;e._sim.brate=0;e._sim.pres=0;e._sim.bpres=0;e._sim.srcPres=0;e._sim.bsrcPres=0;});
     nodes.forEach(n=>{n._sim.fIn=0;n._sim.fOut=0;n._sim.rateIn=0;n._sim.rateOut=0;n._sim.presIn=0;n._sim.presOut=0;n._sim.srcPresIn=0;n._sim.srcPresOut=0;});
 
@@ -1781,7 +1778,6 @@ const SimulatorCore={
         const inE=inEdgesMap.get(n.id)||EMPTY_EDGES;let mxF=0,rateIn=0;
         inE.forEach(e=>{if(e._sim.f>mxF)mxF=e._sim.f;});
         inE.forEach(e=>{if(e._sim.f===mxF&&e._sim.rate>rateIn)rateIn=e._sim.rate;});
-        // Phase 1: 支配的な流入エッジから絶対圧(pres)とソース帰属圧(srcPres)を取得
         let presIn=0,srcPresIn=0;
         inE.forEach(e=>{if(e._sim.f===mxF&&(e._sim.pres||0)>presIn){presIn=e._sim.pres||0;srcPresIn=e._sim.srcPres||0;}});
         n._sim.fIn=mxF;n._sim.rateIn=rateIn;n._sim.presIn=presIn;n._sim.srcPresIn=srcPresIn;
@@ -1799,28 +1795,25 @@ const SimulatorCore={
         else if(n.type===NODE_TYPE.DRAIN){fOut=(n._sim.fIn===FLUID.DRAIN)?FLUID.WATER:n._sim.fIn;}
         else if(n.type===NODE_TYPE.REDUCER){
           fOut=n._sim.fIn;
-          // 流量強度(rate)も出口圧(MPa)から導出して pres と整合させる（outletMPa 未設定時のみ旧 limitRate）
           const _rsrc=srcPresIn>0?srcPresIn:DEF_SRC;
           const _eff=(n.ext.outletMPa!=null)?Math.min(1,n.ext.outletMPa/_rsrc):(n.ext.limitRate??DEF_RED_RATE);
           rOut=Math.min(rateIn,_eff);
         }
         else if(n.type===NODE_TYPE.HEATEX){fOut=n._sim.fIn;rOut=rateIn;}
-        else if(n.type===NODE_TYPE.PGAUGE){fOut=FLUID.EMPTY;rOut=0;}  // 圧力計は末端センサー（下流へ流さない）
+        else if(n.type===NODE_TYPE.PGAUGE){fOut=FLUID.EMPTY;rOut=0;}
         if(fOut===FLUID.EMPTY)rOut=0;
-        // Phase 1: 絶対圧 presOut / ソース帰属圧 srcPresOut の算出
+
         let presOut,srcPresOut;
         if(n.type===NODE_TYPE.SOURCE){
           const sp=(n.ext.pressureMPa!=null)?n.ext.pressureMPa:DEF_SRC;
           presOut=sp;srcPresOut=sp;
         }else{
-          srcPresOut=srcPresIn; // ソース帰属はそのまま下流へ受け渡し
+          srcPresOut=srcPresIn;
           if(n.type===NODE_TYPE.REDUCER){
             const src=srcPresIn>0?srcPresIn:DEF_SRC;
-            // 出口圧(MPa)を優先。未設定（旧データ）は limitRate×ソース圧から換算。
             const outMPa=(n.ext.outletMPa!=null)?n.ext.outletMPa:src*(n.ext.limitRate??DEF_RED_RATE);
             presOut=Math.min(presIn,outMPa);
           }else{
-            // 弁の微開/閉止など、rate と同じ縮約で pres を通過させる
             const factor=rateIn>0?(rOut/rateIn):(rOut>0?1:0);
             presOut=presIn*factor;
           }
@@ -1839,22 +1832,23 @@ const SimulatorCore={
       iter++;
     }
 
-    // バックフロー（逆流）計算 — 流体優先順位＋圧力差による発生
     nodes.forEach(n=>{
       const inE=inEdgesMap.get(n.id)||EMPTY_EDGES;if(inE.length<=1)return;
       const mxF=n._sim.fIn;
-      // REQ-2: 復水(蒸気ドレン)は排出方向のみ。ドレン主体の合流点から上流へ逆流を発生させない。
       if(mxF===FLUID.DRAIN)return;
-      // 合流する中で最も強い流体(mxF)を持つ配管の最大圧力を求める
       let mxRateForMxF=0,mxPresForMxF=0,srcPresForMxF=0;
       inE.forEach(e=>{if(e._sim.f===mxF&&e._sim.rate>mxRateForMxF)mxRateForMxF=e._sim.rate;});
       inE.forEach(e=>{if(e._sim.f===mxF&&(e._sim.pres||0)>mxPresForMxF){mxPresForMxF=e._sim.pres||0;srcPresForMxF=e._sim.srcPres||0;}});
       inE.forEach(e=>{
-        // 自分の流体が最強流体より弱い、または同じ流体でも圧力が負けている場合に逆流発生
-        if(e._sim.f<mxF||(e._sim.f===mxF&&e._sim.rate<mxRateForMxF)){
-          // REQ-1a: 一方向デバイス(トラップ/ソース/閉弁)の二次側エッジには逆流を書き込まない
+        if(e._sim.f<mxF||(e._sim.f===mxF&&(e._sim.pres||0)<mxPresForMxF)){
           const _fn=nodeMap.get(e.from);
-          if(_fn&&(_fn.type===NODE_TYPE.TRAP||_fn.type===NODE_TYPE.SOURCE||((_fn.type===NODE_TYPE.VALVE||_fn.type===NODE_TYPE.SAFETY)&&_fn.state.valveState===VALVE_STATE.CLOSED)))return;
+          if(_fn){
+            if(_fn.type===NODE_TYPE.SOURCE) return;
+            if(_fn.type===NODE_TYPE.TRAP && mxF !== FLUID.STEAM) return;
+            if((_fn.type===NODE_TYPE.VALVE||_fn.type===NODE_TYPE.SAFETY)&&_fn.state.valveState===VALVE_STATE.CLOSED){
+              if(mxF !== FLUID.STEAM) return; 
+            }
+          }
           e._sim.b=mxF;
           e._sim.brate=mxRateForMxF;
           e._sim.bpres=mxPresForMxF;
@@ -1865,30 +1859,38 @@ const SimulatorCore={
     });
     return{nodes,edges};
   },
-  // 最適化3: 隣接リスト(inEdgesMap)を引数で受け取り、再帰内の edges.filter を排除
   _backflow:(nid,val,rate,nodeMap,inEdgesMap,pres,srcPres)=>{
     const n=nodeMap.get(nid);
-    // TRAPとSOURCEは一律ブロック。REDUCER・HEATEXは透過。
-    if(!n||[NODE_TYPE.TRAP,NODE_TYPE.SOURCE].includes(n.type))return;
-    // VALVEとSAFETYはCLOSED時のみブロック（PARTIAL/OPENは逆流を通す）
+    if(!n||n.type===NODE_TYPE.SOURCE)return;
+    if(n.type===NODE_TYPE.TRAP && val !== FLUID.STEAM)return;
     if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)&&n.state.valveState===VALVE_STATE.CLOSED)return;
-    // REQ-2: 復水(蒸気ドレン)の逆流は伝播させない（排出方向のみ）
     if(val===FLUID.DRAIN)return;
+    
+    let nextRate = rate;
+    let nextPres = pres;
+    if ([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type) && n.state.valveState === VALVE_STATE.PARTIAL) {
+      nextRate = Math.min(rate, 0.1);
+      const factor = rate > 0 ? (nextRate / rate) : 0;
+      nextPres = pres * factor;
+    }
+
     (inEdgesMap.get(nid)||[]).forEach(e=>{
-      // 拮抗条件: 「同じ流体」かつ「順方向の圧力が逆流の圧力以上」の場合のみストップ
-      if(val===e._sim.f&&rate<=e._sim.rate)return;
-      // 万が一逆流の流体のほうが弱い場合は進めない
+      if(val===e._sim.f&&nextPres<=(e._sim.pres||0))return; 
       if(val<e._sim.f)return;
-      // REQ-1a: 一方向デバイス(トラップ/ソース/閉弁)の二次側エッジには逆流を書き込まない
       const _fn=nodeMap.get(e.from);
-      if(_fn&&(_fn.type===NODE_TYPE.TRAP||_fn.type===NODE_TYPE.SOURCE||((_fn.type===NODE_TYPE.VALVE||_fn.type===NODE_TYPE.SAFETY)&&_fn.state.valveState===VALVE_STATE.CLOSED)))return;
-      // より強い逆流で上書きする判定
-      if(e._sim.b<val||(e._sim.b===val&&e._sim.brate<rate)){
+      if(_fn){
+        if(_fn.type===NODE_TYPE.SOURCE) return;
+        if(_fn.type===NODE_TYPE.TRAP && val !== FLUID.STEAM) return;
+        if((_fn.type===NODE_TYPE.VALVE||_fn.type===NODE_TYPE.SAFETY)&&_fn.state.valveState===VALVE_STATE.CLOSED){
+          if(val !== FLUID.STEAM) return;
+        }
+      }
+      if(e._sim.b<val||(e._sim.b===val&&(e._sim.bpres||0)<nextPres)){ 
         e._sim.b=val;
-        e._sim.brate=rate;
-        e._sim.bpres=pres||0;
+        e._sim.brate=nextRate; 
+        e._sim.bpres=nextPres||0; 
         e._sim.bsrcPres=srcPres||0;
-        SimulatorCore._backflow(e.from,val,rate,nodeMap,inEdgesMap,pres,srcPres);
+        SimulatorCore._backflow(e.from,val,nextRate,nodeMap,inEdgesMap,nextPres,srcPres); 
       }
     });
   }

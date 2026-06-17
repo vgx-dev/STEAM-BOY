@@ -2122,7 +2122,7 @@ const Anomaly={
     Store.edges.forEach(e=>{_inCnt.set(e.to,(_inCnt.get(e.to)||0)+1);_outCnt.set(e.from,(_outCnt.get(e.from)||0)+1);});
     Store.nodes.forEach(n=>{const inN=_inCnt.get(n.id)||0,outN=_outCnt.get(n.id)||0;
       if(inN+outN===0&&n.type!==NODE_TYPE.SOURCE)Store.anomalies.push({type:'isolated',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 孤立（配管未接続）`});
-      if(![NODE_TYPE.DRAIN,NODE_TYPE.SOURCE,NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(n.type))if(n._sim.fIn>0&&outN===0)Store.anomalies.push({type:'deadend',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 流体の行き止まり`});
+      if(![NODE_TYPE.DRAIN,NODE_TYPE.SOURCE,NODE_TYPE.VALVE,NODE_TYPE.SAFETY,NODE_TYPE.PGAUGE].includes(n.type))if(n._sim.fIn>0&&outN===0)Store.anomalies.push({type:'deadend',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 流体の行き止まり`});
 
       // 熱交換器に高圧蒸気直撃の危険検出（Phase 1: 絶対圧 MPa 判定。未設定はソース既定で rate 同等）
       if(n.type===NODE_TYPE.HEATEX&&n._sim.fIn===FLUID.STEAM){

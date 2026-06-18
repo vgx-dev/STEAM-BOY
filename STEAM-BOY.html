@@ -1183,23 +1183,23 @@ body.master-workspace #mt-resize-handle{display:block;}
 </div>
 
 <!-- ── Master Table Button ── -->
-<button id="btn-master-table" class="glass">📋 マスター管理</button>
+<button id="btn-master-table" class="glass">マスタ管理</button>
 
-<!-- ── Image Viewer ── -->
 <div id="image-viewer" class="glass">
   <div class="iv-header" id="iv-header">
     <div class="matrix-drag-dots"><span></span><span></span></div>
-    <span class="iv-title" id="iv-title">—</span>
+    <span class="iv-title" id="iv-title">関連画像</span>
     <button class="panel-minimize-btn" title="最小化/展開">
       <svg viewBox="0 0 12 12" width="10" height="10"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
   </div>
   <div class="iv-body" id="iv-body">
-    <div class="iv-placeholder" id="iv-placeholder">—</div>
+    <div class="iv-placeholder" id="iv-placeholder">
+      対象機器にカーソルを合わせると<br>ここに画像が表示されます
+    </div>
     <img class="iv-img" id="iv-img" alt="" style="display:none;">
   </div>
 </div>
-
 <!-- ── Master Table Modal ── -->
 <div id="master-table-overlay"></div>
 <div id="master-table-modal" class="glass">
@@ -1240,7 +1240,7 @@ body.master-workspace #mt-resize-handle{display:block;}
 @keyframes toastOut{to{opacity:0;transform:translateY(8px);}}
 
 /* ── Phase 1: Context Menu（右クリックメニュー） ── */
-.ctx-menu{position:fixed;z-index:400;min-width:184px;padding:6px;border-radius:12px;display:flex;flex-direction:column;gap:1px;font-family:var(--font);}
+.ctx-menu{position:fixed;z-index:700;min-width:184px;padding:6px;border-radius:12px;display:flex;flex-direction:column;gap:1px;font-family:var(--font);}
 .ctx-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-1);cursor:pointer;transition:background .12s;user-select:none;-webkit-tap-highlight-color:transparent;}
 .ctx-item:hover{background:rgba(0,0,0,0.05);}
 .ctx-item.danger{color:var(--red);}
@@ -1775,12 +1775,37 @@ const SimulatorCore={
     let changed=true,iter=0;
     while(changed&&iter<100){changed=false;
       nodes.forEach(n=>{
-        const inE=inEdgesMap.get(n.id)||EMPTY_EDGES;let mxF=0,rateIn=0;
-        inE.forEach(e=>{if(e._sim.f>mxF)mxF=e._sim.f;});
-        inE.forEach(e=>{if(e._sim.f===mxF&&e._sim.rate>rateIn)rateIn=e._sim.rate;});
+        const inE=inEdgesMap.get(n.id)||EMPTY_EDGES;
+        
+        // 順方向の液体に対する重力（中継点）チェック
+        const getEffectiveF = (e) => {
+          let edgeF = e._sim.f;
+          if (edgeF === FLUID.WATER || edgeF === FLUID.DRAIN) {
+            let canGo = true;
+            const _fn = nodeMap.get(e.from);
+            if (_fn) {
+              const wps = e.ext.waypoints || [];
+              const ySequence = [_fn.y, ...wps.map(w => w.y), n.y];
+              for (let i = 1; i < ySequence.length; i++) {
+                if (ySequence[i] < ySequence[i - 1] - 5) { 
+                  canGo = false;
+                  break;
+                }
+              }
+            }
+            if (!canGo) edgeF = FLUID.EMPTY;
+          }
+          return edgeF;
+        };
+        
+        let mxF=0,rateIn=0;
+        inE.forEach(e=>{const ef = getEffectiveF(e); if(ef>mxF) mxF=ef;});
+        inE.forEach(e=>{const ef = getEffectiveF(e); if(ef===mxF&&e._sim.rate>rateIn) rateIn=e._sim.rate;});
         let presIn=0,srcPresIn=0;
-        inE.forEach(e=>{if(e._sim.f===mxF&&(e._sim.pres||0)>presIn){presIn=e._sim.pres||0;srcPresIn=e._sim.srcPres||0;}});
+        inE.forEach(e=>{const ef = getEffectiveF(e); if(ef===mxF&&(e._sim.pres||0)>presIn){presIn=e._sim.pres||0;srcPresIn=e._sim.srcPres||0;}});
+        
         n._sim.fIn=mxF;n._sim.rateIn=rateIn;n._sim.presIn=presIn;n._sim.srcPresIn=srcPresIn;
+
         let fOut=mxF,rOut=rateIn;
         if(n.type===NODE_TYPE.SOURCE){fOut=FLUID.STEAM;rOut=1;}
         else if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)){
@@ -1835,7 +1860,7 @@ const SimulatorCore={
     nodes.forEach(n=>{
       const inE=inEdgesMap.get(n.id)||EMPTY_EDGES;if(inE.length<=1)return;
       const mxF=n._sim.fIn;
-      if(mxF===FLUID.DRAIN)return;
+      
       let mxRateForMxF=0,mxPresForMxF=0,srcPresForMxF=0;
       inE.forEach(e=>{if(e._sim.f===mxF&&e._sim.rate>mxRateForMxF)mxRateForMxF=e._sim.rate;});
       inE.forEach(e=>{if(e._sim.f===mxF&&(e._sim.pres||0)>mxPresForMxF){mxPresForMxF=e._sim.pres||0;srcPresForMxF=e._sim.srcPres||0;}});
@@ -1845,10 +1870,25 @@ const SimulatorCore={
           if(_fn){
             if(_fn.type===NODE_TYPE.SOURCE) return;
             if(_fn.type===NODE_TYPE.TRAP && mxF !== FLUID.STEAM) return;
-            if((_fn.type===NODE_TYPE.VALVE||_fn.type===NODE_TYPE.SAFETY)&&_fn.state.valveState===VALVE_STATE.CLOSED){
-              if(mxF !== FLUID.STEAM) return; 
-            }
           }
+
+          // 【追加】逆流スタート時（最初のエッジ）の重力チェック
+          if (mxF === FLUID.WATER || mxF === FLUID.DRAIN) {
+            let canGo = true;
+            if (_fn) {
+              const wps = e.ext.waypoints || [];
+              const ySequence = [_fn.y, ...wps.map(w => w.y), n.y];
+              // n.y(現在地=低い) から _fn.y(逆流先=高い) へ遡れるか
+              for (let i = ySequence.length - 1; i > 0; i--) {
+                if (ySequence[i - 1] < ySequence[i] - 5) { // 上り坂ならNG
+                  canGo = false;
+                  break;
+                }
+              }
+            }
+            if (!canGo) return; // 上り坂なら逆流を開始しない
+          }
+          
           e._sim.b=mxF;
           e._sim.brate=mxRateForMxF;
           e._sim.bpres=mxPresForMxF;
@@ -1857,14 +1897,15 @@ const SimulatorCore={
         }
       });
     });
+      
     return{nodes,edges};
   },
+  
   _backflow:(nid,val,rate,nodeMap,inEdgesMap,pres,srcPres)=>{
     const n=nodeMap.get(nid);
     if(!n||n.type===NODE_TYPE.SOURCE)return;
     if(n.type===NODE_TYPE.TRAP && val !== FLUID.STEAM)return;
     if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)&&n.state.valveState===VALVE_STATE.CLOSED)return;
-    if(val===FLUID.DRAIN)return;
     
     let nextRate = rate;
     let nextPres = pres;
@@ -1881,10 +1922,24 @@ const SimulatorCore={
       if(_fn){
         if(_fn.type===NODE_TYPE.SOURCE) return;
         if(_fn.type===NODE_TYPE.TRAP && val !== FLUID.STEAM) return;
-        if((_fn.type===NODE_TYPE.VALVE||_fn.type===NODE_TYPE.SAFETY)&&_fn.state.valveState===VALVE_STATE.CLOSED){
-          if(val !== FLUID.STEAM) return;
-        }
       }
+
+      // 波及時の重力（勾配）チェック
+      if (val === FLUID.WATER || val === FLUID.DRAIN) {
+        let canGo = true;
+        if (_fn) {
+          const wps = e.ext.waypoints || [];
+          const ySequence = [_fn.y, ...wps.map(w => w.y), n.y];
+          for (let i = ySequence.length - 1; i > 0; i--) {
+            if (ySequence[i - 1] < ySequence[i] - 5) {
+              canGo = false;
+              break;
+            }
+          }
+        }
+        if (!canGo) return;
+      }
+
       if(e._sim.b<val||(e._sim.b===val&&(e._sim.bpres||0)<nextPres)){ 
         e._sim.b=val;
         e._sim.brate=nextRate; 
@@ -1895,7 +1950,6 @@ const SimulatorCore={
     });
   }
 };
-
 /* ━━━━━━━━ ISOLATION TRACER (Feature 1) ━━━━━━━━ */
 const IsolationTracer={
   active:false,
@@ -4329,14 +4383,18 @@ const ImageViewer = {
     }
   },
 
-  clearContent: () => {
-    document.getElementById('iv-title').textContent = '—';
+clearContent: () => {
+    // タイトルバーも「—」ではなくデフォルトに戻す
+    document.getElementById('iv-title').textContent = '関連画像';
     const img = document.getElementById('iv-img');
     img.style.display = 'none';
     img.src = '';
     const ph = document.getElementById('iv-placeholder');
     ph.style.display = 'flex';
-    ph.textContent = '—';
+    // textContentの代わりにinnerHTMLを使い、案内メッセージを表示させる
+    ph.innerHTML = `
+      対象機器にカーソルを合わせると<br>ここに画像が表示されます
+    `;
   }
 };
 
@@ -5628,7 +5686,7 @@ const OperationManual = {
     if (logoClear) logoClear.onclick = () => { Store.config.logoUrl = ''; Persistence.scheduleSave(); OperationManual._render(); };
 
     // 手順の追加（インライン・クイック追加：1クリックで種別ごとに追加）・削除・複製
-    m.querySelectorAll('.opm-qa-add').forEach(b => b.onclick = (e) => { e.stopPropagation(); const r = b.getBoundingClientRect(); OperationManual._openAddMenu(b.dataset.phase, r.left, r.bottom + 4); });
+    m.querySelectorAll('.opm-qa-add').forEach(b => b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); const r = b.getBoundingClientRect(); OperationManual._openAddMenu(b.dataset.phase, r.left, r.bottom + 4); });
     m.querySelectorAll('.opm-qa-route').forEach(b => b.onclick = () => OperationManual._sortPhaseByRoute(b.dataset.phase));
     // フェーズの追加・削除・並べ替え
     { const ap = m.querySelector('#opm-add-phase'); if (ap) ap.onclick = () => OperationManual._addPhase(); }
@@ -5692,10 +5750,9 @@ const OperationManual = {
       tr.addEventListener('click', (e) => {
         if (e.target.closest('input,select,button,textarea,a')) return;
         const id = tr.dataset.id;
-        if (e.ctrlKey || e.metaKey) { OperationManual._toggleMultiSel(id); }
-        else if (e.shiftKey) { OperationManual._rangeMultiSel(id); }
-        else { OperationManual._multiSel = new Set([id]); OperationManual._selAnchor = id; OperationManual._selectStep(id); }
-        OperationManual._applyMultiSelUI();
+        if (e.ctrlKey || e.metaKey) { OperationManual._toggleMultiSel(id); OperationManual._applyMultiSelUI(); }
+        else if (e.shiftKey) { OperationManual._rangeMultiSel(id); OperationManual._applyMultiSelUI(); }
+        else { OperationManual._multiSel.clear(); OperationManual._selAnchor = id; OperationManual._selectStep(id); OperationManual._applyMultiSelUI(); }
       });
     });
     // 🎯 選択手順の対象を図から指定
@@ -5961,8 +6018,14 @@ const OperationManual = {
     }
   },
   _selectStep: (id) => {
+    const prev = OperationManual._selectedStepId;
     OperationManual._selectedStepId = id;
-    const m = OperationManual._modal; if (m) m.querySelectorAll('.opm-table tbody tr').forEach(tr => tr.classList.toggle('opm-row-selected', tr.dataset.id === id));
+    const m = OperationManual._modal;
+    if (m) {
+      // 前の選択を解除（全走査ではなく前の行だけ）
+      if (prev && prev !== id) { const oldTr = m.querySelector(`.opm-table tbody tr[data-id="${prev}"]`); if (oldTr) oldTr.classList.remove('opm-row-selected'); }
+      const newTr = m.querySelector(`.opm-table tbody tr[data-id="${id}"]`); if (newTr) newTr.classList.add('opm-row-selected');
+    }
     const s = OperationManual._stepById(id);
     if (s && s.node) OperationManual._focusNodeOnCanvas(s.node.id, true);
     else OperationManual._clearCanvasFocus();

@@ -586,7 +586,10 @@ g.node[data-active="1"] {
   min-width: 140px;
 }
 #image-viewer.minimized .iv-body { display: none !important; }
-#image-viewer.minimized { min-height: 0 !important; resize: none !important; }
+/* ★ height: auto !important; を追加 */
+#image-viewer.minimized { min-height: 0 !important; height: auto !important; resize: none !important; }
+
+
 .iv-header {
   padding: 8px 10px;
   display: flex;
@@ -826,7 +829,8 @@ body.master-workspace #mt-resize-handle{display:block;}
 #settings-panel.minimized > *:not(.sp-header) { display: none !important; }
 #floating-matrix.minimized .matrix-tabs,
 #floating-matrix.minimized #valveMatrixContent { display: none !important; }
-#floating-matrix.minimized { min-height: 0 !important; resize: none !important; }
+/* ★ height: auto !important; を追加 */
+#floating-matrix.minimized { min-height: 0 !important; height: auto !important; resize: none !important; }
 #minimap-container.minimized #minimap { display: none !important; }
 
 </style>
@@ -952,7 +956,8 @@ body.master-workspace #mt-resize-handle{display:block;}
 
 <div id="vignette-overlay"></div>
 
-<header id="toolbar" class="glass" role="toolbar" aria-label="ツールバー">
+<header id="toolbar" class="glass" role="toolbar" aria-label="ツールバー" style="cursor: grab;">
+  <div class="matrix-drag-dots" style="padding: 0 4px 0 8px; flex-shrink: 0; opacity: 0.5;"><span></span><span></span></div>
   <button class="tool-btn active" data-tool="pointer" title="操作・選択 (V)">
     <svg viewBox="0 0 18 18" fill="none"><path d="M4 2v13l3.5-3.5H14z" fill="currentColor"/></svg>
     <span class="shortcut-hint">V</span>
@@ -2628,19 +2633,36 @@ const Minimap={
 /* ━━━━━━━━ PALETTE FX (フローティングパレット共通: 位置永続化・前面化・ダーク・最小化記憶) ━━━━━━━━ */
 // すべて軽量（イベントは pointerdown/up・resize のみ、毎フレーム処理なし）。
 const PaletteFX = {
-  IDS: ['settings-panel','floating-matrix','minimap-container','image-viewer'],
+  // ① 配列の最後に 'toolbar' を追加します
+  IDS: ['settings-panel','floating-matrix','minimap-container','image-viewer', 'toolbar'],
   POS_KEY:'steamboy_palette_pos', MIN_KEY:'steamboy_palette_min', THEME_KEY:'steamboy_theme',
-  _z: 191,
-  _readJSON:(k)=>{try{return JSON.parse(localStorage.getItem(k)||'{}');}catch(_){return {};}},
-  savePos:(id,el)=>{const all=PaletteFX._readJSON(PaletteFX.POS_KEY);all[id]={left:el.style.left,top:el.style.top,width:el.style.width||'',height:el.style.height||''};try{localStorage.setItem(PaletteFX.POS_KEY,JSON.stringify(all));}catch(_){}},
-  saveMin:()=>{const all={};PaletteFX.IDS.forEach(id=>{const el=document.getElementById(id);if(el)all[id]=el.classList.contains('minimized');});try{localStorage.setItem(PaletteFX.MIN_KEY,JSON.stringify(all));}catch(_){}},
+  
+  _readJSON:(k)=>{try{return JSON.parse(localStorage.getItem(k))||{};}catch(e){return {};}},
+  _writeJSON:(k,v)=>localStorage.setItem(k,JSON.stringify(v)),
+  
+  save:()=>{
+    const pos={},min={};
+    PaletteFX.IDS.forEach(id=>{const el=document.getElementById(id);if(!el)return;
+      if(el.classList.contains('minimized'))min[id]=true;
+      pos[id]={left:el.style.left,top:el.style.top,width:el.style.width,height:el.style.height};});
+    PaletteFX._writeJSON(PaletteFX.POS_KEY,pos);PaletteFX._writeJSON(PaletteFX.MIN_KEY,min);
+  },
+  
+  // ② restore関数の中身を以下に丸ごと差し替えます
   restore:()=>{
     const pos=PaletteFX._readJSON(PaletteFX.POS_KEY),min=PaletteFX._readJSON(PaletteFX.MIN_KEY);
     PaletteFX.IDS.forEach(id=>{const el=document.getElementById(id);if(!el)return;const p=pos[id];
-      if(p&&p.left){el.style.left=p.left;el.style.top=p.top;el.style.right='auto';el.style.bottom='auto';if(p.width)el.style.width=p.width;if(p.height)el.style.height=p.height;}
+      if(p&&p.left){
+        el.style.left=p.left;el.style.top=p.top;el.style.right='auto';el.style.bottom='auto';
+        if(p.width)el.style.width=p.width;if(p.height)el.style.height=p.height;
+        
+        // ★追加部分: ツールバーの位置を復元する時は、CSSの初期中央揃え設定を解除する
+        if(id === 'toolbar') el.style.transform = 'none';
+      }
       if(min[id])el.classList.add('minimized');});
     requestAnimationFrame(PaletteFX.clampAll);
   },
+
   clampAll:()=>{PaletteFX.IDS.forEach(id=>{const el=document.getElementById(id);if(!el||!el.style.left)return;const w=el.offsetWidth,h=el.offsetHeight,vw=innerWidth,vh=innerHeight;el.style.left=Math.max(8,Math.min(parseFloat(el.style.left)||16,Math.max(8,vw-w-8)))+'px';el.style.top=Math.max(8,Math.min(parseFloat(el.style.top)||16,Math.max(8,vh-h-8)))+'px';});},
   raise:(el)=>{if(el)el.style.zIndex=(++PaletteFX._z);},
   applyTheme:(dark)=>{
@@ -6844,6 +6866,31 @@ const Share = {
     } catch (_) { return false; }
   }
 };
+
+// ▼▼▼ ツールバーのドラッグ移動 ▼▼▼
+const toolbarEl = document.getElementById('toolbar');
+toolbarEl.addEventListener('pointerdown', (ev) => {
+  // ボタンを押した時はドラッグを開始しない
+  if (ev.target.closest('button')) return;
+  
+  // 初回ドラッグ時にCSSの「中央揃え（transform: translateX(-50%)）」を解除し、現在の実座標で固定する
+  if (window.getComputedStyle(toolbarEl).transform !== 'none') {
+    const rect = toolbarEl.getBoundingClientRect();
+    toolbarEl.style.transform = 'none';
+    toolbarEl.style.left = rect.left + 'px';
+    toolbarEl.style.top = rect.top + 'px';
+  }
+
+  Store.matrixDrag = {
+    isDragging: true,
+    pointerId: ev.pointerId,
+    offsetX: ev.clientX - toolbarEl.getBoundingClientRect().left,
+    offsetY: ev.clientY - toolbarEl.getBoundingClientRect().top,
+    targetId: 'toolbar'
+  };
+  try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch (_) {}
+});
+// ▲▲▲ ツールバーのドラッグ移動 ここまで ▲▲▲
 
 Controller.init();
 

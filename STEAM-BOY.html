@@ -689,7 +689,19 @@ body.master-workspace #master-table-modal{top:0;left:0;right:auto;bottom:0;width
 body.master-workspace #workspace{left:var(--mt-w,42vw);}
 body.master-workspace #toolbar{left:calc(var(--mt-w,42vw) + (100vw - var(--mt-w,42vw)) / 2);}
 body.master-workspace #btn-master-table{display:none;}
-#mt-resize-handle{display:none;position:fixed;top:0;left:var(--mt-w,42vw);width:7px;height:100vh;z-index:502;cursor:col-resize;background:transparent;transition:background .15s;}
+#mt-resize-handle {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: var(--mt-w, 42vw);
+  bottom: 16px; /* 下端の横スクロールバーを避ける */
+  width: 7px;
+  height: auto; /* 100vh から auto に変更 */
+  z-index: 502;
+  cursor: col-resize;
+  background: transparent;
+  transition: background .15s;
+}
 #mt-resize-handle::after{content:"";position:absolute;top:50%;right:2px;width:3px;height:42px;margin-top:-21px;border-radius:3px;background:rgba(0,0,0,0.18);}
 #mt-resize-handle:hover{background:rgba(0,122,255,0.15);}
 body.master-workspace #mt-resize-handle{display:block;}
@@ -1553,8 +1565,19 @@ body.manual-workspace #op-manual-modal{top:0;right:0;left:auto;bottom:0;width:va
 body.manual-workspace #workspace{right:var(--manual-w,46vw);}
 body.manual-workspace #toolbar{left:calc((100vw - var(--manual-w,46vw)) / 2);}
 body.manual-workspace #zoom-controls{right:calc(var(--manual-w,46vw) + 16px);}
-#opm-resize-handle{display:none;position:fixed;top:0;right:var(--manual-w,46vw);width:7px;height:100vh;z-index:602;cursor:col-resize;background:transparent;transition:background .15s;}
-#opm-resize-handle::after{content:"";position:absolute;top:50%;left:2px;width:3px;height:42px;margin-top:-21px;border-radius:3px;background:rgba(0,0,0,0.18);}
+#opm-resize-handle {
+  display: none;
+  position: fixed;
+  top: 0;
+  right: var(--manual-w, 46vw);
+  bottom: 16px; /* 下端の横スクロールバーを避ける */
+  width: 7px;
+  height: auto; /* 100vh から auto に変更 */
+  z-index: 602;
+  cursor: col-resize;
+  background: transparent;
+  transition: background .15s;
+}#opm-resize-handle::after{content:"";position:absolute;top:50%;left:2px;width:3px;height:42px;margin-top:-21px;border-radius:3px;background:rgba(0,0,0,0.18);}
 #opm-resize-handle:hover{background:rgba(0,122,255,0.15);}
 body.manual-workspace #opm-resize-handle{display:block;}
 /* 上下分割（明示選択時）: 画面幅に関係なく下ドック。入力欄が全幅化して手入力しやすい */

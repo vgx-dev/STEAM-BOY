@@ -364,8 +364,8 @@ body.zen-mode #autosave-off-badge{display:none;}
 /* ④ 不確定残留（密閉空間の広がり）＝黄。赤/紫の点滅を黄の点滅へ上書き */
 @keyframes uncertainPulse { 0%,100%{stroke:#FFCC00;opacity:1;} 50%{stroke:#FFCC00;opacity:.25;} }
 @keyframes uncertainBgPulse { 0%,100%{stroke:#FFCC00;opacity:.4;} 50%{stroke:#FFCC00;opacity:.08;} }
-g.edge-grp[data-uncertain="1"] .edge-path,
-g.edge-grp[data-uncertain="1"] .flow-base:not(.edge-sealed-bg){stroke:#FFCC00 !important;}
+g.edge-grp[data-uncertain="1"] .edge-path{stroke:#ffcc00 !important;}
+g.edge-grp[data-uncertain="1"] .flow-base:not(.edge-sealed-bg){stroke:#FFCC00;}
 g.edge-grp[data-uncertain="1"] .edge-sealed{animation:uncertainPulse 2.4s ease-in-out infinite !important;}
 g.edge-grp[data-uncertain="1"] .edge-sealed-bg{animation:uncertainBgPulse 2.4s ease-in-out infinite !important;}
 .sealed-icon {
@@ -832,6 +832,21 @@ body.master-workspace #mt-resize-handle{display:block;}
 /* ★ height: auto !important; を追加 */
 #floating-matrix.minimized { min-height: 0 !important; height: auto !important; resize: none !important; }
 #minimap-container.minimized #minimap { display: none !important; }
+
+/* ▼▼▼ スクロール中カクつき防止の最終兵器 ▼▼▼ */
+body.is-scrolling .glass {
+  /* 激重のすりガラス効果を一時的にOFF */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  /* 透明感が消える代わり、違和感のない半透明カラーで代用 */
+  background: rgba(235, 235, 240, 0.98) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
+}
+body.is-scrolling #svg-layer * {
+  /* 配管やノードのドロップシャドウ・発光効果を強制停止 */
+  filter: none !important;
+}
+/* ▲▲▲ ここまで ▲▲▲ */
 
 </style>
 </head>
@@ -2609,7 +2624,7 @@ const Minimap={
           const phase=((t/PERIOD)+i*0.5)%1;
           const r=phase*MAX_R,alpha=(1-phase)*0.85;
           ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
-          ctx.strokeStyle=`rgba(255,59,48,${alpha.toFixed(2)})`;
+          ctx.strokeStyle=`rgba(255,59,48,${alpha.toFixed(3)})`;
           ctx.lineWidth=1.5;ctx.stroke();
         }
       });
@@ -2990,17 +3005,30 @@ const Renderer={
         setAttr(base,'stroke-width',esw*2.6);
         setAttr(base,'stroke-opacity',(0.12+0.2*Math.max(.1,dRate)).toFixed(3));
         if(isBk)base.classList.add('backward');else base.classList.remove('backward');
-        // Feature 4: Thermal gradient for steam edges
+        // Feature 4: Thermal gradient for steam edges & uncertain residual
         // 軽量化: perf-lite（大規模図面）ではエッジ毎の userSpaceOnUse グラデーション塗りを
         // 単色（CSSの data-fluid 色）に切替。多数の蒸気配管でのグラデーション再塗りコストを削減。
-        if(ds===FLUID.STEAM&&Renderer.svgDefs&&!_lite){
+        if((ds===FLUID.STEAM||isUncertain)&&Renderer.svgDefs&&!_lite){
           const gid=`tg-${edge.id}`;
           let grad=document.getElementById(gid);
           if(!grad){
             grad=createNS('linearGradient',{id:gid,gradientUnits:'userSpaceOnUse'});
-            grad.appendChild(createNS('stop',{offset:'0%','stop-color':'#FF3B30'}));
-            grad.appendChild(createNS('stop',{offset:'100%','stop-color':'#C44328','stop-opacity':'0.75'}));
+            grad.appendChild(createNS('stop',{offset:'0%'}));
+            grad.appendChild(createNS('stop',{offset:'100%'}));
             Renderer.svgDefs.appendChild(grad);
+          }
+          const stop1 = grad.children[0];
+          const stop2 = grad.children[1];
+          if(isUncertain){
+            setAttr(stop1,'stop-color','#FFCC00');
+            setAttr(stop1,'stop-opacity','1');
+            setAttr(stop2,'stop-color','#FF9500');
+            setAttr(stop2,'stop-opacity','1');
+          }else{
+            setAttr(stop1,'stop-color','#FF3B30');
+            setAttr(stop1,'stop-opacity','1');
+            setAttr(stop2,'stop-color','#C44328');
+            setAttr(stop2,'stop-opacity','0.75');
           }
           setAttr(grad,'x1',nF.x);setAttr(grad,'y1',nF.y);
           setAttr(grad,'x2',nT.x);setAttr(grad,'y2',nT.y);
@@ -3073,7 +3101,7 @@ const Renderer={
         setAttr(flowDash,'d',pathStr);
         setAttr(flowDash,'stroke-width',Math.max(1.5,esw*0.8));
         // 流速(dRate)に応じてアニメーション速度を変更（変化時のみ style 書き込み）
-        const dur=`${(0.6/Math.max(.18,dRate)).toFixed(2)}s`;
+        const dur=`${(0.6/Math.max(.18,dRate)).toFixed(3)}s`;
         if(flowDash.style.animationDuration!==dur)flowDash.style.animationDuration=dur;
         // 逆流時はアニメーションを逆回転
         const dir=isBk?'reverse':'normal';
@@ -3250,7 +3278,7 @@ const Renderer={
         // Phase 1: 出口圧(MPa) ＋ 対ソース% を併記
         const _src = n._sim.srcPresIn>0 ? n._sim.srcPresIn : PRESSURE.DEFAULT_SOURCE_MPA;
         const _setMPa = (n.ext.outletMPa!=null) ? n.ext.outletMPa : _src*(n.ext.limitRate??PRESSURE.DEFAULT_REDUCER_RATE);
-        const rTxt = `${_setMPa.toFixed(2)}MPa (${Math.round(_setMPa/_src*100)}%)`;
+        const rTxt = `${_setMPa.toFixed(3)}MPa (${Math.round(_setMPa/_src*100)}%)`;
         if (rLbl.textContent !== rTxt) rLbl.textContent = rTxt;
       } else {
         if (rLbl) rLbl.remove();
@@ -3281,7 +3309,7 @@ const Renderer={
         }
         setAttr(pLbl,'x',n.labelOffset.x); setAttr(pLbl,'y',n.labelOffset.y);
         const _pv = n._sim.presVal || 0;
-        const pTxt = `${_pv.toFixed(2)}MPa (${n._sim.pct||0}%)`;
+        const pTxt = `${_pv.toFixed(3)}MPa (${n._sim.pct||0}%)`;
         if (pLbl.textContent !== pTxt) pLbl.textContent = pTxt;
       } else {
         if (pLbl) pLbl.remove();
@@ -3440,7 +3468,7 @@ const ValveSelector={
       reliefWrap.style.cssText='display:flex;align-items:center;gap:6px;font-size:11px;padding:4px 8px;font-weight:500;color:var(--text-1);';
       reliefWrap.appendChild(document.createTextNode('リリーフ圧'));
       const ri=document.createElement('input');
-      ri.type='number';ri.min='0';ri.step='0.05';ri.placeholder='未設定';
+      ri.type='number';ri.min='0';ri.step='0.001';ri.placeholder='未設定';
       if(node.ext.reliefMPa!=null)ri.value=node.ext.reliefMPa;
       ri.style.cssText='width:64px;padding:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:7px;font-size:12px;font-family:var(--font);text-align:center;';
       ri.addEventListener('pointerdown',ev=>ev.stopPropagation());
@@ -3555,7 +3583,7 @@ const ReducerSelector={
     const curMPa = (node.ext.outletMPa!=null) ? node.ext.outletMPa : srcPres*(node.ext.limitRate??PRESSURE.DEFAULT_REDUCER_RATE);
     const sliderMax = Math.max(srcPres, curMPa, 0.05);
     const _pct = (v)=>Math.round(v/srcPres*100);
-    const _fmt = (v)=>`${v.toFixed(2)} MPa (${_pct(v)}%)`;
+    const _fmt = (v)=>`${v.toFixed(3)} MPa (${_pct(v)}%)`;
 
     const display = document.createElement('div');
     display.className = 'rs-val-display';
@@ -3563,8 +3591,8 @@ const ReducerSelector={
 
     const slider = document.createElement('input');
     slider.type = 'range'; slider.className = 'rs-slider';
-    slider.min = '0'; slider.max = sliderMax.toFixed(2); slider.step = '0.05';
-    slider.value = Math.min(curMPa, sliderMax).toFixed(2);
+    slider.min = '0'; slider.max = sliderMax.toFixed(3); slider.step = '0.05';
+    slider.value = Math.min(curMPa, sliderMax).toFixed(3);
 
     slider.addEventListener('input', (ev) => {
       display.textContent = _fmt(parseFloat(ev.target.value));
@@ -3643,10 +3671,10 @@ const PressureSelector={
     const display=document.createElement('div');
     display.className='rs-val-display';
     const _set=(node.ext[spec.field]!=null);
-    display.textContent=`${curVal.toFixed(2)} MPa${(!_set&&spec.allowDefault)?'（既定）':''}`;
+    display.textContent=`${curVal.toFixed(3)} MPa${(!_set&&spec.allowDefault)?'（既定）':''}`;
 
     const input=document.createElement('input');
-    input.type='number';input.min='0';input.step='0.05';input.value=curVal.toFixed(2);
+    input.type='number';input.min='0';input.step='0.001';input.value=curVal.toFixed(3);
     input.style.cssText='width:100%;padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:13px;font-family:var(--font);text-align:center;box-sizing:border-box;';
 
     const commit=()=>{
@@ -3658,7 +3686,7 @@ const PressureSelector={
       // Phase 3: 元圧変更は操作手順として記録（耐圧閾値=構成値は記録しない）
       if(node.type===NODE_TYPE.SOURCE)Sequencer.onPressureChange(node.id,'pressureMPa',from,v);
       Simulator.run(Renderer.renderAll);
-      display.textContent=`${v.toFixed(2)} MPa`;
+      display.textContent=`${v.toFixed(3)} MPa`;
     };
     input.addEventListener('change',commit);
     input.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();commit();PressureSelector.close();}});
@@ -3837,6 +3865,34 @@ const Controller={
     minimapEl.addEventListener('pointermove',ev=>{if(_mmDragging)_mmPan(ev);});
     minimapEl.addEventListener('pointerup',()=>{_mmDragging=false;});
     minimapEl.addEventListener('pointercancel',()=>{_mmDragging=false;});
+
+    // ▼▼▼ スクロール（パン移動）の超軽量化ここから ▼▼▼
+    const _ws = document.getElementById('workspace');
+    let _scrollTimeout;
+    let _isScrolling = false;
+    _ws.addEventListener('scroll', () => {
+      if (!_isScrolling) {
+        _isScrolling = true;
+        Renderer.svgLayer.style.pointerEvents = 'none';
+        // 【追加】CSSのスイッチをONにして、すりガラスや影を消す
+        document.body.classList.add('is-scrolling');
+      }
+      
+      if (typeof Minimap !== 'undefined' && Minimap.drawViewport) {
+        requestAnimationFrame(Minimap.drawViewport);
+      }
+
+      clearTimeout(_scrollTimeout);
+      _scrollTimeout = setTimeout(() => {
+        _isScrolling = false;
+        Renderer.svgLayer.style.pointerEvents = 'auto';
+        // 【追加】スクロールが終わったらスイッチをOFFにして美しさを戻す
+        document.body.classList.remove('is-scrolling');
+        
+        if(typeof Culling !== 'undefined') Culling.scheduleApply();
+      }, 150);
+    }, { passive: true });
+    // ▲▲▲ スクロール（パン移動）の超軽量化ここまで ▲▲▲
 
     document.getElementById('btn-undo').addEventListener('click',Controller.undo);
     document.getElementById('btn-save').addEventListener('click',Controller.saveData);
@@ -4591,7 +4647,7 @@ const MasterTable = {
     groups.forEach(g => {
       const srcMPa = g.srcNode ? ((g.srcNode.ext.pressureMPa != null) ? g.srcNode.ext.pressureMPa : PRESSURE.DEFAULT_SOURCE_MPA) : 0;
       const srcRef = srcMPa > 0 ? srcMPa : PRESSURE.DEFAULT_SOURCE_MPA;
-      html += `<tr class="mt-group"><td colspan="4">▼ ${g.srcName}${g.srcNode ? `（元圧 ${srcMPa.toFixed(2)} MPa）` : ''}</td></tr>`;
+      html += `<tr class="mt-group"><td colspan="4">▼ ${g.srcName}${g.srcNode ? `（元圧 ${srcMPa.toFixed(3)} MPa）` : ''}</td></tr>`;
       g.devices.forEach(n => {
         const spec = fieldSpec[n.type];
         const name = (n.ext.customName || nm.get(n.id) || n.id);
@@ -4601,8 +4657,8 @@ const MasterTable = {
         let shownVal = raw;
         if (raw == null && n.type === NODE_TYPE.REDUCER) shownVal = srcRef * (n.ext.limitRate ?? PRESSURE.DEFAULT_REDUCER_RATE);
         else if (raw == null && spec.def != null) shownVal = spec.def;
-        const valStr = (shownVal != null) ? Number(shownVal).toFixed(2) : '';
-        const placeholder = (spec.def != null) ? `既定 ${spec.def.toFixed(2)}` : '未設定';
+        const valStr = (shownVal != null) ? Number(shownVal).toFixed(3) : '';
+        const placeholder = (spec.def != null) ? `既定 ${spec.def.toFixed(3)}` : '未設定';
         // 対ソース%（Source 自身は 100%）
         let pct = '—';
         if (n.type === NODE_TYPE.SOURCE) pct = '100%';
@@ -4610,7 +4666,7 @@ const MasterTable = {
         html += `<tr data-id="${n.id}">
           <td>${escName}</td>
           <td style="font-size:11px;color:var(--text-2);">${MasterTable._LABELS[n.type] || n.type}</td>
-          <td><input type="number" class="mt-pres-input" data-node-id="${n.id}" data-field="${spec.field}" min="0" step="0.05" value="${valStr}" placeholder="${placeholder}"><span class="mt-pres-unit">MPa</span></td>
+          <td><input type="number" class="mt-pres-input" data-node-id="${n.id}" data-field="${spec.field}" min="0" step="0.001" value="${valStr}" placeholder="${placeholder}"><span class="mt-pres-unit">MPa</span></td>
           <td class="mt-pct">${pct}</td>
         </tr>`;
       });
@@ -5093,7 +5149,7 @@ const OperationManual = {
               : { label: '開放', cls: 'open' },
   // 行のバッジ表示（種別 or バルブ操作 or 圧力設定）
   _badgeFor: s => s.kind === 'valve' ? OperationManual._opMeta(s.op)
-              : s.kind === 'pressure' ? { label: (s.op != null ? Number(s.op).toFixed(2) + ' MPa' : '圧力設定'), cls: 'pressure' }
+              : s.kind === 'pressure' ? { label: (s.op != null ? Number(s.op).toFixed(3) + ' MPa' : '圧力設定'), cls: 'pressure' }
               : (OperationManual.KINDS[s.kind] || OperationManual.KINDS.note).badge,
   // 機器を対象としたマニュアルを開く（対象につき1冊。既存があればそれを開く）
   openForTarget: (nodeId) => {
@@ -5337,7 +5393,7 @@ const OperationManual = {
       if (s.kind === 'gauge' && s.node && s.node.type === NODE_TYPE.PGAUGE) {
         const n = Store.getNode(s.node.id);
         if (n && n._sim && n._sim.presVal != null) {
-          s.measured = `${n._sim.presVal.toFixed(2)}MPa (${n._sim.pct || 0}%)`;
+          s.measured = `${n._sim.presVal.toFixed(3)}MPa (${n._sim.pct || 0}%)`;
           const verdict = OperationManual._gaugeVerdict(s.goal, n._sim.presVal);
           s.verdict = verdict ? (verdict.ok ? '合格' : '不合格') : '';
         }
@@ -5420,7 +5476,7 @@ const OperationManual = {
       const untargeted = (isValve || isPres) && !s.node;   // 図連携: 対象未設定の操作手順を警告
       const rowCls = [s.isDrain ? 'opm-steam-row' : '', s.isWarmup ? 'opm-warmup-row' : '', s.kind === 'check' ? 'opm-check-row' : '', !isValve && s.kind !== 'check' ? 'opm-task-row' : '', s.editable ? 'opm-edit-row' : '', untargeted ? 'opm-row-untargeted' : ''].filter(Boolean).join(' ');
       const stateLbl = (isValve && s.fromState != null) ? VALVE_STATE_LABEL[s.fromState]
-        : (isPres && s.fromVal != null) ? Number(s.fromVal).toFixed(2) + 'MPa' : '—';
+        : (isPres && s.fromVal != null) ? Number(s.fromVal).toFixed(3) + 'MPa' : '—';
 
       let targetCell;
       if (s.editable) {
@@ -5431,7 +5487,7 @@ const OperationManual = {
         targetCell = s.node ? esc(s.node.name) : (s.targetText ? esc(s.targetText) : '<span class="opm-check-tgt">全系統</span>');
       }
       const opCell = (s.editable && isValve) ? opOptions(s)
-        : (s.editable && isPres) ? `<input type="number" class="opm-pres-op-input" data-id="${s.id}" min="0" step="0.05" value="${s.op != null ? s.op : ''}" placeholder="MPa"><span class="opm-pres-unit">MPa</span>`
+        : (s.editable && isPres) ? `<input type="number" class="opm-pres-op-input" data-id="${s.id}" min="0" step="0.001" value="${s.op != null ? s.op : ''}" placeholder="MPa"><span class="opm-pres-unit">MPa</span>`
         : `<span class="opm-op-badge ${badge.cls}">${badge.label}</span>`;
       // Phase 4: 計器確認が圧力計に紐付く場合、実測値＝ライブのシミュレーション圧を自動表示し合否判定
       const boundGauge = s.kind === 'gauge' && s.node && s.node.type === NODE_TYPE.PGAUGE;
@@ -5441,7 +5497,7 @@ const OperationManual = {
         const mv = (ln && ln._sim && ln._sim.presVal != null) ? ln._sim.presVal : null;
         const pct = (ln && ln._sim && ln._sim.pct != null) ? ln._sim.pct : null;
         const verdict = OperationManual._gaugeVerdict(s.goal, mv);
-        const valTxt = (mv != null) ? `${mv.toFixed(2)}MPa${pct != null ? `<span class="opm-pres-unit"> (${pct}%)</span>` : ''}` : '—';
+        const valTxt = (mv != null) ? `${mv.toFixed(3)}MPa${pct != null ? `<span class="opm-pres-unit"> (${pct}%)</span>` : ''}` : '—';
         const vBadge = verdict ? `<span class="opm-verdict ${verdict.ok ? 'ok' : 'ng'}">${verdict.label}</span>` : '';
         measuredCellInner = `<span class="opm-measured-live" title="シミュレーション実測（自動）">${valTxt}</span>${vBadge}`;
       } else {
@@ -5994,7 +6050,7 @@ const OperationManual = {
       const opLbl = (badge && badge.label) ? badge.label : '';
       const target = s.node ? s.node.name : (s.targetText || (s.kind === 'check' ? '全系統' : ''));
       const state = (s.kind === 'valve' && s.fromState != null) ? VALVE_STATE_LABEL[s.fromState]
-        : (s.kind === 'pressure' && s.fromVal != null) ? Number(s.fromVal).toFixed(2) + 'MPa' : '';
+        : (s.kind === 'pressure' && s.fromVal != null) ? Number(s.fromVal).toFixed(3) + 'MPa' : '';
       rows.push([q(s.phase), n++, q(K.label), q(target), q(s.tag || ''), q(opLbl), q(state), q(s.goal || ''), q(s.measured || ''), q(s.reason), q(s.checked ? '✓' : ''), q(s.memo || '')].join(','));
     });
     const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
@@ -6660,7 +6716,7 @@ const Sequencer = {
   // 手順の説明テキスト（バルブ／圧力 両対応）
   _stepDesc: (s) => {
     const nm = `<span class="seq-cur">${(s.name || '').replace(/</g, '&lt;')}</span>`;
-    if (s.kind === 'pressure') return `${nm} の${s.label}を ${Number(s.to).toFixed(2)}MPa`;
+    if (s.kind === 'pressure') return `${nm} の${s.label}を ${Number(s.to).toFixed(3)}MPa`;
     return `${nm} を ${VALVE_STATE_LABEL[s.to]}`;
   },
 

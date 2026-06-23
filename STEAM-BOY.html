@@ -542,6 +542,25 @@ g.node[data-active="1"] {
    ノードはアニメ休止状態（filter:none）に落ちるだけでレイアウト・配置は不変。 */
 #svg-layer.perf-lite g.node[data-active="1"] { animation: none; }
 
+/* ── Drain Active Ripple ── */
+@keyframes drainRipple {
+  0%   { transform: scale(0.65); opacity: 0.55; }
+  100% { transform: scale(2.2);  opacity: 0;    }
+}
+.drain-ripple {
+  fill: none;
+  stroke-width: 1.5;
+  pointer-events: none;
+  animation: drainRipple 1.6s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.drain-ripple-2 { animation-delay: -0.8s; }
+g.node[data-fluid-state="1"] .drain-ripple { stroke: #007AFF; }
+g.node[data-fluid-state="2"] .drain-ripple { stroke: #AF52DE; }
+g.node[data-fluid-state="3"] .drain-ripple { stroke: #FF3B30; }
+#svg-layer.perf-lite .drain-ripple { animation: none; opacity: 0; }
+
 /* ── Feature 7: Kinetic Ripple ── */
 @keyframes rippleExpand {
   0%   { transform: scale(0.05); opacity: 0.75; }
@@ -3300,6 +3319,18 @@ const Renderer={
       // transform と class を更新（変化時のみ — 属性ダーティチェック）
       setAttr(shape,'transform',`scale(${nodeScale}) rotate(${n.rotation||0})`);
       if(n.type!==NODE_TYPE.REDUCER&&n.type!==NODE_TYPE.PGAUGE) setAttr(shape,'class','node-shape');
+
+      // Drain アクティブリプル（流体到達時に同心円を展開）
+      if(n.type===NODE_TYPE.DRAIN){
+        const drActive=n._sim.fOut>0;
+        let dr1=g.querySelector('.drain-ripple-1'),dr2=g.querySelector('.drain-ripple-2');
+        if(drActive){
+          if(!dr1){dr1=createNS('circle',{r:'13',cx:'0',cy:'1'});dr1.classList.add('drain-ripple','drain-ripple-1');g.appendChild(dr1);}
+          if(!dr2){dr2=createNS('circle',{r:'13',cx:'0',cy:'1'});dr2.classList.add('drain-ripple','drain-ripple-2');g.appendChild(dr2);}
+        }else{
+          if(dr1)dr1.remove();if(dr2)dr2.remove();
+        }
+      }
 
       let ll=g.querySelector('.leader-line'),lbl=g.querySelector('.node-label');
       if(Store.config.showValveLabels&&[NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)){

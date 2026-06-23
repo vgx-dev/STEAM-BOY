@@ -542,6 +542,25 @@ g.node[data-active="1"] {
    ノードはアニメ休止状態（filter:none）に落ちるだけでレイアウト・配置は不変。 */
 #svg-layer.perf-lite g.node[data-active="1"] { animation: none; }
 
+/* ── Drain Active Ripple ── */
+@keyframes drainRipple {
+  0%   { transform: scale(0.65); opacity: 0.55; }
+  100% { transform: scale(2.2);  opacity: 0;    }
+}
+.drain-ripple {
+  fill: none;
+  stroke-width: 1.5;
+  pointer-events: none;
+  animation: drainRipple 1.6s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.drain-ripple-2 { animation-delay: -0.8s; }
+g.node[data-fluid-state="1"] .drain-ripple { stroke: #007AFF; }
+g.node[data-fluid-state="2"] .drain-ripple { stroke: #AF52DE; }
+g.node[data-fluid-state="3"] .drain-ripple { stroke: #FF3B30; }
+#svg-layer.perf-lite .drain-ripple { animation: none; opacity: 0; }
+
 /* ── Feature 7: Kinetic Ripple ── */
 @keyframes rippleExpand {
   0%   { transform: scale(0.05); opacity: 0.75; }
@@ -1937,8 +1956,15 @@ const SimulatorCore={
       });
       edges.forEach(e=>{
         const fn=nodeMap.get(e.from);
-        if(fn&&(e._sim.f!==fn._sim.fOut||e._sim.rate!==fn._sim.rateOut||Math.abs((e._sim.pres||0)-(fn._sim.presOut||0))>1e-9||Math.abs((e._sim.srcPres||0)-(fn._sim.srcPresOut||0))>1e-9)){
-          e._sim.f=fn._sim.fOut;e._sim.rate=fn._sim.rateOut;e._sim.pres=fn._sim.presOut;e._sim.srcPres=fn._sim.srcPresOut;changed=true;
+        if(!fn)return;
+        let newF=fn._sim.fOut,newRate=fn._sim.rateOut,newPres=fn._sim.presOut,newSrcPres=fn._sim.srcPresOut;
+        // 勾配チェック: 液体は上り坂には流れない（エッジ自体の _sim.f を補正）
+        if(newF===FLUID.WATER||newF===FLUID.DRAIN){
+          const tn=nodeMap.get(e.to);
+          if(tn){const wps=e.ext.waypoints||[];const ySeq=[fn.y,...wps.map(w=>w.y),tn.y];for(let i=1;i<ySeq.length;i++){if(ySeq[i]<ySeq[i-1]-5){newF=FLUID.EMPTY;newRate=0;newPres=0;newSrcPres=0;break;}}}
+        }
+        if(e._sim.f!==newF||e._sim.rate!==newRate||Math.abs((e._sim.pres||0)-newPres)>1e-9||Math.abs((e._sim.srcPres||0)-newSrcPres)>1e-9){
+          e._sim.f=newF;e._sim.rate=newRate;e._sim.pres=newPres;e._sim.srcPres=newSrcPres;changed=true;
         }
       });
       iter++;
@@ -3293,6 +3319,18 @@ const Renderer={
       // transform と class を更新（変化時のみ — 属性ダーティチェック）
       setAttr(shape,'transform',`scale(${nodeScale}) rotate(${n.rotation||0})`);
       if(n.type!==NODE_TYPE.REDUCER&&n.type!==NODE_TYPE.PGAUGE) setAttr(shape,'class','node-shape');
+
+      // Drain アクティブリプル（流体到達時に同心円を展開）
+      if(n.type===NODE_TYPE.DRAIN){
+        const drActive=n._sim.fOut>0;
+        let dr1=g.querySelector('.drain-ripple-1'),dr2=g.querySelector('.drain-ripple-2');
+        if(drActive){
+          if(!dr1){dr1=createNS('circle',{r:'13',cx:'0',cy:'1'});dr1.classList.add('drain-ripple','drain-ripple-1');g.appendChild(dr1);}
+          if(!dr2){dr2=createNS('circle',{r:'13',cx:'0',cy:'1'});dr2.classList.add('drain-ripple','drain-ripple-2');g.appendChild(dr2);}
+        }else{
+          if(dr1)dr1.remove();if(dr2)dr2.remove();
+        }
+      }
 
       let ll=g.querySelector('.leader-line'),lbl=g.querySelector('.node-label');
       if(Store.config.showValveLabels&&[NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)){

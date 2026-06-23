@@ -246,7 +246,7 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 .matrix-empty{font-size:11px;color:var(--text-3);text-align:center;grid-column:1/-1;padding:14px 0;}
 
 /* ── Minimap ── */
-#minimap-container{position:fixed;bottom:72px;left:16px;z-index:190;border-radius:var(--p-radius);overflow:hidden;cursor:default;}
+#minimap-container{position:fixed;bottom:72px;left:16px;z-index:190;border-radius:var(--p-radius);overflow:hidden;cursor:default;width: 170px;}
 #minimap-header{font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--text-3);padding:6px 10px 3px;text-transform:uppercase;display:flex;align-items:center;gap:6px;cursor:grab;touch-action:none;border-bottom:1px solid rgba(0,0,0,0.06);}
 #minimap-header:active{cursor:grabbing;}
 
@@ -860,6 +860,34 @@ body.is-scrolling #svg-layer * {
 }
 /* ▲▲▲ ここまで ▲▲▲ */
 
+/* 最小化ボタンのアニメーション */
+.panel-minimize-btn svg {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.panel-minimize-btn .min-plus {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  transform-origin: center;
+}
+
+/* 最小化時：アイコンを回転させながら「＋」にする */
+.minimized .panel-minimize-btn svg {
+  transform: rotate(90deg);
+}
+.minimized .panel-minimize-btn .min-plus {
+  opacity: 1;
+}
+
+/* 最小化時：パネル全体の存在感を弱めて「畳まれている感」を出す */
+.glass.minimized {
+  opacity: 0.7; /* 少し半透明にする */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* 影を浅くする */
+  transition: opacity 0.2s ease, box-shadow 0.2s ease, height 0.2s ease;
+}
+.glass.minimized:hover {
+  opacity: 1; /* マウスオーバー時はくっきり表示させる */
+}
+
 </style>
 </head>
 <body>
@@ -966,7 +994,7 @@ body.is-scrolling #svg-layer * {
           splash.remove();
         }, 800); 
       }
-    }, 5000);
+    }, 2000);
   });
 </script>
 
@@ -1072,7 +1100,12 @@ body.is-scrolling #svg-layer * {
   <div class="sp-header" id="settings-header" style="cursor:grab; touch-action:none; display:flex; align-items:center; gap:4px;">
     <div class="matrix-drag-dots" style="margin-right:2px;"><span></span><span></span></div>
     <span class="sp-title" style="flex:1;">設定</span>
-    <button class="panel-minimize-btn" title="最小化/展開"><svg viewBox="0 0 12 12" width="10" height="10"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <button class="panel-minimize-btn" title="最小化/展開">
+  <svg viewBox="0 0 12 12" width="10" height="10">
+    <line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line class="min-plus" x1="6" y1="1" x2="6" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+</button>
     <button class="sp-close" id="btn-close-settings">✕</button>
   </div>
 
@@ -1171,7 +1204,12 @@ body.is-scrolling #svg-layer * {
   <div class="matrix-header" id="matrix-header">
     <div class="matrix-drag-dots"><span></span><span></span></div>
     <input type="text" id="matrix-title-input" class="matrix-title-input" value="バルブステータス">
-    <button class="panel-minimize-btn" title="最小化/展開"><svg viewBox="0 0 12 12" width="10" height="10"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <button class="panel-minimize-btn" title="最小化/展開">
+  <svg viewBox="0 0 12 12" width="10" height="10">
+    <line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line class="min-plus" x1="6" y1="1" x2="6" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+</button>
   </div>
   <div class="matrix-tabs" id="matrix-tabs">
     <div class="matrix-tab active" data-tab="all">すべて</div>
@@ -1194,7 +1232,12 @@ body.is-scrolling #svg-layer * {
   <div id="minimap-header" style="cursor:grab; touch-action:none; display:flex; align-items:center; gap:6px;">
     <div class="matrix-drag-dots"><span></span><span></span></div>
     <span style="flex:1;">MAP</span>
-    <button class="panel-minimize-btn" title="最小化/展開"><svg viewBox="0 0 12 12" width="10" height="10"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <button class="panel-minimize-btn" title="最小化/展開">
+  <svg viewBox="0 0 12 12" width="10" height="10">
+    <line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line class="min-plus" x1="6" y1="1" x2="6" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+</button>
   </div>
   <canvas id="minimap" width="170" height="120"></canvas>
 </div>
@@ -1216,16 +1259,17 @@ body.is-scrolling #svg-layer * {
 
 <!-- ── Master Table Button ── -->
 <button id="btn-master-table" class="glass">マスタ管理</button>
-
 <div id="image-viewer" class="glass">
   <div class="iv-header" id="iv-header">
     <div class="matrix-drag-dots"><span></span><span></span></div>
     <span class="iv-title" id="iv-title">関連画像</span>
     <button class="panel-minimize-btn" title="最小化/展開">
-      <svg viewBox="0 0 12 12" width="10" height="10"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <svg viewBox="0 0 12 12" width="10" height="10">
+        <line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line class="min-plus" x1="6" y1="1" x2="6" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
     </button>
-  </div>
-  <div class="iv-body" id="iv-body">
+  </div>  <div class="iv-body" id="iv-body">
     <div class="iv-placeholder" id="iv-placeholder">
       対象機器にカーソルを合わせると<br>ここに画像が表示されます
     </div>
@@ -1331,7 +1375,7 @@ body.is-scrolling #svg-layer * {
 .opm-po-grid{display:flex;flex-wrap:wrap;gap:8px 14px;}
 .opm-po-grid .opm-field{min-width:96px;}
 .opm-po-controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
-.opm-body{padding:0 20px 16px;overflow-y:auto;min-height:0;}
+.opm-body{flex: 1; padding:0 20px 16px;overflow-y:auto;min-height:0;}
 /* フェーズは位置ごとに識別色（--ph-base/text/bg）。図上の手順番号バッジ色と一致 */
 .opm-phase{font-size:12px;font-weight:700;color:var(--ph-text,#b3650a);margin:16px 0 8px;padding:5px 8px 5px 10px;background:var(--ph-bg,rgba(255,149,0,0.08));border-radius:8px;display:flex;align-items:center;gap:8px;border-left:4px solid var(--ph-base,var(--orange));}
 .opm-phase-no{flex:0 0 auto;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--ph-base,var(--orange));color:#fff;font-size:11px;font-weight:800;}
@@ -1569,7 +1613,7 @@ body.manual-workspace #zoom-controls{right:calc(var(--manual-w,46vw) + 16px);}
   display: none;
   position: fixed;
   top: 0;
-  right: var(--manual-w, 46vw);
+  right: calc(var(--manual-w, 46vw) - 7px);
   bottom: 16px; /* 下端の横スクロールバーを避ける */
   width: 7px;
   height: auto; /* 100vh から auto に変更 */
@@ -1585,7 +1629,7 @@ body.manual-workspace.manual-split-v #op-manual-modal{top:auto;left:0;right:0;bo
 body.manual-workspace.manual-split-v #workspace{right:0;bottom:var(--manual-h,52vh);}
 body.manual-workspace.manual-split-v #toolbar{left:50%;}
 body.manual-workspace.manual-split-v #zoom-controls{right:16px;bottom:calc(var(--manual-h,52vh) + 16px);}
-body.manual-workspace.manual-split-v #opm-resize-handle{top:auto;right:0;bottom:var(--manual-h,52vh);left:0;width:100vw;height:7px;cursor:row-resize;}
+body.manual-workspace.manual-split-v #opm-resize-handle{top:auto;right:16px;bottom:calc(var(--manual-h,52vh) - 7px);left:0;width:auto;height:7px;cursor:row-resize;}
 body.manual-workspace.manual-split-v #opm-resize-handle::after{top:2px;left:50%;margin-top:0;margin-left:-21px;width:42px;height:3px;}
 /* 狭い画面では未指定時のみ自動で上下分割（明示選択があればそちらを優先） */
 @media (max-width:900px){

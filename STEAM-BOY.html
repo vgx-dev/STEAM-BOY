@@ -7184,28 +7184,59 @@ const Perf = {
     Perf._rafId = requestAnimationFrame(Perf._frame);
   },
 
+  _POS_KEY: 'STEAMBOY_PERF_POS',
+  _savePos: () => {
+    if (!Perf._hud) return;
+    try {
+      const body = Perf._hud.querySelector('#perf-body');
+      localStorage.setItem(Perf._POS_KEY, JSON.stringify({ left: Perf._hud.style.left, top: Perf._hud.style.top, min: body ? body.style.display === 'none' : false }));
+    } catch (_) {}
+  },
+  _restorePos: () => {
+    try {
+      const p = JSON.parse(localStorage.getItem(Perf._POS_KEY) || 'null');
+      if (!p) return;
+      if (p.left) { Perf._hud.style.left = p.left; Perf._hud.style.right = 'auto'; }
+      if (p.top) Perf._hud.style.top = p.top;
+      if (p.min) { const body = Perf._hud.querySelector('#perf-body'); const mb = Perf._hud.querySelector('#perf-min'); if (body) body.style.display = 'none'; if (mb) mb.textContent = '+'; }
+    } catch (_) {}
+  },
+
   _ensureHud: () => {
     if (Perf._hud) return Perf._hud;
     const h = document.createElement('div');
     h.id = 'perf-hud';
-    h.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99999;background:rgba(0,0,0,.82);color:#0f0;font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;padding:8px 10px;border-radius:8px;pointer-events:auto;min-width:230px;box-shadow:0 4px 16px rgba(0,0,0,.4);user-select:none;';
-    h.title = 'PERF HUD — Alt+P で表示切替';
-    const pre = document.createElement('pre');
-    pre.id = 'perf-text';
-    pre.style.cssText = 'margin:0;white-space:pre;font:inherit;color:inherit;user-select:text;';
-    const note = document.createElement('div');
-    note.id = 'perf-note';
-    note.style.cssText = 'color:#FFD60A;min-height:14px;margin:4px 0 2px;';
-    const bar = document.createElement('div');
-    bar.style.cssText = 'display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;';
+    h.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99999;background:rgba(0,0,0,.82);color:#0f0;font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;border-radius:8px;min-width:230px;box-shadow:0 4px 16px rgba(0,0,0,.4);user-select:none;';
+    const mkIcon = (txt, fn, id) => { const b = document.createElement('button'); if (id) b.id = id; b.textContent = txt; b.style.cssText = 'font:12px ui-monospace,monospace;background:transparent;color:#ddd;border:none;cursor:pointer;padding:0 4px;line-height:1;'; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; };
+    // ── ヘッダー（ドラッグハンドル） ──
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;cursor:move;background:rgba(255,255,255,.08);border-radius:8px 8px 0 0;touch-action:none;';
+    const title = document.createElement('span'); title.textContent = '⚙ PERF'; title.style.cssText = 'font-weight:bold;color:#FFD60A;';
+    const ctrls = document.createElement('span');
+    ctrls.appendChild(mkIcon('—', () => { const body = h.querySelector('#perf-body'); const mb = h.querySelector('#perf-min'); const hidden = body.style.display === 'none'; body.style.display = hidden ? '' : 'none'; mb.textContent = hidden ? '—' : '+'; Perf._savePos(); }, 'perf-min'));
+    ctrls.appendChild(mkIcon('✕', () => Perf.disable()));
+    hdr.appendChild(title); hdr.appendChild(ctrls);
+    // ── 本体 ──
+    const body = document.createElement('div'); body.id = 'perf-body'; body.style.cssText = 'padding:6px 10px 8px;';
+    const pre = document.createElement('pre'); pre.id = 'perf-text'; pre.style.cssText = 'margin:0;white-space:pre;font:inherit;color:inherit;user-select:text;';
+    const note = document.createElement('div'); note.id = 'perf-note'; note.style.cssText = 'color:#FFD60A;min-height:14px;margin:4px 0 2px;';
+    const bar = document.createElement('div'); bar.style.cssText = 'display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;';
     const mkBtn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = 'font:11px ui-monospace,monospace;background:#1f6feb;color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;'; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; };
     bar.appendChild(mkBtn('テスト図面 中', () => Perf.stress(600)));
     bar.appendChild(mkBtn('テスト図面 大', () => Perf.stress(2000)));
     bar.appendChild(mkBtn('↺ リセット', () => { Perf.reset(); const n = h.querySelector('#perf-note'); if (n) { n.textContent = '✓ 計測をリセット'; setTimeout(() => { n.textContent = ''; }, 2500); } }));
     bar.appendChild(mkBtn('📋 記録', () => Perf.snapshot('manual')));
-    h.appendChild(pre); h.appendChild(note); h.appendChild(bar);
+    body.appendChild(pre); body.appendChild(note); body.appendChild(bar);
+    h.appendChild(hdr); h.appendChild(body);
     document.body.appendChild(h);
     Perf._hud = h;
+    // ── ドラッグ移動 ──
+    let drag = null;
+    hdr.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) return; drag = { x: e.clientX, y: e.clientY, l: h.offsetLeft, t: h.offsetTop }; try { hdr.setPointerCapture(e.pointerId); } catch (_) {} });
+    hdr.addEventListener('pointermove', (e) => { if (!drag) return; h.style.left = Math.max(0, drag.l + e.clientX - drag.x) + 'px'; h.style.top = Math.max(0, drag.t + e.clientY - drag.y) + 'px'; h.style.right = 'auto'; });
+    const endDrag = () => { if (drag) { drag = null; Perf._savePos(); } };
+    hdr.addEventListener('pointerup', endDrag); hdr.addEventListener('pointercancel', endDrag);
+    Perf._restorePos();
     return h;
   },
   _updateHud: () => {
@@ -7252,16 +7283,19 @@ const Perf = {
     console.log('%c[PERF] probe enabled', 'color:#FF3B30;font-weight:bold', '— window.__perf.snapshot() / .reset() / .stats()');
   },
 
+  // 計測モードを終了（HUD撤去・ループ停止・自動起動フラグ解除）。関数ラップはリロードで解消。
+  disable: () => {
+    Perf.enabled = false;
+    try { localStorage.removeItem('STEAMBOY_PERF'); } catch (_) {}
+    if (Perf._hudTimer) { clearInterval(Perf._hudTimer); Perf._hudTimer = null; }
+    if (Perf._rafId) { cancelAnimationFrame(Perf._rafId); Perf._rafId = null; }
+    if (Perf._hud && Perf._hud.parentNode) Perf._hud.parentNode.removeChild(Perf._hud);
+    Perf._hud = null;
+    console.log('%c[PERF] probe disabled', 'color:#888', '— 完全停止にはリロードしてください');
+  },
+
   boot: () => {
-    // どの状態でも Alt+Shift+P で計測モードをON / HUD表示切替できるようにする
-    window.addEventListener('keydown', (ev) => {
-      if (ev.altKey && ev.shiftKey && (ev.key === 'p' || ev.key === 'P' || ev.code === 'KeyP')) {
-        ev.preventDefault();
-        if (!Perf.enabled) { Perf.enable(); return; }
-        if (Perf._hud) Perf._hud.style.display = (Perf._hud.style.display === 'none') ? '' : 'none';
-      }
-    });
-    // URLパラメータ / localStorage で指定済みなら自動で有効化
+    // 有効化は ?perf=1 または localStorage['STEAMBOY_PERF']='1' のみ（キーボードショートカットは廃止）
     if (Perf._detect()) Perf.enable();
   }
 };

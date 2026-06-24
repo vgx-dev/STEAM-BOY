@@ -2308,18 +2308,17 @@ const Anomaly={
       if(inN+outN===0&&n.type!==NODE_TYPE.SOURCE)Store.anomalies.push({type:'isolated',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 孤立（配管未接続）`});
       if(![NODE_TYPE.DRAIN,NODE_TYPE.SOURCE,NODE_TYPE.VALVE,NODE_TYPE.SAFETY,NODE_TYPE.PGAUGE].includes(n.type))if(n._sim.fIn>0&&outN===0)Store.anomalies.push({type:'deadend',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 流体の行き止まり`});
 
-      // 熱交換器に高圧蒸気直撃の危険検出（Phase 1: 絶対圧 MPa 判定。未設定はソース既定で rate 同等）
-      if(n.type===NODE_TYPE.HEATEX&&n._sim.fIn===FLUID.STEAM){
-        const lim=(n.ext.maxMPa!=null)?n.ext.maxMPa:PRESSURE.HEATEX_DANGER_MPA;
-        if((n._sim.presIn||0)>lim)Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 熱交換器（高圧蒸気流入）'});
+      // 熱交換器: maxMPa が設定されている場合のみ超過警告（安全弁と同様、未設定は警告なし）
+      if(n.type===NODE_TYPE.HEATEX&&n._sim.fIn===FLUID.STEAM&&n.ext.maxMPa!=null){
+        if((n._sim.presIn||0)>n.ext.maxMPa)Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 熱交換器（高圧蒸気流入）'});
       }
       // 安全弁の設定リリーフ圧 超過検出（手動弁のまま・挙動は変えず判定のみ）
       if(n.type===NODE_TYPE.SAFETY&&n.ext.reliefMPa!=null&&(n._sim.presIn||0)>n.ext.reliefMPa){
         Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 安全弁（設定リリーフ圧 超過）'});
       }
-      // ドレン管（ピット）に高圧蒸気放出の危険検出（Phase 1: 絶対圧 MPa 判定）
-      if(n.type===NODE_TYPE.DRAIN&&n._sim.fIn===FLUID.STEAM&&(n._sim.presIn||0)>PRESSURE.DRAIN_DANGER_MPA){
-        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: ドレン管（高圧蒸気流入）'});
+      // ドレン管（ピット）に蒸気が流入したら圧力に関係なく警告
+      if(n.type===NODE_TYPE.DRAIN&&n._sim.fIn===FLUID.STEAM){
+        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: ドレン管（蒸気流入）'});
       }
     });
   },
@@ -3511,12 +3510,11 @@ const Renderer={
           lbl=createNS('text');lbl.classList.add('node-label');
           // 不変属性は生成時に1度だけ設定（毎レンダーの setAttribute を排除）
           lbl.setAttribute('text-anchor','middle');lbl.setAttribute('dominant-baseline','central');
-          lbl.setAttribute('font-size','12');lbl.setAttribute('font-family','var(--font)');lbl.setAttribute('font-weight','600');lbl.setAttribute('fill','var(--text-1)');
-          // 【修正後】超軽量な処理
+          lbl.setAttribute('font-size','9');lbl.setAttribute('font-family','var(--font)');lbl.setAttribute('font-weight','600');lbl.setAttribute('fill','var(--text-1)');
           lbl.style.filter = 'none';
           lbl.setAttribute('paint-order', 'stroke');
           lbl.setAttribute('stroke', 'white');
-          lbl.setAttribute('stroke-width', '3');
+          lbl.setAttribute('stroke-width', '2.5');
           lbl.setAttribute('stroke-linejoin', 'round');
           g.appendChild(lbl);
         }
@@ -3544,9 +3542,13 @@ const Renderer={
           // 不変属性は生成時に1度だけ設定
           rLbl.setAttribute('text-anchor', 'middle');
           rLbl.setAttribute('dominant-baseline', 'central');
-          rLbl.setAttribute('font-size', '10');
+          rLbl.setAttribute('font-size', '9');
           rLbl.setAttribute('font-weight', '600');
-          rLbl.setAttribute('fill', 'var(--text-2)');
+          rLbl.setAttribute('fill', 'var(--text-1)');
+          rLbl.setAttribute('paint-order', 'stroke');
+          rLbl.setAttribute('stroke', 'white');
+          rLbl.setAttribute('stroke-width', '2.5');
+          rLbl.setAttribute('stroke-linejoin', 'round');
           g.appendChild(rLbl);
         }
         setAttr(rLbl,'x',n.labelOffset.x); setAttr(rLbl,'y',n.labelOffset.y);
@@ -3821,10 +3823,6 @@ const ValveSelector={
     Simulator.run(()=>{
       Animator.prepare(node,prevStates);
       Renderer.renderAll();
-      // Phase 2: 危険を伴う操作は適用後に赤いトーストで明示（元に戻す付き）
-      if(_dz.length){
-        Toast.show('⚠ '+_dz[0].replace(/^DANGER:\s*/,'')+(_dz.length>1?` 他${_dz.length-1}件`:''),{actionLabel:'元に戻す',onAction:Controller.undo,duration:8000});
-      }
 
       // ライフサイクルの分離: 差分DOMの更新がブラウザに描画された直後にアニメーションを発火
       requestAnimationFrame(() => {
@@ -3943,11 +3941,11 @@ const PressureSelector={
     title.style.cssText='font-size:11px;font-weight:600;color:var(--text-2);text-align:center;margin-bottom:4px;';
     title.textContent=spec.title;
 
-    const curVal=(node.ext[spec.field]!=null)?node.ext[spec.field]:spec.def;
+    const _set=(node.ext[spec.field]!=null);
+    const curVal=_set?node.ext[spec.field]:spec.def;
     const display=document.createElement('div');
     display.className='rs-val-display';
-    const _set=(node.ext[spec.field]!=null);
-    display.textContent=`${curVal.toFixed(3)} MPa${(!_set&&spec.allowDefault)?'（既定）':''}`;
+    display.textContent=(!_set&&spec.allowDefault)?'未設定（警告なし）':`${curVal.toFixed(3)} MPa`;
 
     const input=document.createElement('input');
     input.type='number';input.min='0';input.step='0.001';input.value=curVal.toFixed(3);
@@ -3975,7 +3973,7 @@ const PressureSelector={
       const resetBtn=document.createElement('div');
       resetBtn.className='vs-opt';
       resetBtn.style.cssText='justify-content:center;font-size:11px;padding:5px;margin-top:4px;border-top:1px solid rgba(0,0,0,0.06);color:var(--text-2);';
-      resetBtn.textContent='既定値に戻す';
+      resetBtn.textContent='未設定に戻す（警告なし）';
       resetBtn.addEventListener('click',()=>{
         Store.pushHistory();
         delete node.ext[spec.field];

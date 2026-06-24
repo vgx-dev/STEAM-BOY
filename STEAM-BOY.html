@@ -7230,9 +7230,11 @@ const Perf = {
     if (pre) pre.textContent = txt;
   },
 
-  boot: () => {
-    Perf.enabled = Perf._detect();
-    if (!Perf.enabled) return;   // 無効時は完全に何もしない
+  // 実際に計測を開始（ラップ・rAF・HUDを起動）。二重起動はしない。
+  enable: () => {
+    if (Perf.enabled) { if (Perf._hud) Perf._hud.style.display = ''; return; }
+    Perf.enabled = true;
+    try { localStorage.setItem('STEAMBOY_PERF', '1'); } catch (_) {}
     // ホットパスのラップ（SimulatorCore.compute は除外）
     Perf.wrap(Renderer, 'renderAll', 'renderAll');
     Perf.wrap(Renderer, 'drawMatrix', 'drawMatrix');
@@ -7243,20 +7245,24 @@ const Perf = {
     Perf.wrap(Animator, 'apply', 'animApply');
     Perf.wrap(Culling, 'apply', 'cullApply');
     Perf.wrap(Minimap, 'draw', 'minimapDraw');
-    // FPS計測ループ
     Perf._rafId = requestAnimationFrame(Perf._frame);
-    // HUD
     Perf._ensureHud();
     Perf._hudTimer = setInterval(Perf._updateHud, 250);
-    // Alt+P で HUD 表示切替
+    window.__perf = Perf;
+    console.log('%c[PERF] probe enabled', 'color:#FF3B30;font-weight:bold', '— window.__perf.snapshot() / .reset() / .stats()');
+  },
+
+  boot: () => {
+    // どの状態でも Alt+Shift+P で計測モードをON / HUD表示切替できるようにする
     window.addEventListener('keydown', (ev) => {
-      if (ev.altKey && (ev.key === 'p' || ev.key === 'P')) {
+      if (ev.altKey && ev.shiftKey && (ev.key === 'p' || ev.key === 'P' || ev.code === 'KeyP')) {
         ev.preventDefault();
+        if (!Perf.enabled) { Perf.enable(); return; }
         if (Perf._hud) Perf._hud.style.display = (Perf._hud.style.display === 'none') ? '' : 'none';
       }
     });
-    window.__perf = Perf;
-    console.log('%c[PERF] probe enabled', 'color:#FF3B30;font-weight:bold', '— window.__perf.snapshot() / .reset() / .stats()');
+    // URLパラメータ / localStorage で指定済みなら自動で有効化
+    if (Perf._detect()) Perf.enable();
   }
 };
 

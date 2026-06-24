@@ -7053,7 +7053,167 @@ toolbarEl.addEventListener('pointerdown', (ev) => {
 });
 // ▲▲▲ ツールバーのドラッグ移動 ここまで ▲▲▲
 
+/* ━━━━━━━━ PERF PROBE (Phase 0: 計測基盤) ━━━━━━━━
+   完全オプトイン。`?perf` / `?perf=1` のURLパラメータ、または
+   localStorage['STEAMBOY_PERF']==='1' のときのみ有効化。
+   無効時は boot() が即 return し、ラップもrAFもHUDも一切行わない（オーバーヘッドゼロ）。
+   有効時はホットパスの処理時間とFPSを計測し、画面左上のHUDと window.__perf で参照可能。
+   注意: SimulatorCore.compute は SimWorker が .toString() でWorkerソース化するため
+   ラップ対象から除外する（Simulator._baseRun / run 側で計測する）。 */
+const Perf = {
+  enabled: false,
+  _rings: new Map(),     // label -> {buf:[], i, n, count, total, max}
+  RING: 120,             // 各計測の保持フレーム数
+  _fps: { cur: 0, avg: 0, min: Infinity, frames: 0, long: 0, _last: 0, _acc: 0, _cnt: 0, _buf: [], _bi: 0 },
+  _hud: null, _hudTimer: null, _rafId: null, _origs: [],
+
+  _detect: () => {
+    try {
+      const sp = new URLSearchParams(location.search);
+      if (sp.has('perf') && sp.get('perf') !== '0') return true;
+      if (localStorage.getItem('STEAMBOY_PERF') === '1') return true;
+    } catch (_) {}
+    return false;
+  },
+
+  _ring: (label) => {
+    let r = Perf._rings.get(label);
+    if (!r) { r = { buf: new Float32Array(Perf.RING), i: 0, n: 0, count: 0, total: 0, max: 0 }; Perf._rings.set(label, r); }
+    return r;
+  },
+  _record: (label, ms) => {
+    const r = Perf._ring(label);
+    r.buf[r.i] = ms; r.i = (r.i + 1) % Perf.RING; if (r.n < Perf.RING) r.n++;
+    r.count++; r.total += ms; if (ms > r.max) r.max = ms;
+  },
+  // obj[method] を計測ラッパに差し替え（戻り値・this・引数を完全保持）
+  wrap: (obj, method, label) => {
+    if (!obj || typeof obj[method] !== 'function') return;
+    const orig = obj[method];
+    Perf._origs.push({ obj, method, orig });
+    obj[method] = function (...args) {
+      const t0 = performance.now();
+      try { return orig.apply(this, args); }
+      finally { Perf._record(label, performance.now() - t0); }
+    };
+  },
+
+  _stat: (label) => {
+    const r = Perf._rings.get(label);
+    if (!r || !r.n) return null;
+    const arr = Array.prototype.slice.call(r.buf, 0, r.n).sort((a, b) => a - b);
+    const avg = arr.reduce((s, v) => s + v, 0) / arr.length;
+    const p95 = arr[Math.min(arr.length - 1, Math.floor(arr.length * 0.95))];
+    return { avg, p95, max: r.max, last: arr.length ? r.buf[(r.i - 1 + Perf.RING) % Perf.RING] : 0, count: r.count };
+  },
+  // 全計測の集計を返す（コンソール / ベースライン記録用）
+  stats: () => {
+    const out = { graph: { nodes: Store.nodes.length, edges: Store.edges.length, active: Store.edges.filter(e => e._sim && (e._sim.f > 0 || e._sim.b > 0)).length }, fps: { avg: +Perf._fps.avg.toFixed(1), min: Perf._fps.min === Infinity ? 0 : +Perf._fps.min.toFixed(1), longFrames: Perf._fps.long, frames: Perf._fps.frames }, timings: {} };
+    Perf._rings.forEach((_, label) => {
+      const s = Perf._stat(label); if (!s) return;
+      out.timings[label] = { avg: +s.avg.toFixed(2), p95: +s.p95.toFixed(2), max: +s.max.toFixed(2), count: s.count };
+    });
+    return out;
+  },
+  // 名前付きベースラインとしてコンソールに整形出力（コピペでドキュメントへ）
+  snapshot: (label) => {
+    const s = Perf.stats();
+    console.log('%c[PERF snapshot] ' + (label || ''), 'color:#FF3B30;font-weight:bold', s);
+    console.log(JSON.stringify(s, null, 2));
+    return s;
+  },
+  reset: () => {
+    Perf._rings.clear();
+    Perf._fps.min = Infinity; Perf._fps.avg = 0; Perf._fps.frames = 0; Perf._fps.long = 0;
+    Perf._fps._acc = 0; Perf._fps._cnt = 0; Perf._fps._buf.length = 0; Perf._fps._bi = 0; Perf._fps._last = 0;
+  },
+
+  _frame: (t) => {
+    const f = Perf._fps;
+    if (f._last) {
+      const dt = t - f._last;
+      if (dt > 0) {
+        const fps = 1000 / dt;
+        f.cur = fps;
+        if (dt > 50) f.long++;          // ロングフレーム検出 (>50ms)
+        f._buf[f._bi] = fps; f._bi = (f._bi + 1) % 60;
+        if (f._buf.length > 1) {
+          const valid = f._buf.filter(v => v != null);
+          f.avg = valid.reduce((s, v) => s + v, 0) / valid.length;
+          // 直近2秒程度の最低FPSを worst として保持
+          if (fps < f.min) f.min = fps;
+        }
+        f.frames++;
+      }
+    }
+    f._last = t;
+    Perf._rafId = requestAnimationFrame(Perf._frame);
+  },
+
+  _ensureHud: () => {
+    if (Perf._hud) return Perf._hud;
+    const h = document.createElement('div');
+    h.id = 'perf-hud';
+    h.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99999;background:rgba(0,0,0,.82);color:#0f0;font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;padding:8px 10px;border-radius:8px;white-space:pre;pointer-events:auto;min-width:210px;box-shadow:0 4px 16px rgba(0,0,0,.4);user-select:text;';
+    h.title = 'PERF HUD — クリックで snapshot をコンソール出力 / Alt+P で表示切替';
+    h.addEventListener('click', () => Perf.snapshot('manual'));
+    document.body.appendChild(h);
+    Perf._hud = h;
+    return h;
+  },
+  _updateHud: () => {
+    if (!Perf._hud) return;
+    const f = Perf._fps;
+    const active = Store.edges.reduce((s, e) => s + ((e._sim && (e._sim.f > 0 || e._sim.b > 0)) ? 1 : 0), 0);
+    const line = (label, key) => { const s = Perf._stat(key); return s ? `${label.padEnd(9)} ${s.avg.toFixed(1).padStart(5)}/${s.p95.toFixed(1).padStart(5)}/${s.max.toFixed(0).padStart(4)}ms\n` : ''; };
+    let txt = `FPS ${f.cur.toFixed(0).padStart(3)}  avg ${f.avg.toFixed(0)}  min ${f.min === Infinity ? '-' : f.min.toFixed(0)}\n`;
+    txt += `long(>50ms) ${f.long}\n`;
+    txt += `N ${Store.nodes.length}  E ${Store.edges.length}  active ${active}\n`;
+    txt += `        avg/p95/max\n`;
+    txt += line('render', 'renderAll');
+    txt += line('matrix', 'drawMatrix');
+    txt += line('sim', 'simRun');
+    txt += line('anomaly', 'anomaly');
+    txt += line('sealed', 'sealed');
+    txt += line('animPrep', 'animPrepare');
+    txt += line('animApply', 'animApply');
+    txt += line('cull', 'cullApply');
+    txt += line('minimap', 'minimapDraw');
+    Perf._hud.textContent = txt;
+  },
+
+  boot: () => {
+    Perf.enabled = Perf._detect();
+    if (!Perf.enabled) return;   // 無効時は完全に何もしない
+    // ホットパスのラップ（SimulatorCore.compute は除外）
+    Perf.wrap(Renderer, 'renderAll', 'renderAll');
+    Perf.wrap(Renderer, 'drawMatrix', 'drawMatrix');
+    Perf.wrap(Simulator, '_baseRun', 'simRun');
+    Perf.wrap(Anomaly, 'detect', 'anomaly');
+    Perf.wrap(SealedDetector, 'compute', 'sealed');
+    Perf.wrap(Animator, 'prepare', 'animPrepare');
+    Perf.wrap(Animator, 'apply', 'animApply');
+    Perf.wrap(Culling, 'apply', 'cullApply');
+    Perf.wrap(Minimap, 'draw', 'minimapDraw');
+    // FPS計測ループ
+    Perf._rafId = requestAnimationFrame(Perf._frame);
+    // HUD
+    Perf._ensureHud();
+    Perf._hudTimer = setInterval(Perf._updateHud, 250);
+    // Alt+P で HUD 表示切替
+    window.addEventListener('keydown', (ev) => {
+      if (ev.altKey && (ev.key === 'p' || ev.key === 'P')) {
+        ev.preventDefault();
+        if (Perf._hud) Perf._hud.style.display = (Perf._hud.style.display === 'none') ? '' : 'none';
+      }
+    });
+    window.__perf = Perf;
+    console.log('%c[PERF] probe enabled', 'color:#FF3B30;font-weight:bold', '— window.__perf.snapshot() / .reset() / .stats()');
+  }
+};
+
 Controller.init();
+Perf.boot();
 
 // スナップOFF時にグリッド詳細を折りたたむ
 document.getElementById('toggleSnap').addEventListener('change', ev => {

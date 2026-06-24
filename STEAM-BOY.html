@@ -2890,7 +2890,7 @@ const Renderer={
       if(currentEdge && !isNaN(currentIdx)){
         Store.pushHistory();
         currentEdge.ext.waypoints.splice(currentIdx,1);
-        Renderer.renderAll();
+        Simulator.run(Renderer.renderAll);
       }
     };
     Renderer.edgesGroup.addEventListener('contextmenu',ev=>{
@@ -4223,7 +4223,7 @@ const Controller={
             Store.dragState={isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null,preNodeX:0,preNodeY:0};if(mutated)Simulator.run(Renderer.renderAll);else Renderer.renderAll();}
 
       if(Store.labelDrag.isDragging&&ev.pointerId===Store.labelDrag.pointerId){try{if(Store.labelDrag.gEl?.hasPointerCapture(ev.pointerId))Store.labelDrag.gEl.releasePointerCapture(ev.pointerId);}catch(_){}if(Store.labelDrag.hasDragged&&Store.labelDrag.preSnapshot)Store.pushSnapshot(Store.labelDrag.preSnapshot);Store.labelDrag={isDragging:false,hasDragged:false,targetNode:null,gEl:null,startX:0,startY:0,startOffsetX:0,startOffsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null};Renderer.renderAll();}
-    if(Store.waypointDrag.active&&ev.pointerId===Store.waypointDrag.pointerId){try{if(Store.waypointDrag.wpEl?.hasPointerCapture(ev.pointerId))Store.waypointDrag.wpEl.releasePointerCapture(ev.pointerId);}catch(_){}if(Store.waypointDrag.hasDragged&&Store.waypointDrag.preSnapshot)Store.pushSnapshot(Store.waypointDrag.preSnapshot);Store.waypointDrag={active:false,edge:null,index:-1,wpEl:null,pointerId:null,hasDragged:false,startClientX:0,startClientY:0,preSnapshot:null};Renderer.renderAll();}
+    if(Store.waypointDrag.active&&ev.pointerId===Store.waypointDrag.pointerId){try{if(Store.waypointDrag.wpEl?.hasPointerCapture(ev.pointerId))Store.waypointDrag.wpEl.releasePointerCapture(ev.pointerId);}catch(_){}if(Store.waypointDrag.hasDragged&&Store.waypointDrag.preSnapshot)Store.pushSnapshot(Store.waypointDrag.preSnapshot);const _wpMoved=Store.waypointDrag.hasDragged;Store.waypointDrag={active:false,edge:null,index:-1,wpEl:null,pointerId:null,hasDragged:false,startClientX:0,startClientY:0,preSnapshot:null};if(_wpMoved)Simulator.run(Renderer.renderAll);else Renderer.renderAll();}
     if(Store.rectSelect.active&&ev.pointerId===Store.rectSelect.pointerId){const x1=Math.min(Store.rectSelect.startSvgX,Store.rectSelect.currentSvgX),y1=Math.min(Store.rectSelect.startSvgY,Store.rectSelect.currentSvgY),x2=Math.max(Store.rectSelect.startSvgX,Store.rectSelect.currentSvgX),y2=Math.max(Store.rectSelect.startSvgY,Store.rectSelect.currentSvgY);const wasDrag=x2-x1>5||y2-y1>5;if(wasDrag){if(!ev.shiftKey)Store.selection.clear();Store.nodes.forEach(n=>{if(n.x>=x1&&n.x<=x2&&n.y>=y1&&n.y<=y2)Store.selection.add(n.id);});}else{Store.selection.clear();}Store.rectSelect={active:false,startSvgX:0,startSvgY:0,currentSvgX:0,currentSvgY:0,pointerId:null};Renderer.selectRectEl.setAttribute('display','none');Renderer.renderAll();}
   },
 
@@ -4366,7 +4366,7 @@ const Controller={
       {icon:'🗑',label:'配管を削除',danger:true,onClick:()=>Controller.deleteEdge(edge)}
     ]);
   },
-  handleEdgeDblClick:(ev,edge)=>{ev.preventDefault();ev.stopPropagation();const coords=Renderer.getMouseSvgCoords(ev);const nF=Store.getNode(edge.from),nT=Store.getNode(edge.to);if(!nF||!nT)return;const wps=edge.ext.waypoints||[],pts=[nF,...wps,nT];let bestSeg=0,bestDist=Infinity;for(let i=0;i<pts.length-1;i++){const d=distPtSeg(coords,pts[i],pts[i+1]);if(d<bestDist){bestDist=d;bestSeg=i;}}Store.pushHistory();wps.splice(bestSeg,0,{x:coords.x,y:coords.y});edge.ext.waypoints=wps;Renderer.renderAll();},
+  handleEdgeDblClick:(ev,edge)=>{ev.preventDefault();ev.stopPropagation();const coords=Renderer.getMouseSvgCoords(ev);const nF=Store.getNode(edge.from),nT=Store.getNode(edge.to);if(!nF||!nT)return;const wps=edge.ext.waypoints||[],pts=[nF,...wps,nT];let bestSeg=0,bestDist=Infinity;for(let i=0;i<pts.length-1;i++){const d=distPtSeg(coords,pts[i],pts[i+1]);if(d<bestDist){bestDist=d;bestSeg=i;}}Store.pushHistory();wps.splice(bestSeg,0,{x:coords.x,y:coords.y});edge.ext.waypoints=wps;Simulator.run(Renderer.renderAll);},
 
   // Phase 1: コンテキストメニューから呼ばれる軽量ヘルパー群
   renameNode:(node)=>{
@@ -4378,7 +4378,7 @@ const Controller={
     const nF=Store.getNode(edge.from),nT=Store.getNode(edge.to);if(!nF||!nT)return;
     const wps=edge.ext.waypoints||[],pts=[nF,...wps,nT];let bestSeg=0,bestDist=Infinity;
     for(let i=0;i<pts.length-1;i++){const d=distPtSeg(coords,pts[i],pts[i+1]);if(d<bestDist){bestDist=d;bestSeg=i;}}
-    Store.pushHistory();wps.splice(bestSeg,0,{x:coords.x,y:coords.y});edge.ext.waypoints=wps;Renderer.renderAll();
+    Store.pushHistory();wps.splice(bestSeg,0,{x:coords.x,y:coords.y});edge.ext.waypoints=wps;Simulator.run(Renderer.renderAll);
   },
   deleteNode:(node)=>{
     Store.pushHistory();

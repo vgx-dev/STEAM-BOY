@@ -112,7 +112,15 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 #canvas-wrapper{position:relative;width:2000px;height:2000px;}
 #canvas-container{position:absolute;inset:0;transform-origin:top left;transition:transform .1s ease-out;will-change:transform;contain:layout paint;}
 #pdf-canvas{position:absolute;top:0;left:0;box-shadow:0 1px 12px rgba(0,0,0,0.06);background:#fff;display:none;border-radius:2px;}
-#svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:auto;}
+/* ── 問題A対策: 流れ破線(.flow-dash)のCanvas化レイヤ構成 ──
+   z-order（背→前）: #pdf-canvas → #edge-layer(配管/エッジ) → #flow-canvas(流れ破線) → #svg-layer(ノード) → #overlay-layer
+   ・#edge-layer が最下層の当たり判定SVGとなり、空白部クリック=背景の判定もここが受ける（pointer-events:auto）。
+   ・#svg-layer はノードのみを内包し、空白部はクリックをエッジ層へ通すため root を pointer-events:none にする
+     （ノードは #nodes-group 側で auto に戻して従来どおり操作可能）。 */
+#edge-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:auto;}
+#flow-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+#svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+#nodes-group{pointer-events:auto;}
 #overlay-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
 
 /* ── Toolbar ── */
@@ -502,15 +510,17 @@ g.edge-grp[data-residual="1"] .flow-base{
 .rs-slider { width: 100%; -webkit-appearance: none; appearance: none; height: 4px; background: rgba(0,0,0,0.1); border-radius: 2px; outline: none; }
 .rs-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.2), 0 0 0 0.5px rgba(0,0,0,0.08); cursor: pointer; }
 
-/* ── Feature 1: Isolation Trace ── */
-#svg-layer.isolation-mode g.node:not(.focus),
-#svg-layer.isolation-mode g.edge-grp:not(.focus) {
+/* ── Feature 1: Isolation Trace ──
+   エッジは #edge-layer、ノードは #svg-layer に分離したため、両層を内包する
+   #canvas-container にクラスを付与してスコープする（旧 #svg-layer スコープから変更）。 */
+#canvas-container.isolation-mode g.node:not(.focus),
+#canvas-container.isolation-mode g.edge-grp:not(.focus) {
   opacity: 0.1;
   filter: grayscale(100%);
   transition: opacity 0.25s ease, filter 0.25s ease;
 }
-#svg-layer.isolation-mode g.node.focus,
-#svg-layer.isolation-mode g.edge-grp.focus {
+#canvas-container.isolation-mode g.node.focus,
+#canvas-container.isolation-mode g.edge-grp.focus {
   transition: opacity 0.25s ease, filter 0.25s ease;
 }
 
@@ -1024,6 +1034,8 @@ body.is-scrolling #svg-layer * {
   <div id="canvas-wrapper">
     <div id="canvas-container">
       <canvas id="pdf-canvas"></canvas>
+      <svg id="edge-layer"></svg>
+      <canvas id="flow-canvas"></canvas>
       <svg id="svg-layer"></svg>
       <svg id="overlay-layer"></svg>
     </div>
@@ -1577,8 +1589,10 @@ body.is-scrolling #svg-layer * {
 #manual-pick-banner .mpick-phase{font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:4px;}
 #manual-pick-banner select{font-family:var(--font);font-size:12px;padding:3px 6px;border-radius:7px;border:1px solid rgba(0,0,0,0.14);background:#fff;}
 #manual-pick-banner .mpick-count{font-size:12px;font-weight:700;color:var(--accent);}
-#svg-layer.manual-picking{cursor:crosshair;}
-#svg-layer.manual-picking g.node{cursor:crosshair;}
+/* manual-picking のカーソルは #canvas-container に付与（#svg-layer は pointer-events:none のため
+   root のカーソル指定が効かない。cursor は継承プロパティなので子のエッジ/ノードにも波及する）。 */
+#canvas-container.manual-picking{cursor:crosshair;}
+#canvas-container.manual-picking g.node{cursor:crosshair;}
 .manual-picked-flash{animation:manualPickFlash .4s ease-out;}
 @keyframes manualPickFlash{0%{opacity:.3;}50%{opacity:1;}100%{opacity:1;}}
 /* 図⇄手順リンク：手順に対応する機器を図上で強調 */
@@ -2091,13 +2105,14 @@ const IsolationTracer={
   },
   _apply:()=>{
     if(!IsolationTracer.active)return;
-    if(Renderer.svgLayer)Renderer.svgLayer.classList.add('isolation-mode');
+    // レイヤ分離後はエッジ(#edge-layer)とノード(#svg-layer)が別SVGのため、両者を内包する #canvas-container にクラス付与
+    if(Renderer.container)Renderer.container.classList.add('isolation-mode');
     Store.nodes.forEach(n=>{const g=document.getElementById(`node-grp-${n.id}`);if(g)g.classList.toggle('focus',IsolationTracer._focusNodes.has(n.id));});
     Store.edges.forEach(e=>{const eg=document.getElementById(`edge-grp-${e.id}`);if(eg)eg.classList.toggle('focus',IsolationTracer._focusEdges.has(e.id));});
   },
   clear:()=>{
-    if(Renderer.svgLayer)Renderer.svgLayer.classList.remove('isolation-mode');
-    document.querySelectorAll('#svg-layer .focus').forEach(el=>el.classList.remove('focus'));
+    if(Renderer.container)Renderer.container.classList.remove('isolation-mode');
+    document.querySelectorAll('#canvas-container .focus').forEach(el=>el.classList.remove('focus'));
     IsolationTracer.active=false;
     IsolationTracer._focusNodes=new Set();
     IsolationTracer._focusEdges=new Set();
@@ -2851,6 +2866,9 @@ const Culling={
       setAttr(eg,'data-culled',visible?'0':'1');
       const disp=(displayCull&&!visible)?'none':'';
       if(eg.style.display!==disp)eg.style.display=disp;
+      // 問題A対策: 流れ破線Canvasの描画可否を SVGの display-cull と同期させる
+      // （流れ破線が配管本体(display:none中)より先に表示されるチラつきを防ぐ）。
+      if(FlowCanvas.enabled){const rec=FlowCanvas._records.get(edge.id);if(rec)rec.hidden=(disp==='none');}
     });
     if(displayCull||Culling._displayCulled){
       // 大規模時はノードも display カリング。閾値を下回ったら一括解除。
@@ -2872,23 +2890,141 @@ const Culling={
   }
 };
 
+/* ━━━━━━━━ FLOW CANVAS (問題A対策: 流れ破線 .flow-dash の Canvas 化) ━━━━━━━━
+   多数のアクティブエッジに付く .flow-dash（SVG要素ごとの stroke-dashoffset CSSアニメ）は、
+   連続再生中のブラウザPaintコストの主因（親要件 §11 / 本件 §1）。これを1枚のCanvasへ
+   毎フレーム描画する方式へ置き換え、SVGのPaintコストを排除して連続FPSを引き上げる。
+   見た目（太さ/色/破線間隔/速度/向き/形状/重なり順）と機能は完全維持する。
+   フォールバック: URL ?canvasflow=0 で従来のSVG .flow-dash 方式に戻る（§5.7）。 */
+const FlowCanvas={
+  enabled:false,
+  canvas:null,_ctx:null,_ss:1,
+  _records:new Map(),                    // edgeId -> rec（形状/状態のキャッシュ）
+  _running:false,_raf:null,
+  _DASH:[6,6],
+  _COL:'rgba(255,255,255,0.8)',          // 通常: 半透明白(α0.8)
+  _COL_RESID:'rgba(255,255,255,0.64)',   // 残留: α0.8 × stroke-opacity0.8 = 0.64 を再現
+  _MAXPX:16e6,                           // ビットマップ面積上限（メモリ保護, §8）
+
+  init:()=>{
+    FlowCanvas.canvas=Renderer.flowCanvas;
+    // フィーチャーフラグ: 既定ON、?canvasflow=0 でSVGモードへフォールバック（§5.7）
+    let on=true;
+    try{ on=new URLSearchParams(location.search).get('canvasflow')!=='0'; }catch(_){}
+    FlowCanvas.enabled=on;
+    if(FlowCanvas.canvas){
+      FlowCanvas.canvas.style.display=on?'':'none';
+      try{ FlowCanvas.resize(); }catch(_){ FlowCanvas.enabled=false; }   // 2D context 取得失敗時はSVGへ自動フォールバック
+    }
+    if(typeof window!=='undefined') window.__flowCanvas=FlowCanvas;   // A/B比較・デバッグ用
+  },
+
+  // baseWidth/baseHeight 変更時・DPR変化時にビットマップ解像度を再構成（§5.2）。
+  // 表示サイズは CSS(width/height:100%) が #canvas-container(=base寸法) に追従するため、ここではビットマップのみ更新。
+  resize:()=>{
+    const c=FlowCanvas.canvas; if(!c)return;
+    const bw=Store.config.baseWidth||1, bh=Store.config.baseHeight||1;
+    let SS=Math.min(window.devicePixelRatio||1,2);                  // メモリ上限のため2でクランプ
+    if(bw*bh*SS*SS>FlowCanvas._MAXPX) SS=Math.max(1,Math.sqrt(FlowCanvas._MAXPX/(bw*bh)));   // 巨大PDFでSS降格
+    FlowCanvas._ss=SS;
+    const W=Math.max(1,Math.round(bw*SS)),H=Math.max(1,Math.round(bh*SS));
+    if(c.width!==W)c.width=W;
+    if(c.height!==H)c.height=H;
+    FlowCanvas._ctx=c.getContext('2d');
+  },
+
+  // renderAll のエッジループから呼ぶ: ジオメトリ/状態が変わった時だけ rec を更新（§5.3）。
+  // d = {pathStr,lineWidth,durationSec,reverse,paused,active,minX,minY,maxX,maxY}
+  updateRecord:(id,d)=>{
+    let rec=FlowCanvas._records.get(id);
+    if(!rec){rec={};FlowCanvas._records.set(id,rec);}
+    rec.path2d=new Path2D(d.pathStr);   // base座標のSVGパス文字列をそのまま再利用（形状完全一致）
+    rec.lineWidth=d.lineWidth;
+    rec.durationSec=d.durationSec;
+    rec.reverse=d.reverse;
+    rec.paused=d.paused;                // 残留(=流れない)
+    rec.active=d.active;                // ds>0
+    rec.minX=d.minX;rec.minY=d.minY;rec.maxX=d.maxX;rec.maxY=d.maxY;
+    // rec.hidden は Culling.apply が更新（SVGの display-cull と同期）
+  },
+  deleteRecord:(id)=>{ FlowCanvas._records.delete(id); },
+
+  // アクティブな rec が存在する間だけ rAF を回す（§5.4 省電力）
+  start:()=>{
+    if(FlowCanvas._running||!FlowCanvas.enabled||!FlowCanvas._ctx)return;
+    FlowCanvas._running=true;
+    FlowCanvas._raf=requestAnimationFrame(FlowCanvas._tick);
+  },
+  stop:()=>{
+    FlowCanvas._running=false;
+    if(FlowCanvas._raf){cancelAnimationFrame(FlowCanvas._raf);FlowCanvas._raf=null;}
+  },
+
+  _tick:(now)=>{
+    FlowCanvas._raf=null;
+    const ctx=FlowCanvas._ctx;
+    if(!FlowCanvas.enabled||!ctx){FlowCanvas._running=false;return;}
+    const SS=FlowCanvas._ss||1;
+    const bw=Store.config.baseWidth||0,bh=Store.config.baseHeight||0;
+    ctx.setTransform(SS,0,0,SS,0,0);             // base座標→ビットマップ
+    ctx.clearRect(0,0,bw,bh);                    // base座標で全消去
+    // 画面内のみ描画（perf）。base座標のビューポート矩形を算出。
+    const ws=$id('workspace'),z=Store.config.currentZoom||1;
+    let vx1=0,vy1=0,vx2=bw,vy2=bh;
+    if(ws){vx1=ws.scrollLeft/z;vy1=ws.scrollTop/z;vx2=(ws.scrollLeft+ws.clientWidth)/z;vy2=(ws.scrollTop+ws.clientHeight)/z;}
+    ctx.lineCap='round';
+    ctx.setLineDash(FlowCanvas._DASH);
+    ctx.strokeStyle=FlowCanvas._COL;
+    let curResid=false,anyActive=false;
+    const t=now/1000;
+    FlowCanvas._records.forEach(rec=>{
+      if(!rec.active)return;
+      anyActive=true;
+      if(rec.hidden)return;                                               // display-cull: SVGの display:none と同期（流れ破線が配管より先に出るのを防ぐ）
+      if(rec.maxX<vx1||rec.minX>vx2||rec.maxY<vy1||rec.minY>vy2)return;   // ビューポート外はスキップ
+      if(rec.paused!==curResid){ctx.strokeStyle=rec.paused?FlowCanvas._COL_RESID:FlowCanvas._COL;curResid=rec.paused;}
+      ctx.lineWidth=rec.lineWidth;
+      if(rec.paused){
+        ctx.lineDashOffset=0;                                            // 残留=流れない
+      }else{
+        const off=((t/rec.durationSec)*24)%24;                           // SVG: 1周期で -24 進む linear infinite を時間で再現
+        ctx.lineDashOffset=rec.reverse?off:-off;                         // 逆流は符号反転（§5.4: 正方向 -off / 逆方向 +off）
+      }
+      ctx.stroke(rec.path2d);
+    });
+    if(!anyActive){FlowCanvas._running=false;return;}                    // 流れる対象が無ければ停止（canvasは空のまま）
+    FlowCanvas._raf=requestAnimationFrame(FlowCanvas._tick);
+  }
+};
+
 /* ━━━━━━━━ RENDERER ━━━━━━━━ */
 const Renderer={
-  svgLayer:null,overlayLayer:null,edgesGroup:null,nodesGroup:null,svgDefs:null,
+  svgLayer:null,overlayLayer:null,edgeLayer:null,flowCanvas:null,edgesGroup:null,nodesGroup:null,svgDefs:null,
   valveMatrixContent:null,zoomDisplay:null,container:null,wrapper:null,connectPreviewLine:null,selectRectEl:null,snapGuideX:null,snapGuideY:null,
   
   init:()=>{
     Renderer.svgLayer=document.getElementById('svg-layer');Renderer.overlayLayer=document.getElementById('overlay-layer');
+    // 問題A対策: 流れ破線Canvas化のためのレイヤ分離
+    //   #edge-layer … 配管/エッジ(SVG) を内包する最下層の当たり判定SVG（旧 #svg-layer の役割を継承）
+    //   #flow-canvas … 流れ破線(.flow-dash)を毎フレーム描画する1枚Canvas（配管の上・ノードの下）
+    //   #svg-layer  … ノードのみを内包（z-order を「配管 < 流れ破線 < ノード」に維持）
+    Renderer.edgeLayer=document.getElementById('edge-layer');
+    Renderer.flowCanvas=document.getElementById('flow-canvas');
 
     // SVG defs for thermal gradients (Feature 4)
+    // 注: url(#...) 参照は同一SVGルート内で解決させるのが堅牢なため、エッジ(flow-base)が
+    //     参照するサーマルグラデーション定義は edge-layer 側に置く。
     Renderer.svgDefs=createNS('defs',{id:'svg-defs'});
-    Renderer.svgLayer.insertBefore(Renderer.svgDefs,Renderer.svgLayer.firstChild);
+    Renderer.edgeLayer.insertBefore(Renderer.svgDefs,Renderer.edgeLayer.firstChild);
 
     // Grouping for delta updates
     Renderer.edgesGroup=createNS('g',{id:'edges-group'});
     Renderer.nodesGroup=createNS('g',{id:'nodes-group'});
-    Renderer.svgLayer.appendChild(Renderer.edgesGroup);
-    Renderer.svgLayer.appendChild(Renderer.nodesGroup);
+    Renderer.edgeLayer.appendChild(Renderer.edgesGroup);  // エッジは edge-layer へ
+    Renderer.svgLayer.appendChild(Renderer.nodesGroup);   // ノードは svg-layer へ
+
+    // 流れ破線Canvasの初期化（フィーチャーフラグ・サイズ確定）
+    FlowCanvas.init();
 
     // 最適化5: エッジ・ウェイポイント・ノードの contextmenu/dblclick を
     // 親グループ1箇所へのイベントデリゲーションに集約（要素ごとのリスナー数千個を排除）。
@@ -3189,32 +3325,56 @@ const Renderer={
       });
       for(let i=wps.length;i<existingWps.length;i++)existingWps[i].remove();
 
-      // 5. Flow Dash (Task 1-1: textPath矢印を廃止し、CSS破線アニメーションに完全移行)
-      // textPath+SVG animateは「パス長計算・textNode操作・DOM書き込み」が毎フレーム発生していた。
-      // .flow-dashはpathのstroke-dashoffsetをCSSだけで動かすため、DOM更新コストが最小限。
-      let flowDash=eg.querySelector('.flow-dash');
-      if(ds>FLUID.EMPTY){
-        if(!flowDash){
-          flowDash=createNS('path');
-          flowDash.classList.add('flow-dash');
-          // 配管の色に対して視認性の高い半透明白を重ねて流れを表現
-          flowDash.setAttribute('stroke','rgba(255,255,255,0.8)');
-          eg.appendChild(flowDash);
+      // 5. Flow Dash (流れる白破線)
+      if(FlowCanvas.enabled){
+        // 問題A対策: Canvasモードでは .flow-dash のSVG要素を作らず、毎フレーム描画用の rec を更新する。
+        // SVGのPaintコスト（多数要素の stroke-dashoffset アニメ再描画）を排除し連続FPSを引き上げる。
+        const stale=eg.querySelector('.flow-dash'); if(stale)stale.remove();   // モード混在/復帰時の残骸除去
+        if(ds>FLUID.EMPTY){
+          // ビューポートカリング用のAABB（ノード中心＋ウェイポイント、丸キャップ分の小マージン）
+          let mnx=Math.min(nF.x,nT.x),mny=Math.min(nF.y,nT.y),mxx=Math.max(nF.x,nT.x),mxy=Math.max(nF.y,nT.y);
+          for(let i=0;i<wps.length;i++){const w=wps[i];if(w.x<mnx)mnx=w.x;if(w.x>mxx)mxx=w.x;if(w.y<mny)mny=w.y;if(w.y>mxy)mxy=w.y;}
+          const m=8;
+          FlowCanvas.updateRecord(edge.id,{
+            pathStr,                                   // buildTrimmedPath の結果をそのまま使用（形状完全一致）
+            lineWidth:Math.max(1.5,esw*0.8),           // SVGと同一の線幅
+            durationSec:0.6/Math.max(.18,dRate),       // SVG duration 式と同一
+            reverse:!!isBk,                            // 逆流
+            paused:isResidual,                         // 残留=流れない
+            active:true,
+            minX:mnx-m,minY:mny-m,maxX:mxx+m,maxY:mxy+m
+          });
+        }else{
+          FlowCanvas.deleteRecord(edge.id);
         }
-        setAttr(flowDash,'d',pathStr);
-        setAttr(flowDash,'stroke-width',Math.max(1.5,esw*0.8));
-        // 流速(dRate)に応じてアニメーション速度を変更（変化時のみ style 書き込み）
-        const dur=`${(0.6/Math.max(.18,dRate)).toFixed(3)}s`;
-        if(flowDash.style.animationDuration!==dur)flowDash.style.animationDuration=dur;
-        // 逆流時はアニメーションを逆回転
-        const dir=isBk?'reverse':'normal';
-        if(flowDash.style.animationDirection!==dir)flowDash.style.animationDirection=dir;
-      }else if(flowDash){
-        flowDash.remove();
+      }else{
+        // 従来のSVG方式（?canvasflow=0）。textPath矢印を廃止しCSS破線アニメで流れを表現。
+        let flowDash=eg.querySelector('.flow-dash');
+        if(ds>FLUID.EMPTY){
+          if(!flowDash){
+            flowDash=createNS('path');
+            flowDash.classList.add('flow-dash');
+            // 配管の色に対して視認性の高い半透明白を重ねて流れを表現
+            flowDash.setAttribute('stroke','rgba(255,255,255,0.8)');
+            eg.appendChild(flowDash);
+          }
+          setAttr(flowDash,'d',pathStr);
+          setAttr(flowDash,'stroke-width',Math.max(1.5,esw*0.8));
+          // 流速(dRate)に応じてアニメーション速度を変更（変化時のみ style 書き込み）
+          const dur=`${(0.6/Math.max(.18,dRate)).toFixed(3)}s`;
+          if(flowDash.style.animationDuration!==dur)flowDash.style.animationDuration=dur;
+          // 逆流時はアニメーションを逆回転
+          const dir=isBk?'reverse':'normal';
+          if(flowDash.style.animationDirection!==dir)flowDash.style.animationDirection=dir;
+        }else if(flowDash){
+          flowDash.remove();
+        }
       }
     });
 
-    Array.from(Renderer.edgesGroup.children).forEach(child=>{const _id=child.getAttribute('data-id');if(!activeEdges.has(_id)){child.remove();Renderer._edgeSig.delete(_id);}});
+    Array.from(Renderer.edgesGroup.children).forEach(child=>{const _id=child.getAttribute('data-id');if(!activeEdges.has(_id)){child.remove();Renderer._edgeSig.delete(_id);if(FlowCanvas.enabled)FlowCanvas.deleteRecord(_id);}});
+    // 問題A対策: 削除されたエッジの流れ破線recも破棄し、アクティブな流れがあればCanvasループを起動
+    if(FlowCanvas.enabled)FlowCanvas.start();
     // Cleanup orphaned thermal gradients
     if(Renderer.svgDefs)Array.from(Renderer.svgDefs.querySelectorAll('linearGradient[id^="tg-"]')).forEach(g=>{if(!activeEdges.has(g.id.slice(3)))g.remove();});
 
@@ -3973,7 +4133,9 @@ const Controller={
     });
     window.addEventListener('pointerup',Controller.handleGlobalPointerUp);
     window.addEventListener('pointercancel',Controller.handleGlobalPointerUp);
-    Renderer.svgLayer.addEventListener('pointerdown',Controller.handleCanvasPointerDown);
+    // 問題A対策のレイヤ分離: ノードは #svg-layer、エッジ/背景は #edge-layer に分かれたため、
+    // pointerdown は両者を内包する #canvas-container へ委譲する（移動/終了は従来どおり window）。
+    Renderer.container.addEventListener('pointerdown',Controller.handleCanvasPointerDown);
 
     const minimapEl=document.getElementById('minimap');let _mmDragging=false;
     const _mmPan=(ev)=>{const r=minimapEl.getBoundingClientRect();Minimap.panTo(ev.clientX-r.left,ev.clientY-r.top);};
@@ -3989,7 +4151,10 @@ const Controller={
     _ws.addEventListener('scroll', () => {
       if (!_isScrolling) {
         _isScrolling = true;
-        Renderer.svgLayer.style.pointerEvents = 'none';
+        // スクロール中はヒットテストを止めて軽量化（#svg-layer root は常時 none のため、
+        // 実際に当たり判定を持つ #edge-layer と #nodes-group を一時的に無効化する）。
+        Renderer.edgeLayer.style.pointerEvents = 'none';
+        Renderer.nodesGroup.style.pointerEvents = 'none';
         // 【追加】CSSのスイッチをONにして、すりガラスや影を消す
         document.body.classList.add('is-scrolling');
       }
@@ -4001,7 +4166,8 @@ const Controller={
       clearTimeout(_scrollTimeout);
       _scrollTimeout = setTimeout(() => {
         _isScrolling = false;
-        Renderer.svgLayer.style.pointerEvents = 'auto';
+        Renderer.edgeLayer.style.pointerEvents = '';   // CSSの auto に戻す
+        Renderer.nodesGroup.style.pointerEvents = '';  // CSSの auto に戻す
         // 【追加】スクロールが終わったらスイッチをOFFにして美しさを戻す
         document.body.classList.remove('is-scrolling');
         
@@ -4009,6 +4175,11 @@ const Controller={
       }, 150);
     }, { passive: true });
     // ▲▲▲ スクロール（パン移動）の超軽量化ここまで ▲▲▲
+
+    // 問題A対策: ウィンドウリサイズ/ブラウザズーム(DPR変化)時に流れ破線Canvasのビットマップ解像度を追従。
+    // resize() は寸法が変わらなければ no-op（width!==W ガード）なので無条件呼び出しで安全。
+    let _flowResizeT;
+    window.addEventListener('resize',()=>{clearTimeout(_flowResizeT);_flowResizeT=setTimeout(()=>{if(FlowCanvas.enabled)FlowCanvas.resize();},150);});
 
     document.getElementById('btn-undo').addEventListener('click',Controller.undo);
     document.getElementById('btn-save').addEventListener('click',Controller.saveData);
@@ -4299,7 +4470,9 @@ const Controller={
     }
     // ------------------------------------------------
 
-    const isSvgBg=(ev.target.tagName==='svg'||ev.target.id==='svg-layer');if(!isSvgBg)return;
+    // 背景クリック判定: 空白部のクリックは最下層の #edge-layer(root svg) が受ける（#svg-layer は pointer-events:none）。
+    // tagName==='svg' で従来どおり全SVGルートを背景扱いするが、レイヤ分離後の受け皿IDも明示しておく。
+    const isSvgBg=(ev.target.tagName==='svg'||ev.target.id==='svg-layer'||ev.target.id==='edge-layer');if(!isSvgBg)return;
     if(Store.config.isConnectMode){if(Store.config.selectedNodeIdForConnection){Store.config.selectedNodeIdForConnection=null;Renderer.renderAll();}return;}
     const tool=Store.config.currentTool;
     if(tool===NODE_TYPE.POINTER){const c=Renderer.getMouseSvgCoords(ev);Store.rectSelect={active:true,startSvgX:c.x,startSvgY:c.y,currentSvgX:c.x,currentSvgY:c.y,pointerId:ev.pointerId};return;}
@@ -4490,7 +4663,7 @@ const Controller={
         },
 
   clearData:()=>{if(!confirm('全削除しますか？'))return;Store.pushHistory();Store.nodes=[];Store.edges=[];Store.invalidateIndex();Store.selection.clear();Store.config.selectedNodeIdForConnection=null;document.getElementById('pdf-canvas').style.display='none';document.getElementById('pdf-upload').value='';Simulator.run(Renderer.renderAll);},
-  handlePdfUpload:(ev)=>{const file=ev.target.files[0];if(!file||file.type!=='application/pdf')return;const fr=new FileReader();fr.onload=function(){pdfjsLib.getDocument(new Uint8Array(this.result)).promise.then(pdf=>pdf.getPage(1)).then(page=>{const sc=parseFloat(document.getElementById('pdfScale').value)||1.5;const vp=page.getViewport({scale:sc});const canvas=document.getElementById('pdf-canvas');Store.config.baseWidth=vp.width;Store.config.baseHeight=vp.height;canvas.width=vp.width;canvas.height=vp.height;canvas.style.display='block';page.render({canvasContext:canvas.getContext('2d'),viewport:vp});Controller.setZoom(Store.config.currentZoom);}).catch(()=>alert('PDF展開エラー'));};fr.readAsArrayBuffer(file);}
+  handlePdfUpload:(ev)=>{const file=ev.target.files[0];if(!file||file.type!=='application/pdf')return;const fr=new FileReader();fr.onload=function(){pdfjsLib.getDocument(new Uint8Array(this.result)).promise.then(pdf=>pdf.getPage(1)).then(page=>{const sc=parseFloat(document.getElementById('pdfScale').value)||1.5;const vp=page.getViewport({scale:sc});const canvas=document.getElementById('pdf-canvas');Store.config.baseWidth=vp.width;Store.config.baseHeight=vp.height;canvas.width=vp.width;canvas.height=vp.height;canvas.style.display='block';FlowCanvas.resize();page.render({canvasContext:canvas.getContext('2d'),viewport:vp});Controller.setZoom(Store.config.currentZoom);}).catch(()=>alert('PDF展開エラー'));};fr.readAsArrayBuffer(file);}
 };
 
 // Epic 8: Simulator は SimulatorCore を使う Pure Function 設計に再構築済み。
@@ -4922,6 +5095,7 @@ const Persistence = {
     if (d.matrixTitle) $id('matrix-title-input').value = d.matrixTitle;
     if (d.baseWidth) Store.config.baseWidth = d.baseWidth;
     if (d.baseHeight) Store.config.baseHeight = d.baseHeight;
+    if (d.baseWidth || d.baseHeight) { try { FlowCanvas.resize(); } catch(_){} }   // 流れ破線Canvasのビットマップを新base寸法へ再構成
     if (d.gridSize) { Store.config.gridSize = d.gridSize; $id('gridSizeSlider').value = d.gridSize; $id('gridSizeVal').textContent = d.gridSize; }
     if (d.gridOffsetX != null) { Store.config.gridOffsetX = d.gridOffsetX; $id('gridOffsetX').value = d.gridOffsetX; }
     if (d.gridOffsetY != null) { Store.config.gridOffsetY = d.gridOffsetY; $id('gridOffsetY').value = d.gridOffsetY; }
@@ -6626,7 +6800,7 @@ const ManualPicker = {
     ManualPicker._count = 0;
     ManualPicker.active = true;
     ManualPicker._showBanner(true);
-    Renderer.svgLayer.classList.add('manual-picking');
+    Renderer.container.classList.add('manual-picking');
   },
   assign: (node) => {
     const s = OperationManual._stepById(ManualPicker._assignStepId);
@@ -6660,7 +6834,7 @@ const ManualPicker = {
     ManualPicker.active = true;
     // 2分割ワークスペースではパネルを開いたまま、左の生キャンバスから直接ピックする
     ManualPicker._showBanner();
-    Renderer.svgLayer.classList.add('manual-picking');
+    Renderer.container.classList.add('manual-picking');
   },
   pick: (node) => {
     if (!node) return;
@@ -6702,7 +6876,7 @@ const ManualPicker = {
     const added = ManualPicker._count;
     ManualPicker.active = false;
     ManualPicker._assignStepId = null;
-    Renderer.svgLayer.classList.remove('manual-picking');
+    Renderer.container.classList.remove('manual-picking');
     if (ManualPicker._banner) { ManualPicker._banner.remove(); ManualPicker._banner = null; }
     OperationManual._show();   // 再描画して追加された手順を反映
     if (added) Toast.show(`${added}件の手順を図から追加しました`);

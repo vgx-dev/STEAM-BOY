@@ -299,3 +299,38 @@ FlowCanvas._tick(now):
 - 計測結果（SVG版/Canvas版のFPS）が記録されている。
 - フィーチャーフラグでSVG/Canvasを安全に切替できる。
 - 単一HTML/PWAの配布形態を維持している。
+
+---
+
+## 12. 実装記録（2026-06-24）
+
+### 12.1 実装サマリ
+`.flow-dash`（流れる白破線）を **エッジごとのSVG要素＋CSSアニメ** から **1枚のCanvasへの毎フレーム描画** へ置き換えた。`FlowCanvas` モジュール（`STEAM-BOY.html` 内）を新設し、`renderAll` のエッジループでジオメトリ/状態が変わった時だけ per-edge レコードを更新、rAFループでレコードを `stroke` する。見た目（太さ/色/破線間隔/速度/向き/形状/重なり順）と機能はSVG版と一致するよう実装。
+
+### 12.2 §5.1 からの設計変更（レイヤ分離方式）— 重要
+本書 §5.1 は「**nodes-group** を新SVG `#node-layer` へ移す」方針だが、実装では **「edges-group を新SVG `#edge-layer` へ移し、nodes は `#svg-layer` に残す」** 方式を採用した。
+
+- **理由**: ノードを対象とする `#svg-layer` スコープのCSS（`always-show-labels` / `perf-lite` / `isolation-mode` / `manual-picking` / `manual-link-hl`）や `querySelector('#svg-layer ...')`、ImageViewer / MasterTable のホバー系リスナーが10箇所以上あり、**ノード移動は回帰リスクが極めて高い**。一方エッジ系の見た目CSSは大半が `g.edge-grp ...` の**層に依存しないグローバルセレクタ**のため、エッジ移動の影響は最小（実質3点のみ）。
+- **z-order・機能・見た目は §5.1 と同一結果**（背→前: `#pdf-canvas → #edge-layer → #flow-canvas → #svg-layer(ノード) → #overlay-layer`）。最優先原則（機能・見た目の完全維持）に最も適う選択として採用。
+
+### 12.3 主な変更点
+- **レイヤ**: `#edge-layer`(SVG, エッジ+defs) と `#flow-canvas`(Canvas) を追加。`#svg-layer` はノード専用化。`#svg-layer` root を `pointer-events:none`、`#nodes-group` を `auto` にして、空白部クリックを最下層 `#edge-layer` へ通す（背景判定の受け皿が `#edge-layer` に移行）。
+- **イベント**: メインの `pointerdown` を `#svg-layer` から共通祖先 `#canvas-container` へ委譲（エッジ=edge-layer/ノード=svg-layer の両方を受ける）。`isSvgBg` に `edge-layer` を追加。スクロール時のヒットテスト無効化は `edge-layer`+`nodes-group` を対象に変更。`isolation-mode`/`manual-picking` のクラス付与先を `#canvas-container` へ。
+- **描画**: `FlowCanvas._records`(Map) と rAF ループ。SS=min(DPR,2)、ビットマップ面積 16M px 上限。`durationSec=0.6/max(.18,dRate)`、`lineDashOffset` を時間ベースで算出（正方向 `-off` / 逆流 `+off`、破線周期12と合同で SVG と一致）。残留は `offset=0`＋α0.64（=0.8×0.8）で凍結再現。
+- **カリング同期**: `Culling.apply` が `rec.hidden`(display-cull) を更新し、Canvasも同期して非描画（流れ破線が配管より先に出るチラつきを防止）。加えてrAF内で**ライブのビューポートカリング**を行い画面外は毎フレームスキップ。
+- **追従**: PDF読込・復元・ウィンドウリサイズ/ズーム(DPR変化)で `FlowCanvas.resize()`。アクティブな流れが0になればrAF自動停止。
+
+### 12.4 フィーチャーフラグ / フォールバック
+- 既定 **Canvasモード ON**。`?canvasflow=0` で従来の **SVG `.flow-dash` 方式**へ完全フォールバック（AC-A5）。
+- Canvas の2Dコンテキスト取得に失敗した場合は自動的にSVGモードへ降格。
+- `window.__flowCanvas` でデバッグ/AB比較可能。
+
+### 12.5 検証状況
+- **構文**: `node --check`（スクリプト抽出）パス。
+- **コアロジック単体テスト**（ブラウザ非依存）: `lineDashOffset` 数式が SVG と破線周期12で合同・正/逆方向が逆・ビューポートカリング判定・残留α=0.64 をテストし全パス。
+- **FlowCanvasオブジェクト統合テスト**（モックCanvas）: フラグ既定ON/`?canvasflow=0`でOFF、resizeのSSクランプ、画面外/hidden/非アクティブのスキップ、残留の凍結とα、アクティブ0でのループ停止を確認し全パス。
+- **未実施（要実機）**: AC-A1 の実FPS計測（`?perf=1`）と AC-A2 のスクショ目視パリティ比較は、ブラウザ実機での確認が必要。下表は実測後に追記すること。
+
+| シナリオ | SVG版 fps.avg/long | Canvas版 fps.avg/long | 判定 |
+|---|---|---|---|
+| 703要素・アクティブ約345本 放置 | （要実機: ?canvasflow=0） | （要実機: 既定） | ≥48fps? |

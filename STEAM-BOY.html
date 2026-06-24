@@ -3823,12 +3823,6 @@ const ValveSelector={
     Simulator.run(()=>{
       Animator.prepare(node,prevStates);
       Renderer.renderAll();
-      // Phase 2: 危険を伴う操作は適用後に赤いトーストで明示（元に戻す付き）
-      // ドレン管警告はシミュレーション操作の自由を妨げないため除外
-      const _dzFiltered=_dz.filter(m=>!m.includes('ドレン管'));
-      if(_dzFiltered.length){
-        Toast.show('⚠ '+_dzFiltered[0].replace(/^DANGER:\s*/,'')+(_dzFiltered.length>1?` 他${_dzFiltered.length-1}件`:''),{actionLabel:'元に戻す',onAction:Controller.undo,duration:8000});
-      }
 
       // ライフサイクルの分離: 差分DOMの更新がブラウザに描画された直後にアニメーションを発火
       requestAnimationFrame(() => {

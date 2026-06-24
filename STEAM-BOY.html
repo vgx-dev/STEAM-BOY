@@ -5232,23 +5232,59 @@ const ContextMenu = {
 const SampleDiagram = {
   load: () => {
     Store.pushHistory(); // サンプル投入も undo 可能にする
-    const N = (t, x, y) => Store.createNode(t, x, y);
-    const s  = N('source', 240, 330);
-    const v1 = N('valve',  380, 330);
-    const sp = N('split',  520, 330);
-    const v2 = N('valve',  640, 250);
-    const rd = N('reducer',760, 250);
-    const hx = N('heatex', 880, 250);
-    const t1 = N('trap',  1010, 250);
-    const d1 = N('drain', 1010, 400);
-    const v3 = N('valve',  640, 440);
-    const t2 = N('trap',   760, 440);
-    const d2 = N('drain',  760, 570);
-    Store.nodes = [s, v1, sp, v2, rd, hx, t1, d1, v3, t2, d2];
-    const E = (a, b) => Store.createEdge(a.id, b.id);
-    Store.edges = [E(s,v1),E(v1,sp),E(sp,v2),E(v2,rd),E(rd,hx),E(hx,t1),E(t1,d1),E(sp,v3),E(v3,t2),E(t2,d2)];
+
+    // JSONデータの注入
+    const sampleData = {
+      "nodes": [
+        {"id":"mqrjtvg8cxgur","type":"source","x":363,"y":220,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":35,"y":-25}},
+        {"id":"mqrjtw7nekmos","type":"valve","x":453,"y":220,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":0.33,"y":40.33}},
+        {"id":"mqrjtzn3m2jq4","type":"split","x":408,"y":220,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":35,"y":-25}},
+        {"id":"mqrju2vv0s3pv","type":"pgauge","x":408,"y":175,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":-2.33,"y":-31}},
+        {"id":"mqrju5dap8a8l","type":"reducer","x":498,"y":220,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":35,"y":-25}},
+        {"id":"mqrju7dgymxdq","type":"valve","x":543,"y":220,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":0.33,"y":41}},
+        {"id":"mqrju995a6lt2","type":"split","x":588,"y":220,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":35,"y":-25}},
+        {"id":"mqrjudp4cx7oa","type":"pgauge","x":588,"y":175,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":1.67,"y":-33.67}},
+        {"id":"mqrjuj1tl996v","type":"heatex","x":648,"y":220,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":35,"y":-25}},
+        {"id":"mqrjukutor0ww","type":"split","x":708,"y":220,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":35,"y":-25}},
+        {"id":"mqrjunina5ey6","type":"valve","x":768,"y":220,"rotation":0,"state":{"valveState":0},"ext":{},"labelOffset":{"x":0.33,"y":-31}},
+        {"id":"mqrjuonc5a94s","type":"valve","x":768,"y":280,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":-0.33,"y":41.67}},
+        {"id":"mqrjuqeeq9hlf","type":"trap","x":813,"y":280,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":35,"y":-25}},
+        {"id":"mqrjurdzjlphr","type":"valve","x":858,"y":280,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":3,"y":39}},
+        {"id":"mqrjutorhabde","type":"merge","x":948,"y":280,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":35,"y":-25}},
+        {"id":"mqrjuyah4cb18","type":"split","x":618,"y":220,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":35,"y":-25}},
+        {"id":"mqrjv2h9jzf6d","type":"safety","x":618,"y":175,"rotation":0,"state":{"valveState":0},"ext":{},"labelOffset":{"x":62.33,"y":-17}},
+        {"id":"mqrjv7npo6ak2","type":"drain","x":678,"y":370,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":35,"y":-25}},
+        {"id":"mqrjvr28zkt8c","type":"drain","x":948,"y":370,"rotation":0,"state":{"valveState":2},"ext":{},"labelOffset":{"x":35,"y":-25}}
+      ],
+      "edges": [
+        {"id":"mqrjvcnmp2fan","from":"mqrjtvg8cxgur","to":"mqrjtzn3m2jq4","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false}},
+        {"id":"mqrjvdnq35zuu","from":"mqrjtzn3m2jq4","to":"mqrju2vv0s3pv","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false}},
+        {"id":"mqrjver60smyv","from":"mqrjtzn3m2jq4","to":"mqrjtw7nekmos","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false}},
+        {"id":"mqrjvfrq6do6n","from":"mqrjtw7nekmos","to":"mqrju5dap8a8l","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false}},
+        {"id":"mqrjvgh0qvw6x","from":"mqrju5dap8a8l","to":"mqrju7dgymxdq","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false}},
+        {"id":"mqrjvh7o97jdd","from":"mqrju7dgymxdq","to":"mqrju995a6lt2","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjvhxnm4c33","from":"mqrju995a6lt2","to":"mqrjudp4cx7oa","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjvj54tqs1h","from":"mqrju995a6lt2","to":"mqrjuyah4cb18","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjvju4pz2xq","from":"mqrjuyah4cb18","to":"mqrjv2h9jzf6d","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjvkqafiy77","from":"mqrjuyah4cb18","to":"mqrjuj1tl996v","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjvlifprjf0","from":"mqrjuj1tl996v","to":"mqrjukutor0ww","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjvmbo265ts","from":"mqrjukutor0ww","to":"mqrjunina5ey6","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjvndy8lzbx","from":"mqrjunina5ey6","to":"mqrjutorhabde","ext":{"waypoints":[{"x":940.33,"y":222}],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjvt2gsqwb5","from":"mqrjutorhabde","to":"mqrjvr28zkt8c","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjvu8c5u6to","from":"mqrjukutor0ww","to":"mqrjuonc5a94s","ext":{"waypoints":[{"x":710.67,"y":274.67}],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjvux4yk54h","from":"mqrjuonc5a94s","to":"mqrjuqeeq9hlf","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0.1,"residualSrcPres":1}},
+        {"id":"mqrjvvkdjc6ed","from":"mqrjuqeeq9hlf","to":"mqrjurdzjlphr","ext":{"waypoints":[],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjvwj5mjmb5","from":"mqrjurdzjlphr","to":"mqrjutorhabde","ext":{"waypoints":[{"x":899.33,"y":282}],"hasResidual":false,"residualType":0,"residualUncertain":false,"residualPres":0,"residualSrcPres":0}},
+        {"id":"mqrjxkvt36syt","from":"mqrjv2h9jzf6d","to":"mqrjv7npo6ak2","ext":{"waypoints":[{"x":674.67,"y":177}],"residualUncertain":false}}
+      ]
+    };
+
+    Store.nodes = sampleData.nodes.map(n => Store.createNode(n.type, n.x, n.y, n));
+    Store.edges = sampleData.edges.map(e => Store.createEdge(e.from, e.to, e));
     Store.invalidateIndex();
+
     Simulator.run(Renderer.renderAll);
+    Controller.fitToContent();
   }
 };
 

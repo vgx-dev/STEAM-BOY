@@ -2733,6 +2733,14 @@ const Minimap={
     Minimap._renderBase();
     Minimap._composite();
   },
+  // Phase1-B: renderAll の同期パスから外し、rAFで1フレーム1回に間引くフル更新。
+  // 1フレーム内に renderAll が複数回呼ばれても draw は1回だけ実行（見た目は不変、描画は次フレーム）。
+  _drawQueued:false,
+  scheduleDraw:()=>{
+    if(Minimap._drawQueued)return;
+    Minimap._drawQueued=true;
+    requestAnimationFrame(()=>{Minimap._drawQueued=false;Minimap.draw();});
+  },
   // スクロール/ズーム時の軽量更新（ベースは再利用しビューポート枠と波紋のみ再合成）
   drawViewport:()=>{Minimap._composite();},
   panTo:(mx,my)=>{const c=Minimap.canvas,W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;const svgX=Math.max(0,Math.min((mx-ox)/ms,Store.config.baseWidth)),svgY=Math.max(0,Math.min((my-oy)/ms,Store.config.baseHeight));Renderer.centerOnSvg(svgX,svgY);}
@@ -3453,7 +3461,8 @@ const Renderer={
     if(IsolationTracer.active)IsolationTracer._apply();
 
     Renderer._lastMatrixData=valveMatrixData;Renderer.drawMatrix(valveMatrixData);
-    Anomaly.renderPanel();Minimap.draw();
+    // Phase1-B: ミニマップは同期描画せず rAF へ間引き（renderAll スパイクから minimap コストを分離）
+    Anomaly.renderPanel();Minimap.scheduleDraw();
     // B-4: 操作マニュアルが開いている間は手順番号バッジをノード移動/ズームに追従
     if(typeof OperationManual!=='undefined'&&OperationManual._modal&&OperationManual._modal.classList.contains('open'))OperationManual._drawStepBadges();
     // Epic 7: ボード更新後に画面外アニメーションをスロットル制御

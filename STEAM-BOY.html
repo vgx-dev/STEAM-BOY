@@ -2733,6 +2733,14 @@ const Minimap={
     Minimap._renderBase();
     Minimap._composite();
   },
+  // Phase1-B: renderAll の同期パスから外し、rAFで1フレーム1回に間引くフル更新。
+  // 1フレーム内に renderAll が複数回呼ばれても draw は1回だけ実行（見た目は不変、描画は次フレーム）。
+  _drawQueued:false,
+  scheduleDraw:()=>{
+    if(Minimap._drawQueued)return;
+    Minimap._drawQueued=true;
+    requestAnimationFrame(()=>{Minimap._drawQueued=false;Minimap.draw();});
+  },
   // スクロール/ズーム時の軽量更新（ベースは再利用しビューポート枠と波紋のみ再合成）
   drawViewport:()=>{Minimap._composite();},
   panTo:(mx,my)=>{const c=Minimap.canvas,W=c.width,H=c.height,ms=Math.min(W/Store.config.baseWidth,H/Store.config.baseHeight),ox=(W-Store.config.baseWidth*ms)/2,oy=(H-Store.config.baseHeight*ms)/2;const svgX=Math.max(0,Math.min((mx-ox)/ms,Store.config.baseWidth)),svgY=Math.max(0,Math.min((my-oy)/ms,Store.config.baseHeight));Renderer.centerOnSvg(svgX,svgY);}
@@ -3453,7 +3461,8 @@ const Renderer={
     if(IsolationTracer.active)IsolationTracer._apply();
 
     Renderer._lastMatrixData=valveMatrixData;Renderer.drawMatrix(valveMatrixData);
-    Anomaly.renderPanel();Minimap.draw();
+    // Phase1-B: ミニマップは同期描画せず rAF へ間引き（renderAll スパイクから minimap コストを分離）
+    Anomaly.renderPanel();Minimap.scheduleDraw();
     // B-4: 操作マニュアルが開いている間は手順番号バッジをノード移動/ズームに追従
     if(typeof OperationManual!=='undefined'&&OperationManual._modal&&OperationManual._modal.classList.contains('open'))OperationManual._drawStepBadges();
     // Epic 7: ボード更新後に画面外アニメーションをスロットル制御
@@ -7053,7 +7062,255 @@ toolbarEl.addEventListener('pointerdown', (ev) => {
 });
 // ▲▲▲ ツールバーのドラッグ移動 ここまで ▲▲▲
 
+/* ━━━━━━━━ PERF PROBE (Phase 0: 計測基盤) ━━━━━━━━
+   完全オプトイン。`?perf` / `?perf=1` のURLパラメータ、または
+   localStorage['STEAMBOY_PERF']==='1' のときのみ有効化。
+   無効時は boot() が即 return し、ラップもrAFもHUDも一切行わない（オーバーヘッドゼロ）。
+   有効時はホットパスの処理時間とFPSを計測し、画面左上のHUDと window.__perf で参照可能。
+   注意: SimulatorCore.compute は SimWorker が .toString() でWorkerソース化するため
+   ラップ対象から除外する（Simulator._baseRun / run 側で計測する）。 */
+const Perf = {
+  enabled: false,
+  _rings: new Map(),     // label -> {buf:[], i, n, count, total, max}
+  RING: 120,             // 各計測の保持フレーム数
+  _fps: { cur: 0, avg: 0, min: Infinity, frames: 0, long: 0, _last: 0, _acc: 0, _cnt: 0, _buf: [], _bi: 0 },
+  _hud: null, _hudTimer: null, _rafId: null, _origs: [],
+
+  _detect: () => {
+    try {
+      const sp = new URLSearchParams(location.search);
+      if (sp.has('perf') && sp.get('perf') !== '0') return true;
+      if (localStorage.getItem('STEAMBOY_PERF') === '1') return true;
+    } catch (_) {}
+    return false;
+  },
+
+  _ring: (label) => {
+    let r = Perf._rings.get(label);
+    if (!r) { r = { buf: new Float32Array(Perf.RING), i: 0, n: 0, count: 0, total: 0, max: 0 }; Perf._rings.set(label, r); }
+    return r;
+  },
+  _record: (label, ms) => {
+    const r = Perf._ring(label);
+    r.buf[r.i] = ms; r.i = (r.i + 1) % Perf.RING; if (r.n < Perf.RING) r.n++;
+    r.count++; r.total += ms; if (ms > r.max) r.max = ms;
+  },
+  // obj[method] を計測ラッパに差し替え（戻り値・this・引数を完全保持）
+  wrap: (obj, method, label) => {
+    if (!obj || typeof obj[method] !== 'function') return;
+    const orig = obj[method];
+    Perf._origs.push({ obj, method, orig });
+    obj[method] = function (...args) {
+      const t0 = performance.now();
+      try { return orig.apply(this, args); }
+      finally { Perf._record(label, performance.now() - t0); }
+    };
+  },
+
+  _stat: (label) => {
+    const r = Perf._rings.get(label);
+    if (!r || !r.n) return null;
+    const arr = Array.prototype.slice.call(r.buf, 0, r.n).sort((a, b) => a - b);
+    const avg = arr.reduce((s, v) => s + v, 0) / arr.length;
+    const p95 = arr[Math.min(arr.length - 1, Math.floor(arr.length * 0.95))];
+    return { avg, p95, max: r.max, last: arr.length ? r.buf[(r.i - 1 + Perf.RING) % Perf.RING] : 0, count: r.count };
+  },
+  // 全計測の集計を返す（コンソール / ベースライン記録用）
+  stats: () => {
+    const out = { graph: { nodes: Store.nodes.length, edges: Store.edges.length, active: Store.edges.filter(e => e._sim && (e._sim.f > 0 || e._sim.b > 0)).length }, fps: { avg: +Perf._fps.avg.toFixed(1), min: Perf._fps.min === Infinity ? 0 : +Perf._fps.min.toFixed(1), longFrames: Perf._fps.long, frames: Perf._fps.frames }, timings: {} };
+    Perf._rings.forEach((_, label) => {
+      const s = Perf._stat(label); if (!s) return;
+      out.timings[label] = { avg: +s.avg.toFixed(2), p95: +s.p95.toFixed(2), max: +s.max.toFixed(2), count: s.count };
+    });
+    return out;
+  },
+  // 名前付きベースラインとしてコンソールに整形出力（可能ならクリップボードへコピー）
+  snapshot: (label) => {
+    const s = Perf.stats();
+    s.label = label || '';
+    const json = JSON.stringify(s, null, 2);
+    console.log('%c[PERF snapshot] ' + (label || ''), 'color:#FF3B30;font-weight:bold', s);
+    console.log(json);
+    let copied = false;
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(json); copied = true; } } catch (_) {}
+    if (Perf._hud) { const n = Perf._hud.querySelector('#perf-note'); if (n) { n.textContent = copied ? '✓ 記録をコピーしました（貼り付けてください）' : '✓ 記録をコンソールに出力'; setTimeout(() => { if (n) n.textContent = ''; }, 4000); } }
+    return s;
+  },
+  // ベースライン採取用のテスト図面を自動生成（現在の図面は置き換わるが Undo で復元可能）
+  stress: (target) => {
+    target = target || 2000;
+    Store.pushHistory();
+    const nodes = [], edges = [];
+    const CHAIN = 10, per = CHAIN * 2 - 1;
+    const chains = Math.max(1, Math.round(target / per));
+    const mid = ['valve', 'reducer', 'heatex', 'split', 'merge', 'trap'];
+    let y = 100;
+    for (let c = 0; c < chains; c++) {
+      let prev = null, x = 140;
+      for (let i = 0; i < CHAIN; i++) {
+        const t = (i === 0) ? 'source' : (i === CHAIN - 1) ? 'drain' : mid[(i + c) % mid.length];
+        const n = Store.createNode(t, x, y);
+        nodes.push(n);
+        if (prev) edges.push(Store.createEdge(prev.id, n.id));
+        prev = n; x += 120;
+      }
+      y += 80;
+    }
+    Store.nodes = nodes; Store.edges = edges;
+    Store.invalidateIndex();
+    Perf.reset();
+    Simulator.run(() => { Renderer.renderAll(); if (Minimap.canvas) Minimap.draw(); });
+    const r = { nodes: nodes.length, edges: edges.length };
+    console.log('%c[PERF] test diagram generated', 'color:#FF3B30;font-weight:bold', r, '— 操作後に「記録」を押してください（Undoで元の図面に戻せます）');
+    if (Perf._hud) { const note = Perf._hud.querySelector('#perf-note'); if (note) { note.textContent = `✓ テスト図面生成 (N${r.nodes}/E${r.edges})`; setTimeout(() => { if (note) note.textContent = ''; }, 4000); } }
+    return r;
+  },
+  reset: () => {
+    Perf._rings.clear();
+    Perf._fps.min = Infinity; Perf._fps.avg = 0; Perf._fps.frames = 0; Perf._fps.long = 0;
+    Perf._fps._acc = 0; Perf._fps._cnt = 0; Perf._fps._buf.length = 0; Perf._fps._bi = 0; Perf._fps._last = 0;
+  },
+
+  _frame: (t) => {
+    const f = Perf._fps;
+    if (f._last) {
+      const dt = t - f._last;
+      if (dt > 0) {
+        const fps = 1000 / dt;
+        f.cur = fps;
+        if (dt > 50) f.long++;          // ロングフレーム検出 (>50ms)
+        f._buf[f._bi] = fps; f._bi = (f._bi + 1) % 60;
+        if (f._buf.length > 1) {
+          const valid = f._buf.filter(v => v != null);
+          f.avg = valid.reduce((s, v) => s + v, 0) / valid.length;
+          // 直近2秒程度の最低FPSを worst として保持
+          if (fps < f.min) f.min = fps;
+        }
+        f.frames++;
+      }
+    }
+    f._last = t;
+    Perf._rafId = requestAnimationFrame(Perf._frame);
+  },
+
+  _POS_KEY: 'STEAMBOY_PERF_POS',
+  _savePos: () => {
+    if (!Perf._hud) return;
+    try {
+      const body = Perf._hud.querySelector('#perf-body');
+      localStorage.setItem(Perf._POS_KEY, JSON.stringify({ left: Perf._hud.style.left, top: Perf._hud.style.top, min: body ? body.style.display === 'none' : false }));
+    } catch (_) {}
+  },
+  _restorePos: () => {
+    try {
+      const p = JSON.parse(localStorage.getItem(Perf._POS_KEY) || 'null');
+      if (!p) return;
+      if (p.left) { Perf._hud.style.left = p.left; Perf._hud.style.right = 'auto'; }
+      if (p.top) Perf._hud.style.top = p.top;
+      if (p.min) { const body = Perf._hud.querySelector('#perf-body'); const mb = Perf._hud.querySelector('#perf-min'); if (body) body.style.display = 'none'; if (mb) mb.textContent = '+'; }
+    } catch (_) {}
+  },
+
+  _ensureHud: () => {
+    if (Perf._hud) return Perf._hud;
+    const h = document.createElement('div');
+    h.id = 'perf-hud';
+    h.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99999;background:rgba(0,0,0,.82);color:#0f0;font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;border-radius:8px;min-width:230px;box-shadow:0 4px 16px rgba(0,0,0,.4);user-select:none;';
+    const mkIcon = (txt, fn, id) => { const b = document.createElement('button'); if (id) b.id = id; b.textContent = txt; b.style.cssText = 'font:12px ui-monospace,monospace;background:transparent;color:#ddd;border:none;cursor:pointer;padding:0 4px;line-height:1;'; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; };
+    // ── ヘッダー（ドラッグハンドル） ──
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;cursor:move;background:rgba(255,255,255,.08);border-radius:8px 8px 0 0;touch-action:none;';
+    const title = document.createElement('span'); title.textContent = '⚙ PERF'; title.style.cssText = 'font-weight:bold;color:#FFD60A;';
+    const ctrls = document.createElement('span');
+    ctrls.appendChild(mkIcon('—', () => { const body = h.querySelector('#perf-body'); const mb = h.querySelector('#perf-min'); const hidden = body.style.display === 'none'; body.style.display = hidden ? '' : 'none'; mb.textContent = hidden ? '—' : '+'; Perf._savePos(); }, 'perf-min'));
+    ctrls.appendChild(mkIcon('✕', () => Perf.disable()));
+    hdr.appendChild(title); hdr.appendChild(ctrls);
+    // ── 本体 ──
+    const body = document.createElement('div'); body.id = 'perf-body'; body.style.cssText = 'padding:6px 10px 8px;';
+    const pre = document.createElement('pre'); pre.id = 'perf-text'; pre.style.cssText = 'margin:0;white-space:pre;font:inherit;color:inherit;user-select:text;';
+    const note = document.createElement('div'); note.id = 'perf-note'; note.style.cssText = 'color:#FFD60A;min-height:14px;margin:4px 0 2px;';
+    const bar = document.createElement('div'); bar.style.cssText = 'display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;';
+    const mkBtn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = 'font:11px ui-monospace,monospace;background:#1f6feb;color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;'; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; };
+    bar.appendChild(mkBtn('テスト図面 中', () => Perf.stress(600)));
+    bar.appendChild(mkBtn('テスト図面 大', () => Perf.stress(2000)));
+    bar.appendChild(mkBtn('↺ リセット', () => { Perf.reset(); const n = h.querySelector('#perf-note'); if (n) { n.textContent = '✓ 計測をリセット'; setTimeout(() => { n.textContent = ''; }, 2500); } }));
+    bar.appendChild(mkBtn('📋 記録', () => Perf.snapshot('manual')));
+    body.appendChild(pre); body.appendChild(note); body.appendChild(bar);
+    h.appendChild(hdr); h.appendChild(body);
+    document.body.appendChild(h);
+    Perf._hud = h;
+    // ── ドラッグ移動 ──
+    let drag = null;
+    hdr.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) return; drag = { x: e.clientX, y: e.clientY, l: h.offsetLeft, t: h.offsetTop }; try { hdr.setPointerCapture(e.pointerId); } catch (_) {} });
+    hdr.addEventListener('pointermove', (e) => { if (!drag) return; h.style.left = Math.max(0, drag.l + e.clientX - drag.x) + 'px'; h.style.top = Math.max(0, drag.t + e.clientY - drag.y) + 'px'; h.style.right = 'auto'; });
+    const endDrag = () => { if (drag) { drag = null; Perf._savePos(); } };
+    hdr.addEventListener('pointerup', endDrag); hdr.addEventListener('pointercancel', endDrag);
+    Perf._restorePos();
+    return h;
+  },
+  _updateHud: () => {
+    if (!Perf._hud) return;
+    const f = Perf._fps;
+    const active = Store.edges.reduce((s, e) => s + ((e._sim && (e._sim.f > 0 || e._sim.b > 0)) ? 1 : 0), 0);
+    const line = (label, key) => { const s = Perf._stat(key); return s ? `${label.padEnd(9)} ${s.avg.toFixed(1).padStart(5)}/${s.p95.toFixed(1).padStart(5)}/${s.max.toFixed(0).padStart(4)}ms\n` : ''; };
+    let txt = `FPS ${f.cur.toFixed(0).padStart(3)}  avg ${f.avg.toFixed(0)}  min ${f.min === Infinity ? '-' : f.min.toFixed(0)}\n`;
+    txt += `long(>50ms) ${f.long}\n`;
+    txt += `N ${Store.nodes.length}  E ${Store.edges.length}  active ${active}\n`;
+    txt += `        avg/p95/max\n`;
+    txt += line('render', 'renderAll');
+    txt += line('matrix', 'drawMatrix');
+    txt += line('sim', 'simRun');
+    txt += line('anomaly', 'anomaly');
+    txt += line('sealed', 'sealed');
+    txt += line('animPrep', 'animPrepare');
+    txt += line('animApply', 'animApply');
+    txt += line('cull', 'cullApply');
+    txt += line('minimap', 'minimapDraw');
+    const pre = Perf._hud.querySelector('#perf-text');
+    if (pre) pre.textContent = txt;
+  },
+
+  // 実際に計測を開始（ラップ・rAF・HUDを起動）。二重起動はしない。
+  enable: () => {
+    if (Perf.enabled) { if (Perf._hud) Perf._hud.style.display = ''; return; }
+    Perf.enabled = true;
+    try { localStorage.setItem('STEAMBOY_PERF', '1'); } catch (_) {}
+    // ホットパスのラップ（SimulatorCore.compute は除外）
+    Perf.wrap(Renderer, 'renderAll', 'renderAll');
+    Perf.wrap(Renderer, 'drawMatrix', 'drawMatrix');
+    Perf.wrap(Simulator, '_baseRun', 'simRun');
+    Perf.wrap(Anomaly, 'detect', 'anomaly');
+    Perf.wrap(SealedDetector, 'compute', 'sealed');
+    Perf.wrap(Animator, 'prepare', 'animPrepare');
+    Perf.wrap(Animator, 'apply', 'animApply');
+    Perf.wrap(Culling, 'apply', 'cullApply');
+    Perf.wrap(Minimap, 'draw', 'minimapDraw');
+    Perf._rafId = requestAnimationFrame(Perf._frame);
+    Perf._ensureHud();
+    Perf._hudTimer = setInterval(Perf._updateHud, 250);
+    window.__perf = Perf;
+    console.log('%c[PERF] probe enabled', 'color:#FF3B30;font-weight:bold', '— window.__perf.snapshot() / .reset() / .stats()');
+  },
+
+  // 計測モードを終了（HUD撤去・ループ停止・自動起動フラグ解除）。関数ラップはリロードで解消。
+  disable: () => {
+    Perf.enabled = false;
+    try { localStorage.removeItem('STEAMBOY_PERF'); } catch (_) {}
+    if (Perf._hudTimer) { clearInterval(Perf._hudTimer); Perf._hudTimer = null; }
+    if (Perf._rafId) { cancelAnimationFrame(Perf._rafId); Perf._rafId = null; }
+    if (Perf._hud && Perf._hud.parentNode) Perf._hud.parentNode.removeChild(Perf._hud);
+    Perf._hud = null;
+    console.log('%c[PERF] probe disabled', 'color:#888', '— 完全停止にはリロードしてください');
+  },
+
+  boot: () => {
+    // 有効化は ?perf=1 または localStorage['STEAMBOY_PERF']='1' のみ（キーボードショートカットは廃止）
+    if (Perf._detect()) Perf.enable();
+  }
+};
+
 Controller.init();
+Perf.boot();
 
 // スナップOFF時にグリッド詳細を折りたたむ
 document.getElementById('toggleSnap').addEventListener('change', ev => {

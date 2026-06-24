@@ -1,9 +1,9 @@
 /* STEAM-BOY Service Worker — オフライン動作（PWA）
-   方針: stale-while-revalidate。キャッシュを即返しつつ裏で更新する。
-   アプリ本体・CDNリソース（pdf.js / フォント）をキャッシュし、
-   工場などのオフライン環境でも起動できるようにする。 */
+   方針: ネットワーク優先（network-first）。
+   常にネットワークから最新版を取得し、オフライン時のみキャッシュにフォールバック。
+   これにより「1世代遅れ」問題（初回リロードで古いキャッシュが返る）を解消する。 */
 'use strict';
-const CACHE = 'steamboy-v1';
+const CACHE = 'steamboy-v2';
 const PRECACHE = ['./', './STEAM-BOY.html', './manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
@@ -27,19 +27,17 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
   if (!/^https?:$/.test(url.protocol)) return;
+  // ネットワーク優先: 成功したらキャッシュを更新して返す。
+  // オフライン等でネットワークが失敗した場合のみキャッシュにフォールバック。
   e.respondWith(
-    caches.match(e.request).then((hit) => {
-      const refresh = fetch(e.request)
-        .then((res) => {
-          if (res && (res.ok || res.type === 'opaque')) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(e.request, copy));
-          }
-          return res;
-        })
-        .catch(() => hit);
-      // キャッシュがあれば即返し、裏で更新（stale-while-revalidate）
-      return hit || refresh;
-    })
+    fetch(e.request)
+      .then((res) => {
+        if (res && (res.ok || res.type === 'opaque')) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });

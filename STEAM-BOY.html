@@ -7115,12 +7115,46 @@ const Perf = {
     });
     return out;
   },
-  // 名前付きベースラインとしてコンソールに整形出力（コピペでドキュメントへ）
+  // 名前付きベースラインとしてコンソールに整形出力（可能ならクリップボードへコピー）
   snapshot: (label) => {
     const s = Perf.stats();
+    s.label = label || '';
+    const json = JSON.stringify(s, null, 2);
     console.log('%c[PERF snapshot] ' + (label || ''), 'color:#FF3B30;font-weight:bold', s);
-    console.log(JSON.stringify(s, null, 2));
+    console.log(json);
+    let copied = false;
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(json); copied = true; } } catch (_) {}
+    if (Perf._hud) { const n = Perf._hud.querySelector('#perf-note'); if (n) { n.textContent = copied ? '✓ 記録をコピーしました（貼り付けてください）' : '✓ 記録をコンソールに出力'; setTimeout(() => { if (n) n.textContent = ''; }, 4000); } }
     return s;
+  },
+  // ベースライン採取用のテスト図面を自動生成（現在の図面は置き換わるが Undo で復元可能）
+  stress: (target) => {
+    target = target || 2000;
+    Store.pushHistory();
+    const nodes = [], edges = [];
+    const CHAIN = 10, per = CHAIN * 2 - 1;
+    const chains = Math.max(1, Math.round(target / per));
+    const mid = ['valve', 'reducer', 'heatex', 'split', 'merge', 'trap'];
+    let y = 100;
+    for (let c = 0; c < chains; c++) {
+      let prev = null, x = 140;
+      for (let i = 0; i < CHAIN; i++) {
+        const t = (i === 0) ? 'source' : (i === CHAIN - 1) ? 'drain' : mid[(i + c) % mid.length];
+        const n = Store.createNode(t, x, y);
+        nodes.push(n);
+        if (prev) edges.push(Store.createEdge(prev.id, n.id));
+        prev = n; x += 120;
+      }
+      y += 80;
+    }
+    Store.nodes = nodes; Store.edges = edges;
+    Store.invalidateIndex();
+    Perf.reset();
+    Simulator.run(() => { Renderer.renderAll(); if (Minimap.canvas) Minimap.draw(); });
+    const r = { nodes: nodes.length, edges: edges.length };
+    console.log('%c[PERF] test diagram generated', 'color:#FF3B30;font-weight:bold', r, '— 操作後に「記録」を押してください（Undoで元の図面に戻せます）');
+    if (Perf._hud) { const note = Perf._hud.querySelector('#perf-note'); if (note) { note.textContent = `✓ テスト図面生成 (N${r.nodes}/E${r.edges})`; setTimeout(() => { if (note) note.textContent = ''; }, 4000); } }
+    return r;
   },
   reset: () => {
     Perf._rings.clear();
@@ -7154,9 +7188,22 @@ const Perf = {
     if (Perf._hud) return Perf._hud;
     const h = document.createElement('div');
     h.id = 'perf-hud';
-    h.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99999;background:rgba(0,0,0,.82);color:#0f0;font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;padding:8px 10px;border-radius:8px;white-space:pre;pointer-events:auto;min-width:210px;box-shadow:0 4px 16px rgba(0,0,0,.4);user-select:text;';
-    h.title = 'PERF HUD — クリックで snapshot をコンソール出力 / Alt+P で表示切替';
-    h.addEventListener('click', () => Perf.snapshot('manual'));
+    h.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99999;background:rgba(0,0,0,.82);color:#0f0;font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;padding:8px 10px;border-radius:8px;pointer-events:auto;min-width:230px;box-shadow:0 4px 16px rgba(0,0,0,.4);user-select:none;';
+    h.title = 'PERF HUD — Alt+P で表示切替';
+    const pre = document.createElement('pre');
+    pre.id = 'perf-text';
+    pre.style.cssText = 'margin:0;white-space:pre;font:inherit;color:inherit;user-select:text;';
+    const note = document.createElement('div');
+    note.id = 'perf-note';
+    note.style.cssText = 'color:#FFD60A;min-height:14px;margin:4px 0 2px;';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;';
+    const mkBtn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = 'font:11px ui-monospace,monospace;background:#1f6feb;color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;'; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; };
+    bar.appendChild(mkBtn('テスト図面 中', () => Perf.stress(600)));
+    bar.appendChild(mkBtn('テスト図面 大', () => Perf.stress(2000)));
+    bar.appendChild(mkBtn('↺ リセット', () => { Perf.reset(); const n = h.querySelector('#perf-note'); if (n) { n.textContent = '✓ 計測をリセット'; setTimeout(() => { n.textContent = ''; }, 2500); } }));
+    bar.appendChild(mkBtn('📋 記録', () => Perf.snapshot('manual')));
+    h.appendChild(pre); h.appendChild(note); h.appendChild(bar);
     document.body.appendChild(h);
     Perf._hud = h;
     return h;
@@ -7179,7 +7226,8 @@ const Perf = {
     txt += line('animApply', 'animApply');
     txt += line('cull', 'cullApply');
     txt += line('minimap', 'minimapDraw');
-    Perf._hud.textContent = txt;
+    const pre = Perf._hud.querySelector('#perf-text');
+    if (pre) pre.textContent = txt;
   },
 
   boot: () => {

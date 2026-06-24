@@ -559,7 +559,9 @@ g.node[data-active="1"] {
 g.node[data-fluid-state="1"] .drain-ripple { stroke: #007AFF; }
 g.node[data-fluid-state="2"] .drain-ripple { stroke: #AF52DE; }
 g.node[data-fluid-state="3"] .drain-ripple { stroke: #FF3B30; }
-#svg-layer.perf-lite .drain-ripple { animation: none; opacity: 0; }
+/* 注: ドレンリプルは active なドレンにしか生成されず数も少数（重い常時アニメは
+   flow-dash と nodeBreath 側）。perf-lite でも停止せず効果を維持する。
+   これにより大規模/読み込み図面でもドレン到達エフェクトが正しく表示される。 */
 
 /* ── Feature 7: Kinetic Ripple ── */
 @keyframes rippleExpand {

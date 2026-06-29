@@ -2391,10 +2391,11 @@ const Animator={
 };
 
 /* ━━━━━━━━ STEAM VENT VALVE REVERSE BFS ━━━━━━━━ */
-// ドレンノードから上流方向へ BFS 探索し、蒸気通気バルブの最大開度を返す。
-// 蒸気通気バルブ = VALVE / SAFETY / SOURCE（SOURCE は常に OPEN 扱い）
-// VALVE/SAFETY が PARTIAL/OPEN の場合はさらに上流へ探索継続する。
-// 戻り値: 'danger'（OPEN あり）| 'caution'（PARTIAL あり・OPEN なし）| null（全 CLOSED）
+// ドレンノードから上流方向へ BFS 探索し、各経路で「最初に到達したバルブ」の開度を集約する。
+// 蒸気通気バルブ = VALVE / SAFETY / SOURCE（SOURCE はバルブなし直結 = 常に OPEN 扱い）。
+// バルブに到達したらその枝の探索は止める（最短バルブがゲートキーパー）。
+// 多方向に枝分かれする場合は各枝の最短バルブ状態を集約し、最も危険な状態を採用する。
+// 戻り値: 'danger'（OPEN あり）| 'caution'（PARTIAL あり・OPEN なし）| null（全 CLOSED / バルブなし）
 function getSteamVentValveStatus(drainNode, edgesByNode) {
   const nodeMap = new Map(Store.nodes.map(n => [n.id, n]));
   const visited = new Set([drainNode.id]);
@@ -2410,23 +2411,23 @@ function getSteamVentValveStatus(drainNode, edgesByNode) {
       const neighbor = nodeMap.get(neighborId);
       if (!neighbor) continue;
       if (neighbor.type === NODE_TYPE.SOURCE) {
-        maxState = VALVE_STATE.OPEN; // 蒸気源は常に全開
-        continue; // 端末ノード、上流なし
+        // バルブを介さず蒸気源に直結する経路 = 常に全開。記録して枝を止める
+        maxState = VALVE_STATE.OPEN;
+        continue;
       }
       if (neighbor.type === NODE_TYPE.SAFETY) {
+        // 最短バルブ（安全弁）= この枝のゲートキーパー。記録して枝を止める
         const effState = (neighbor._sim && neighbor._sim.autoOpen) ? VALVE_STATE.OPEN : neighbor.state.valveState;
         if (effState > maxState) maxState = effState;
-        if (effState !== VALVE_STATE.CLOSED) queue.push(neighborId); // 開/微開なら上流も探索
         continue;
       }
       if (neighbor.type === NODE_TYPE.VALVE) {
-        const vs = neighbor.state.valveState;
-        if (vs > maxState) maxState = vs;
-        if (vs !== VALVE_STATE.CLOSED) queue.push(neighborId); // 開/微開なら上流も探索
+        // 最短バルブ（通常弁）= この枝のゲートキーパー。記録して枝を止める
+        if (neighbor.state.valveState > maxState) maxState = neighbor.state.valveState;
         continue;
       }
       if (neighbor.type === NODE_TYPE.TRAP) continue; // 蒸気/液体の境界、探索停止
-      queue.push(neighborId); // SPLIT/MERGE/REDUCER/HEATEX 等は透過して探索継続
+      queue.push(neighborId); // SPLIT/MERGE/REDUCER/HEATEX 等は透過して上流へ探索継続
     }
   }
   if (maxState === VALVE_STATE.OPEN)    return 'danger';

@@ -1931,8 +1931,10 @@ const SimulatorCore={
         let fOut=mxF,rOut=rateIn;
         if(n.type===NODE_TYPE.SOURCE){fOut=FLUID.STEAM;rOut=1;}
         else if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)){
-          if(n.state.valveState===VALVE_STATE.CLOSED){fOut=FLUID.EMPTY;rOut=0;}
-          else if(n.state.valveState===VALVE_STATE.PARTIAL){fOut=n._sim.fIn;rOut=Math.min(rateIn,.1);}
+          const _effState=(n.type===NODE_TYPE.SAFETY&&n.ext.reliefMPa!=null&&presIn>n.ext.reliefMPa)?VALVE_STATE.OPEN:n.state.valveState;
+          n._sim.autoOpen=(n.type===NODE_TYPE.SAFETY&&_effState===VALVE_STATE.OPEN&&n.state.valveState!==VALVE_STATE.OPEN);
+          if(_effState===VALVE_STATE.CLOSED){fOut=FLUID.EMPTY;rOut=0;}
+          else if(_effState===VALVE_STATE.PARTIAL){fOut=n._sim.fIn;rOut=Math.min(rateIn,.1);}
           else{fOut=n._sim.fIn;rOut=rateIn;}
         }
         else if(n.type===NODE_TYPE.TRAP){
@@ -2034,11 +2036,12 @@ const SimulatorCore={
     const n=nodeMap.get(nid);
     if(!n||n.type===NODE_TYPE.SOURCE)return;
     if(n.type===NODE_TYPE.TRAP && val !== FLUID.STEAM)return;
-    if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)&&n.state.valveState===VALVE_STATE.CLOSED)return;
-    
+    const _effBfState=(n.type===NODE_TYPE.SAFETY&&n.ext.reliefMPa!=null&&(n._sim.presIn||0)>n.ext.reliefMPa)?VALVE_STATE.OPEN:n.state.valveState;
+    if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)&&_effBfState===VALVE_STATE.CLOSED)return;
+
     let nextRate = rate;
     let nextPres = pres;
-    if ([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type) && n.state.valveState === VALVE_STATE.PARTIAL) {
+    if ([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type) && _effBfState === VALVE_STATE.PARTIAL) {
       nextRate = Math.min(rate, 0.1);
       const factor = rate > 0 ? (nextRate / rate) : 0;
       nextPres = pres * factor;
@@ -2312,9 +2315,9 @@ const Anomaly={
       if(n.type===NODE_TYPE.HEATEX&&n._sim.fIn===FLUID.STEAM&&n.ext.maxMPa!=null){
         if((n._sim.presIn||0)>n.ext.maxMPa)Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 熱交換器（高圧蒸気流入）'});
       }
-      // 安全弁の設定リリーフ圧 超過検出（手動弁のまま・挙動は変えず判定のみ）
+      // 安全弁: リリーフ圧超過時は自動動作（開放）し危険表示
       if(n.type===NODE_TYPE.SAFETY&&n.ext.reliefMPa!=null&&(n._sim.presIn||0)>n.ext.reliefMPa){
-        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 安全弁（設定リリーフ圧 超過）'});
+        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 安全弁（リリーフ圧超過・自動動作）'});
       }
       // ドレン管（ピット）に蒸気が流入したら圧力に関係なく警告
       if(n.type===NODE_TYPE.DRAIN&&n._sim.fIn===FLUID.STEAM){
@@ -2370,7 +2373,7 @@ const SealedDetector={
     // 安全弁(開放/微開)も大気開放として排出口リストに含める
     const drainNodes=Store.nodes.filter(n=>
       n.type===NODE_TYPE.DRAIN || 
-      (n.type===NODE_TYPE.SAFETY && n.state.valveState!==VALVE_STATE.CLOSED)
+      (n.type===NODE_TYPE.SAFETY && (n.state.valveState!==VALVE_STATE.CLOSED||n._sim.autoOpen))
     );
     const steamDrainableSet=new Set();
 
@@ -2400,7 +2403,7 @@ const SealedDetector={
 
           // ノードが壁なら、これ以上先へは探索しない
           if(nextNode.type===NODE_TYPE.TRAP)return;
-          if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(nextNode.type)&&nextNode.state.valveState===VALVE_STATE.CLOSED)return;
+          if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(nextNode.type)&&nextNode.state.valveState===VALVE_STATE.CLOSED&&!nextNode._sim.autoOpen)return;
 
           if(!visitedNodes.has(nextNodeId)){
             visitedNodes.add(nextNodeId);
@@ -2459,7 +2462,7 @@ const SealedDetector={
           liquidDrainableSet.add(e.id);
 
           if(nextNode.type===NODE_TYPE.TRAP)return;
-          if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(nextNode.type)&&nextNode.state.valveState===VALVE_STATE.CLOSED)return;
+          if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(nextNode.type)&&nextNode.state.valveState===VALVE_STATE.CLOSED&&!nextNode._sim.autoOpen)return;
 
           if(!visitedNodes.has(nextNodeId)){
             visitedNodes.add(nextNodeId);
@@ -2536,7 +2539,7 @@ const SealedDetector={
           const nd=nodeMap.get(nid);
           if(!nd)return;
           if(nd.type===NODE_TYPE.TRAP)return;
-          if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(nd.type)&&nd.state.valveState===VALVE_STATE.CLOSED)return;
+          if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(nd.type)&&nd.state.valveState===VALVE_STATE.CLOSED&&!nd._sim.autoOpen)return;
           if(nd.type===NODE_TYPE.REDUCER)return; // 減圧弁は圧力境界: 一次側と二次側を別成分に分離
           q.push(nid);
         });
@@ -2553,7 +2556,7 @@ const SealedDetector={
             const on=nodeMap.get(other);
             if(!on)return;
             if(on.type===NODE_TYPE.TRAP)return;
-            if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(on.type)&&on.state.valveState===VALVE_STATE.CLOSED)return;
+            if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(on.type)&&on.state.valveState===VALVE_STATE.CLOSED&&!on._sim.autoOpen)return;
             if(on.type===NODE_TYPE.REDUCER)return; // 減圧弁は圧力境界: 一次側と二次側を別成分に分離
             q.push(other);
           });
@@ -2579,7 +2582,7 @@ const SealedDetector={
             const nd=nodeMap.get(nid);
             if(!nd)return;
             if(nd.type===NODE_TYPE.TRAP)return;
-            if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(nd.type)&&nd.state.valveState===VALVE_STATE.CLOSED)return;
+            if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(nd.type)&&nd.state.valveState===VALVE_STATE.CLOSED&&!nd._sim.autoOpen)return;
             lq.push({nodeId:nid,srcFluid:e.ext.residualType,srcPres:e.ext.residualPres||0,srcSrcPres:e.ext.residualSrcPres||0});
           });
         });
@@ -2606,7 +2609,7 @@ const SealedDetector={
             e._anim.sealed=false;
             // 次のノードが壁でなければ探索継続
             if(en.type===NODE_TYPE.TRAP)return;
-            if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(en.type)&&en.state.valveState===VALVE_STATE.CLOSED)return;
+            if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(en.type)&&en.state.valveState===VALVE_STATE.CLOSED&&!en._sim.autoOpen)return;
             lq.push({nodeId:isOut?e.to:e.from,srcFluid,srcPres,srcSrcPres});
           });
         }
@@ -3418,7 +3421,7 @@ const Renderer={
       // Epic 6-1: 流体状態・バルブ状態を data-* 属性で投射→CSSで色制御
       setAttr(g,'data-fluid-state', n._sim.fOut);
       if(n.type===NODE_TYPE.PGAUGE) setAttr(g,'data-gauge-state', n._sim.gauge||'empty');
-      if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)) setAttr(g,'data-valve-state', n.state.valveState);
+      if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)) setAttr(g,'data-valve-state', (n.type===NODE_TYPE.SAFETY&&n._sim.autoOpen)?VALVE_STATE.OPEN:n.state.valveState);
       else if(g.hasAttribute('data-valve-state')) g.removeAttribute('data-valve-state');
       // Feature 6: Breathing — active node detection
       setAttr(g,'data-active',(n._sim.fOut>0||n._sim.rateOut>0)?'1':'0');

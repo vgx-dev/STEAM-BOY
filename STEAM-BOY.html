@@ -2391,12 +2391,37 @@ const Animator={
 };
 
 /* ━━━━━━━━ STEAM VENT VALVE REVERSE BFS ━━━━━━━━ */
-// ドレンノードから上流方向へ BFS 探索し、各経路で「最初に到達したバルブ」の開度を集約する。
+// 蒸気源(SOURCE)からトラップを越えずに到達できるノード集合（＝蒸気側）を返す。
+// この集合に含まれるバルブは蒸気が直接届く「蒸気側バルブ」。含まれない（トラップ二次側）
+// バルブは凝縮水のみ通過するため、開度に関わらず安全（判定対象外）。
+// トラップは通過する蒸気を凝縮水(DRAIN)に変換するため、トラップより先へは蒸気側を伝播しない。
+function computeSteamSideSet(edgesByNode) {
+  const nodeMap = new Map(Store.nodes.map(n => [n.id, n]));
+  const steamSide = new Set();
+  const queue = [];
+  Store.nodes.forEach(n => { if (n.type === NODE_TYPE.SOURCE) { steamSide.add(n.id); queue.push(n.id); } });
+  while (queue.length > 0) {
+    const nodeId = queue.shift();
+    for (const e of (edgesByNode.get(nodeId) || [])) {
+      const nbId = (e.from === nodeId) ? e.to : e.from;
+      if (steamSide.has(nbId)) continue;
+      const nb = nodeMap.get(nbId);
+      if (!nb) continue;
+      steamSide.add(nbId);
+      if (nb.type === NODE_TYPE.TRAP) continue; // トラップで蒸気は凝縮水化。先へは伝播しない
+      queue.push(nbId);
+    }
+  }
+  return steamSide;
+}
+
+// ドレンノードから上流方向へ BFS 探索し、各経路で「最初に到達した蒸気側バルブ」の開度を集約する。
 // 蒸気通気バルブ = VALVE / SAFETY / SOURCE（SOURCE はバルブなし直結 = 常に OPEN 扱い）。
-// バルブに到達したらその枝の探索は止める（最短バルブがゲートキーパー）。
+// 蒸気側バルブに到達したらその枝の探索を止める（最短バルブがゲートキーパー）。
+// 凝縮水側バルブ（トラップ二次側 = steamSide 非該当）は開度を無視し透過して上流へ続行する。
 // 多方向に枝分かれする場合は各枝の最短バルブ状態を集約し、最も危険な状態を採用する。
 // 戻り値: 'danger'（OPEN あり）| 'caution'（PARTIAL あり・OPEN なし）| null（全 CLOSED / バルブなし）
-function getSteamVentValveStatus(drainNode, edgesByNode) {
+function getSteamVentValveStatus(drainNode, edgesByNode, steamSide) {
   const nodeMap = new Map(Store.nodes.map(n => [n.id, n]));
   const visited = new Set([drainNode.id]);
   const queue = [drainNode.id];
@@ -2415,15 +2440,16 @@ function getSteamVentValveStatus(drainNode, edgesByNode) {
         maxState = VALVE_STATE.OPEN;
         continue;
       }
-      if (neighbor.type === NODE_TYPE.SAFETY) {
-        // 最短バルブ（安全弁）= この枝のゲートキーパー。記録して枝を止める
-        const effState = (neighbor._sim && neighbor._sim.autoOpen) ? VALVE_STATE.OPEN : neighbor.state.valveState;
+      if (neighbor.type === NODE_TYPE.SAFETY || neighbor.type === NODE_TYPE.VALVE) {
+        if (!steamSide.has(neighbor.id)) {
+          // 凝縮水側バルブ（トラップ二次側）= 開度問わず無害。透過して上流へ続行
+          queue.push(neighborId);
+          continue;
+        }
+        // 蒸気側バルブ = この枝のゲートキーパー。状態を問わず枝を止める
+        const effState = (neighbor.type === NODE_TYPE.SAFETY && neighbor._sim && neighbor._sim.autoOpen)
+          ? VALVE_STATE.OPEN : neighbor.state.valveState;
         if (effState > maxState) maxState = effState;
-        continue;
-      }
-      if (neighbor.type === NODE_TYPE.VALVE) {
-        // 最短バルブ（通常弁）= この枝のゲートキーパー。記録して枝を止める
-        if (neighbor.state.valveState > maxState) maxState = neighbor.state.valveState;
         continue;
       }
       if (neighbor.type === NODE_TYPE.TRAP) continue; // 蒸気/液体の境界、探索停止
@@ -2449,6 +2475,8 @@ const Anomaly={
       let a=_edgesByNode.get(e.from);if(!a)_edgesByNode.set(e.from,a=[]);a.push(e);
       if(e.to!==e.from){let b=_edgesByNode.get(e.to);if(!b)_edgesByNode.set(e.to,b=[]);b.push(e);}
     });
+    // 蒸気側ノード集合（SOURCEからトラップを越えずに到達できる範囲）を1度だけ計算
+    const _steamSide=computeSteamSideSet(_edgesByNode);
     Store.nodes.forEach(n=>{const inN=_inCnt.get(n.id)||0,outN=_outCnt.get(n.id)||0;
       if(inN+outN===0&&n.type!==NODE_TYPE.SOURCE)Store.anomalies.push({type:'isolated',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 孤立（配管未接続）`});
       if(![NODE_TYPE.DRAIN,NODE_TYPE.SOURCE,NODE_TYPE.VALVE,NODE_TYPE.SAFETY,NODE_TYPE.PGAUGE].includes(n.type))if(n._sim.fIn>0&&outN===0)Store.anomalies.push({type:'deadend',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 流体の行き止まり`});
@@ -2467,7 +2495,7 @@ const Anomaly={
       }
       // ドレン管: 逆方向 BFS で蒸気通気バルブの開度をチェック（圧力不問）
       if(n.type===NODE_TYPE.DRAIN){
-        const _vs=getSteamVentValveStatus(n,_edgesByNode);
+        const _vs=getSteamVentValveStatus(n,_edgesByNode,_steamSide);
         if(_vs==='danger')Store.anomalies.push({type:'danger-vent',nodeId:n.id,msg:'DANGER: 蒸気通気バルブ全開（蒸気流入リスク）'});
         else if(_vs==='caution')Store.anomalies.push({type:'caution',nodeId:n.id,msg:'CAUTION: 蒸気通気バルブ微開（蒸気流入注意）'});
       }

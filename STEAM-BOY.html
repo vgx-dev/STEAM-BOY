@@ -2537,6 +2537,7 @@ const SealedDetector={
           if(!nd)return;
           if(nd.type===NODE_TYPE.TRAP)return;
           if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(nd.type)&&nd.state.valveState===VALVE_STATE.CLOSED)return;
+          if(nd.type===NODE_TYPE.REDUCER)return; // 減圧弁は圧力境界: 一次側と二次側を別成分に分離
           q.push(nid);
         });
         while(q.length){
@@ -2553,6 +2554,7 @@ const SealedDetector={
             if(!on)return;
             if(on.type===NODE_TYPE.TRAP)return;
             if([NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(on.type)&&on.state.valveState===VALVE_STATE.CLOSED)return;
+            if(on.type===NODE_TYPE.REDUCER)return; // 減圧弁は圧力境界: 一次側と二次側を別成分に分離
             q.push(other);
           });
         }

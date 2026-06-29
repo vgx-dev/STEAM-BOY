@@ -2403,7 +2403,8 @@ function computeSteamSideSet(edgesByNode) {
   while (queue.length > 0) {
     const nodeId = queue.shift();
     for (const e of (edgesByNode.get(nodeId) || [])) {
-      const nbId = (e.from === nodeId) ? e.to : e.from;
+      if (e.from !== nodeId) continue; // 順方向エッジのみ追跡。逆向きに辿るとバイパス→マージ経由でトラップ二次側が誤って蒸気側に混入する
+      const nbId = e.to;
       if (steamSide.has(nbId)) continue;
       const nb = nodeMap.get(nbId);
       if (!nb) continue;
@@ -2441,8 +2442,8 @@ function getSteamVentValveStatus(drainNode, edgesByNode, steamSide) {
         continue;
       }
       if (neighbor.type === NODE_TYPE.SAFETY || neighbor.type === NODE_TYPE.VALVE) {
-        if (!steamSide.has(neighbor.id)) {
-          // 凝縮水側バルブ（トラップ二次側）= 開度問わず無害。透過して上流へ続行
+        if (!steamSide.has(neighbor.id) || (neighbor._sim && neighbor._sim.fIn === FLUID.DRAIN)) {
+          // 凝縮水側バルブ（トラップ二次側、またはドレン流体が流入中）= 開度問わず無害。透過して上流へ続行
           queue.push(neighborId);
           continue;
         }

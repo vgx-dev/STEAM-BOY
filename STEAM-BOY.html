@@ -554,21 +554,64 @@ g.node[data-active="1"] {
 
 /* ── Drain Active Ripple ── */
 @keyframes drainRipple {
-  0%   { transform: scale(0.65); opacity: 0.55; }
-  100% { transform: scale(2.2);  opacity: 0;    }
+  0%   { transform: scale(0.5);  opacity: 0.7; }
+  100% { transform: scale(3.0);  opacity: 0;   }
+}
+@keyframes drainRippleSteam {
+  0%   { transform: scale(0.35); opacity: 0.9;  }
+  50%  { transform: scale(2.0);  opacity: 0.35; }
+  100% { transform: scale(4.5);  opacity: 0;    }
+}
+@keyframes drainSteamCore {
+  0%, 100% { transform: scale(0.9); opacity: 0.45; }
+  50%       { transform: scale(1.7); opacity: 0.08; }
+}
+@keyframes drainSteamGlow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255,59,48,0.5)); }
+  50%       { filter: drop-shadow(0 0 12px rgba(255,59,48,0.9)) drop-shadow(0 0 24px rgba(255,59,48,0.4)); }
+}
+@keyframes drainDangerBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
 }
 .drain-ripple {
   fill: none;
-  stroke-width: 1.5;
+  stroke-width: 2;
   pointer-events: none;
-  animation: drainRipple 1.6s ease-out infinite;
+  animation: drainRipple 1.3s ease-out infinite;
   transform-box: fill-box;
   transform-origin: center;
 }
-.drain-ripple-2 { animation-delay: -0.8s; }
+.drain-ripple-2 { animation-delay: -0.43s; }
+.drain-ripple-3 { animation-delay: -0.87s; }
+.drain-steam-core {
+  pointer-events: none;
+  filter: blur(4px);
+  animation: drainSteamCore 0.85s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.drain-danger-label {
+  font-size: 9px;
+  font-weight: 800;
+  fill: #FF3B30;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  letter-spacing: 0.5px;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  animation: drainDangerBlink 0.7s ease-in-out infinite;
+  filter: drop-shadow(0 0 2px rgba(255,59,48,0.8));
+}
 g.node[data-fluid-state="1"] .drain-ripple { stroke: #007AFF; }
 g.node[data-fluid-state="2"] .drain-ripple { stroke: #AF52DE; }
-g.node[data-fluid-state="3"] .drain-ripple { stroke: #FF3B30; }
+g.node[data-fluid-state="3"] .drain-ripple { stroke: #FF3B30; animation-name: drainRippleSteam; animation-duration: 1.0s; stroke-width: 2.5; }
+g.node[data-fluid-state="3"] .drain-ripple-2 { animation-delay: -0.33s; }
+g.node[data-fluid-state="3"] .drain-ripple-3 { animation-delay: -0.67s; }
+g.node.drain-steam-active { animation: drainSteamGlow 0.85s ease-in-out infinite; }
 /* 注: ドレンリプルは active なドレンにしか生成されず数も少数（重い常時アニメは
    flow-dash と nodeBreath 側）。perf-lite でも停止せず効果を維持する。
    これにより大規模/読み込み図面でもドレン到達エフェクトが正しく表示される。 */
@@ -3497,13 +3540,23 @@ const Renderer={
       // Drain アクティブリプル（流体到達時に同心円を展開）
       if(n.type===NODE_TYPE.DRAIN){
         const drActive=n._sim.fOut>0;
-        let dr1=g.querySelector('.drain-ripple-1'),dr2=g.querySelector('.drain-ripple-2');
+        const drSteam=drActive&&n._sim.fOut===FLUID.STEAM;
+        let dr1=g.querySelector('.drain-ripple-1'),dr2=g.querySelector('.drain-ripple-2'),dr3=g.querySelector('.drain-ripple-3'),drc=g.querySelector('.drain-steam-core'),ddl=g.querySelector('.drain-danger-label');
         if(drActive){
           if(!dr1){dr1=createNS('circle',{r:'13',cx:'0',cy:'1'});dr1.classList.add('drain-ripple','drain-ripple-1');g.appendChild(dr1);}
           if(!dr2){dr2=createNS('circle',{r:'13',cx:'0',cy:'1'});dr2.classList.add('drain-ripple','drain-ripple-2');g.appendChild(dr2);}
+          if(!dr3){dr3=createNS('circle',{r:'13',cx:'0',cy:'1'});dr3.classList.add('drain-ripple','drain-ripple-3');g.appendChild(dr3);}
+          if(drSteam){
+            if(!drc){drc=createNS('circle',{r:'8',cx:'0',cy:'1'});drc.classList.add('drain-steam-core');drc.setAttribute('fill','#FF3B30');g.appendChild(drc);}
+            if(!ddl){ddl=createNS('text');ddl.classList.add('drain-danger-label');ddl.setAttribute('x','0');ddl.setAttribute('y','22');ddl.textContent='⚠ DANGER!';g.appendChild(ddl);}
+          }else{
+            if(drc)drc.remove();if(ddl)ddl.remove();
+          }
         }else{
-          if(dr1)dr1.remove();if(dr2)dr2.remove();
+          if(dr1)dr1.remove();if(dr2)dr2.remove();if(dr3)dr3.remove();
+          if(drc)drc.remove();if(ddl)ddl.remove();
         }
+        g.classList.toggle('drain-steam-active',drSteam);
       }
 
       let ll=g.querySelector('.leader-line'),lbl=g.querySelector('.node-label');

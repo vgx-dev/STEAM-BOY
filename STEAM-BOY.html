@@ -70,6 +70,7 @@
 [data-theme="dark"] #zoom-controls button:hover{background:var(--p-hover);}
 [data-theme="dark"] .panel-minimize-btn:hover{background:var(--p-hover);}
 [data-theme="dark"] .anomaly-item{background:rgba(255,149,0,0.14);}
+[data-theme="dark"] .anomaly-item.anomaly-danger{background:rgba(255,59,48,0.14);}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:var(--font);height:100vh;overflow:hidden;background:#E5E5EA;color:var(--text-1);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
 input, textarea{user-select:auto;-webkit-user-select:auto;}
@@ -195,6 +196,7 @@ input, textarea{user-select:auto;-webkit-user-select:auto;}
 .sp-hints p{font-size:10px;color:var(--text-3);margin-bottom:2px;line-height:1.5;}
 .anomaly-badge{background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;}
 .anomaly-list .anomaly-item{margin-bottom:3px;padding:4px 8px;background:rgba(255,149,0,0.08);border-left:3px solid var(--orange);border-radius:0 6px 6px 0;font-size:11px;color:var(--text-1);}
+.anomaly-list .anomaly-item.anomaly-danger{background:rgba(255,59,48,0.08);border-left-color:var(--red);color:var(--red);}
 
 /* ── Valve Matrix ── */
 #floating-matrix {
@@ -612,6 +614,52 @@ g.node[data-fluid-state="3"] .drain-ripple { stroke: #FF3B30; animation-name: dr
 g.node[data-fluid-state="3"] .drain-ripple-2 { animation-delay: -0.33s; }
 g.node[data-fluid-state="3"] .drain-ripple-3 { animation-delay: -0.67s; }
 g.node.drain-steam-active { animation: drainSteamGlow 0.85s ease-in-out infinite; }
+g.node.drain-steam-active .drain-ripple { stroke: #FF3B30; animation-name: drainRippleSteam; animation-duration: 1.0s; stroke-width: 2.5; }
+g.node.drain-steam-active .drain-ripple-2 { animation-delay: -0.33s; }
+g.node.drain-steam-active .drain-ripple-3 { animation-delay: -0.67s; }
+/* ── Drain CAUTION Ripple（蒸気通気バルブ微開警告） ── */
+@keyframes drainRippleCaution {
+  0%   { transform: scale(0.4);  opacity: 0.85; }
+  100% { transform: scale(3.5);  opacity: 0;    }
+}
+@keyframes drainCautionCore {
+  0%, 100% { transform: scale(0.85); opacity: 0.35; }
+  50%       { transform: scale(1.5);  opacity: 0.08; }
+}
+@keyframes drainCautionBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+@keyframes drainCautionGlow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(255,149,0,0.4)); }
+  50%       { filter: drop-shadow(0 0 8px rgba(255,149,0,0.85)) drop-shadow(0 0 16px rgba(255,149,0,0.35)); }
+}
+.drain-caution-core {
+  pointer-events: none;
+  filter: blur(3px);
+  animation: drainCautionCore 1.05s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.drain-caution-label {
+  font-size: 9px;
+  font-weight: 800;
+  fill: #FF9500;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  letter-spacing: 0.5px;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  animation: drainCautionBlink 1.05s ease-in-out infinite;
+  filter: drop-shadow(0 0 2px rgba(255,149,0,0.7));
+}
+g.node.drain-caution-active { animation: drainCautionGlow 1.05s ease-in-out infinite; }
+g.node.drain-caution-active .drain-ripple { stroke: #FF9500; animation-name: drainRippleCaution; animation-duration: 1.05s; }
+g.node.drain-caution-active .drain-ripple-2 { animation-delay: -0.35s; }
+g.node.drain-caution-active .drain-ripple-3 { animation-delay: -0.70s; }
 /* 注: ドレンリプルは active なドレンにしか生成されず数も少数（重い常時アニメは
    flow-dash と nodeBreath 側）。perf-lite でも停止せず効果を維持する。
    これにより大規模/読み込み図面でもドレン到達エフェクトが正しく表示される。 */
@@ -2342,6 +2390,40 @@ const Animator={
   }
 };
 
+/* ━━━━━━━━ STEAM VENT VALVE REVERSE BFS ━━━━━━━━ */
+// ドレンノードから上流方向へ BFS 探索し、蒸気通気バルブ（SAFETY ノード）の最大開度を返す。
+// 戻り値: 'danger'（全開あり）| 'caution'（微開あり・全開なし）| null（全閉）
+function getSteamVentValveStatus(drainNode, edgesByNode) {
+  const nodeMap = new Map(Store.nodes.map(n => [n.id, n]));
+  const visited = new Set([drainNode.id]);
+  const queue = [drainNode.id];
+  let maxState = VALVE_STATE.CLOSED;
+  while (queue.length > 0) {
+    const nodeId = queue.shift();
+    const edges = edgesByNode.get(nodeId) || [];
+    for (const e of edges) {
+      const neighborId = (e.from === nodeId) ? e.to : e.from;
+      if (visited.has(neighborId)) continue;
+      const neighbor = nodeMap.get(neighborId);
+      if (!neighbor) { visited.add(neighborId); continue; }
+      if (neighbor.type === NODE_TYPE.SAFETY) {
+        // 安全弁（蒸気通気バルブ）: 実効開度を記録して貫通探索しない
+        const effState = (neighbor._sim && neighbor._sim.autoOpen) ? VALVE_STATE.OPEN : neighbor.state.valveState;
+        if (effState > maxState) maxState = effState;
+        visited.add(neighborId);
+        continue;
+      }
+      if (neighbor.type === NODE_TYPE.TRAP) { visited.add(neighborId); continue; }
+      if (neighbor.type === NODE_TYPE.VALVE && neighbor.state.valveState === VALVE_STATE.CLOSED) { visited.add(neighborId); continue; }
+      visited.add(neighborId);
+      queue.push(neighborId);
+    }
+  }
+  if (maxState === VALVE_STATE.OPEN)    return 'danger';
+  if (maxState === VALVE_STATE.PARTIAL) return 'caution';
+  return null;
+}
+
 /* ━━━━━━━━ ANOMALY ━━━━━━━━ */
 const Anomaly={
   TYPE_NAMES:{source:'Source',valve:'Valve',trap:'Trap',drain:'Drain',split:'Split',merge:'Merge',reducer:'Reducer',heatex:'Heat Exchanger',safety:'Safety Valve',pgauge:'Pressure Gauge'},
@@ -2350,6 +2432,12 @@ const Anomaly={
     // 最適化3: ノードごとの O(E) filter ×2 をやめ、流入/流出本数を1パスで集計
     const _inCnt=new Map(),_outCnt=new Map();
     Store.edges.forEach(e=>{_inCnt.set(e.to,(_inCnt.get(e.to)||0)+1);_outCnt.set(e.from,(_outCnt.get(e.from)||0)+1);});
+    // 蒸気通気バルブ逆方向探索用の隣接リスト（DRAIN ノードが複数ある場合でも1度だけ構築）
+    const _edgesByNode=new Map();
+    Store.edges.forEach(e=>{
+      let a=_edgesByNode.get(e.from);if(!a)_edgesByNode.set(e.from,a=[]);a.push(e);
+      if(e.to!==e.from){let b=_edgesByNode.get(e.to);if(!b)_edgesByNode.set(e.to,b=[]);b.push(e);}
+    });
     Store.nodes.forEach(n=>{const inN=_inCnt.get(n.id)||0,outN=_outCnt.get(n.id)||0;
       if(inN+outN===0&&n.type!==NODE_TYPE.SOURCE)Store.anomalies.push({type:'isolated',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 孤立（配管未接続）`});
       if(![NODE_TYPE.DRAIN,NODE_TYPE.SOURCE,NODE_TYPE.VALVE,NODE_TYPE.SAFETY,NODE_TYPE.PGAUGE].includes(n.type))if(n._sim.fIn>0&&outN===0)Store.anomalies.push({type:'deadend',nodeId:n.id,msg:`${Anomaly.TYPE_NAMES[n.type]||n.type}: 流体の行き止まり`});
@@ -2366,6 +2454,12 @@ const Anomaly={
       if(n.type===NODE_TYPE.DRAIN&&n._sim.fIn===FLUID.STEAM){
         Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: ドレン管（蒸気流入）'});
       }
+      // ドレン管: 逆方向 BFS で蒸気通気バルブの開度をチェック（圧力不問）
+      if(n.type===NODE_TYPE.DRAIN){
+        const _vs=getSteamVentValveStatus(n,_edgesByNode);
+        if(_vs==='danger')Store.anomalies.push({type:'danger-vent',nodeId:n.id,msg:'DANGER: 蒸気通気バルブ全開（蒸気流入リスク）'});
+        else if(_vs==='caution')Store.anomalies.push({type:'caution',nodeId:n.id,msg:'CAUTION: 蒸気通気バルブ微開（蒸気流入注意）'});
+      }
     });
   },
   _lastHtml:null,
@@ -2373,12 +2467,15 @@ const Anomaly={
     // 最適化3: DOM参照はメモ化キャッシュ ($id) 経由。
     const list=$id('anomaly-list'),badge=$id('anomaly-badge');
     const vignette=$id('vignette-overlay');
-    if(vignette) vignette.classList.toggle('active', Store.anomalies.some(a=>a.type==='danger'));
+    if(vignette) vignette.classList.toggle('active', Store.anomalies.some(a=>a.type==='danger'||a.type==='danger-vent'));
 
     // 最適化1: 内容が前回と同じなら innerHTML を書き換えない（Dirty Checking）
     let html,badgeText;
     if(!Store.anomalies.length){html='<span style="color:var(--green);font-weight:500;">✓ 異常なし</span>';badgeText=null;}
-    else{html=Store.anomalies.map(a=>`<div class="anomaly-item">⚠ ${a.msg}</div>`).join('');badgeText=String(Store.anomalies.length);}
+    else{html=Store.anomalies.map(a=>{
+      const cls=(a.type==='danger'||a.type==='danger-vent')?'anomaly-item anomaly-danger':'anomaly-item';
+      return`<div class="${cls}">⚠ ${a.msg}</div>`;
+    }).join('');badgeText=String(Store.anomalies.length);}
     if(html!==Anomaly._lastHtml){Anomaly._lastHtml=html;list.innerHTML=html;}
     if(badgeText==null){if(badge.style.display!=='none')badge.style.display='none';}
     else{if(badge.textContent!==badgeText)badge.textContent=badgeText;if(badge.style.display!=='inline')badge.style.display='inline';}
@@ -3541,22 +3638,37 @@ const Renderer={
       if(n.type===NODE_TYPE.DRAIN){
         const drActive=n._sim.fOut>0;
         const drSteam=drActive&&n._sim.fOut===FLUID.STEAM;
-        let dr1=g.querySelector('.drain-ripple-1'),dr2=g.querySelector('.drain-ripple-2'),dr3=g.querySelector('.drain-ripple-3'),drc=g.querySelector('.drain-steam-core'),ddl=g.querySelector('.drain-danger-label');
-        if(drActive){
+        // 蒸気通気バルブ全開: 実流入なしでも DANGER 表示（圧力不問）
+        const drDangerValve=!drSteam&&Store.anomalies.some(a=>a.type==='danger-vent'&&a.nodeId===n.id);
+        // 蒸気通気バルブ微開: 全開なし・実流入なしで CAUTION 表示
+        const drCaution=!drSteam&&!drDangerValve&&Store.anomalies.some(a=>a.type==='caution'&&a.nodeId===n.id);
+        const drShowRipples=drActive||drDangerValve||drCaution;
+        let dr1=g.querySelector('.drain-ripple-1'),dr2=g.querySelector('.drain-ripple-2'),dr3=g.querySelector('.drain-ripple-3');
+        let drc=g.querySelector('.drain-steam-core'),ddl=g.querySelector('.drain-danger-label');
+        let dcc=g.querySelector('.drain-caution-core'),dcl=g.querySelector('.drain-caution-label');
+        if(drShowRipples){
           if(!dr1){dr1=createNS('circle',{r:'13',cx:'0',cy:'1'});dr1.classList.add('drain-ripple','drain-ripple-1');g.appendChild(dr1);}
           if(!dr2){dr2=createNS('circle',{r:'13',cx:'0',cy:'1'});dr2.classList.add('drain-ripple','drain-ripple-2');g.appendChild(dr2);}
           if(!dr3){dr3=createNS('circle',{r:'13',cx:'0',cy:'1'});dr3.classList.add('drain-ripple','drain-ripple-3');g.appendChild(dr3);}
-          if(drSteam){
+          if(drSteam||drDangerValve){
             if(!drc){drc=createNS('circle',{r:'8',cx:'0',cy:'1'});drc.classList.add('drain-steam-core');drc.setAttribute('fill','#FF3B30');g.appendChild(drc);}
             if(!ddl){ddl=createNS('text');ddl.classList.add('drain-danger-label');ddl.setAttribute('x','0');ddl.setAttribute('y','22');ddl.textContent='⚠ DANGER!';g.appendChild(ddl);}
+            if(dcc)dcc.remove();if(dcl)dcl.remove();
+          }else if(drCaution){
+            if(!dcc){dcc=createNS('circle',{r:'7',cx:'0',cy:'1'});dcc.classList.add('drain-caution-core');dcc.setAttribute('fill','#FF9500');g.appendChild(dcc);}
+            if(!dcl){dcl=createNS('text');dcl.classList.add('drain-caution-label');dcl.setAttribute('x','0');dcl.setAttribute('y','22');dcl.textContent='⚠ CAUTION';g.appendChild(dcl);}
+            if(drc)drc.remove();if(ddl)ddl.remove();
           }else{
             if(drc)drc.remove();if(ddl)ddl.remove();
+            if(dcc)dcc.remove();if(dcl)dcl.remove();
           }
         }else{
           if(dr1)dr1.remove();if(dr2)dr2.remove();if(dr3)dr3.remove();
           if(drc)drc.remove();if(ddl)ddl.remove();
+          if(dcc)dcc.remove();if(dcl)dcl.remove();
         }
-        g.classList.toggle('drain-steam-active',drSteam);
+        g.classList.toggle('drain-steam-active',drSteam||drDangerValve);
+        g.classList.toggle('drain-caution-active',drCaution);
       }
 
       let ll=g.querySelector('.leader-line'),lbl=g.querySelector('.node-label');
@@ -3704,7 +3816,7 @@ const ValveSelector={
   _el:null,_node:null,_ghosts:[],_outsideHandler:null,_warnEl:null,_dangers:null,
   // Phase 2: What-if — ある弁状態に変更した場合に発生する DANGER を副作用なしで算出
   _computeDangersFor:(node,targetState)=>{
-    if(targetState===node.state.valveState)return Store.anomalies.filter(a=>a.type==='danger').map(a=>a.msg);
+    if(targetState===node.state.valveState)return Store.anomalies.filter(a=>a.type==='danger'||a.type==='danger-vent').map(a=>a.msg);
     // Phase 3: 大規模グラフでは同期再計算（候補×1回）がセレクタ表示を遅らせるためスキップ
     if(Store.nodes.length+Store.edges.length>SimWorker.THRESHOLD)return[];
     const saved=node.state.valveState;
@@ -3714,7 +3826,7 @@ const ValveSelector={
     node.state.valveState=targetState;
     Simulator._baseRun();
     Anomaly.detect();
-    const ds=Store.anomalies.filter(a=>a.type==='danger').map(a=>a.msg);
+    const ds=Store.anomalies.filter(a=>a.type==='danger'||a.type==='danger-vent').map(a=>a.msg);
     node.state.valveState=saved;
     Store.nodes.forEach(n=>{const s=sn.get(n.id);if(s)Object.assign(n._sim,s);});
     Store.edges.forEach(e=>{const s=se.get(e.id);if(s)Object.assign(e._sim,s);});

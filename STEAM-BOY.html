@@ -2092,6 +2092,7 @@ const SimulatorCore={
           if(_fn){
             if(_fn.type===NODE_TYPE.SOURCE) return;
             if(_fn.type===NODE_TYPE.TRAP && mxF !== FLUID.STEAM) return;
+            if(SimulatorCore._effGateState(_fn)===VALVE_STATE.CLOSED) return; // 閉止バルブ/安全弁へは逆流を発生させない
           }
 
           // 【追加】逆流スタート時（最初のエッジ）の重力チェック
@@ -2123,12 +2124,17 @@ const SimulatorCore={
     return{nodes,edges};
   },
   
+  // VALVE/SAFETY の実効状態を返す（非ゲートなら null）。SAFETYは設定圧超過時に自動開扱い。
+  _effGateState:(n)=>{
+    if(![NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(n.type))return null;
+    return (n.type===NODE_TYPE.SAFETY&&n.ext.reliefMPa!=null&&(n._sim.presIn||0)>n.ext.reliefMPa)?VALVE_STATE.OPEN:n.state.valveState;
+  },
   _backflow:(nid,val,rate,nodeMap,inEdgesMap,pres,srcPres)=>{
     const n=nodeMap.get(nid);
     if(!n||n.type===NODE_TYPE.SOURCE)return;
     if(n.type===NODE_TYPE.TRAP && val !== FLUID.STEAM)return;
-    const _effBfState=(n.type===NODE_TYPE.SAFETY&&n.ext.reliefMPa!=null&&(n._sim.presIn||0)>n.ext.reliefMPa)?VALVE_STATE.OPEN:n.state.valveState;
-    if([NODE_TYPE.VALVE, NODE_TYPE.SAFETY].includes(n.type)&&_effBfState===VALVE_STATE.CLOSED)return;
+    const _effBfState=SimulatorCore._effGateState(n);
+    if(_effBfState===VALVE_STATE.CLOSED)return;
 
     let nextRate = rate;
     let nextPres = pres;
@@ -2145,6 +2151,7 @@ const SimulatorCore={
       if(_fn){
         if(_fn.type===NODE_TYPE.SOURCE) return;
         if(_fn.type===NODE_TYPE.TRAP && val !== FLUID.STEAM) return;
+        if(SimulatorCore._effGateState(_fn)===VALVE_STATE.CLOSED) return; // 閉止バルブ/安全弁へは逆流を発生させない
       }
 
       // 波及時の重力（勾配）チェック
@@ -2223,7 +2230,7 @@ const SimWorker={
     `const FLUID=${JSON.stringify(FLUID)};`+
     `const NODE_TYPE=${JSON.stringify(NODE_TYPE)};`+
     `const VALVE_STATE=${JSON.stringify(VALVE_STATE)};`+
-    `const SimulatorCore={compute:${SimulatorCore.compute.toString()},_backflow:${SimulatorCore._backflow.toString()}};`+
+    `const SimulatorCore={compute:${SimulatorCore.compute.toString()},_backflow:${SimulatorCore._backflow.toString()},_effGateState:${SimulatorCore._effGateState.toString()}};`+
     `onmessage=(e)=>{const{seq,nodes,edges}=e.data;const r=SimulatorCore.compute(nodes,edges);`+
     `postMessage({seq,nodes:r.nodes.map(n=>({id:n.id,_sim:n._sim})),edges:r.edges.map(x=>({id:x.id,_sim:x._sim}))});};`,
   ensure:()=>{

@@ -3681,8 +3681,8 @@ const Renderer={
         const drSteam=drActive&&n._sim.fOut===FLUID.STEAM;
         // 蒸気通気バルブ全開: 実流入なしでも DANGER 表示（圧力不問）
         const drDangerValve=!drSteam&&Store.anomalies.some(a=>a.type==='danger-vent'&&a.nodeId===n.id);
-        // 蒸気通気バルブ微開: 全開なし・実流入なしで CAUTION 表示
-        const drCaution=!drSteam&&!drDangerValve&&Store.anomalies.some(a=>a.type==='caution'&&a.nodeId===n.id);
+        // caution アノマリがあれば蒸気流入中でも CAUTION（微開バルブ起因）。drDangerValve 優先
+        const drCaution=!drDangerValve&&Store.anomalies.some(a=>a.type==='caution'&&a.nodeId===n.id);
         const drShowRipples=drActive||drDangerValve||drCaution;
         let dr1=g.querySelector('.drain-ripple-1'),dr2=g.querySelector('.drain-ripple-2'),dr3=g.querySelector('.drain-ripple-3');
         let drc=g.querySelector('.drain-steam-core'),ddl=g.querySelector('.drain-danger-label');
@@ -3691,7 +3691,7 @@ const Renderer={
           if(!dr1){dr1=createNS('circle',{r:'13',cx:'0',cy:'1'});dr1.classList.add('drain-ripple','drain-ripple-1');g.appendChild(dr1);}
           if(!dr2){dr2=createNS('circle',{r:'13',cx:'0',cy:'1'});dr2.classList.add('drain-ripple','drain-ripple-2');g.appendChild(dr2);}
           if(!dr3){dr3=createNS('circle',{r:'13',cx:'0',cy:'1'});dr3.classList.add('drain-ripple','drain-ripple-3');g.appendChild(dr3);}
-          if(drSteam||drDangerValve){
+          if((drSteam&&!drCaution)||drDangerValve){
             if(!drc){drc=createNS('circle',{r:'8',cx:'0',cy:'1'});drc.classList.add('drain-steam-core');drc.setAttribute('fill','#FF3B30');g.appendChild(drc);}
             if(!ddl){ddl=createNS('text');ddl.classList.add('drain-danger-label');ddl.setAttribute('x','0');ddl.setAttribute('y','22');ddl.textContent='⚠ DANGER!';g.appendChild(ddl);}
             if(dcc)dcc.remove();if(dcl)dcl.remove();
@@ -3708,7 +3708,7 @@ const Renderer={
           if(drc)drc.remove();if(ddl)ddl.remove();
           if(dcc)dcc.remove();if(dcl)dcl.remove();
         }
-        g.classList.toggle('drain-steam-active',drSteam||drDangerValve);
+        g.classList.toggle('drain-steam-active',(drSteam&&!drCaution)||drDangerValve);
         g.classList.toggle('drain-caution-active',drCaution);
       }
 

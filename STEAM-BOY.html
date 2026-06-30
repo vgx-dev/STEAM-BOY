@@ -2490,16 +2490,11 @@ const Anomaly={
       if(n.type===NODE_TYPE.SAFETY&&n.ext.reliefMPa!=null&&(n._sim.presIn||0)>n.ext.reliefMPa){
         Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 安全弁（リリーフ圧超過・自動動作）'});
       }
-      // ドレン管: 蒸気流入時は原因バルブの開度で DANGER/CAUTION を決定。非流入時は予防的通気バルブチェック
-      if(n.type===NODE_TYPE.DRAIN){
+      // ドレン管: 蒸気が実流入している場合のみ、原因バルブの開度で DANGER/CAUTION を決定
+      if(n.type===NODE_TYPE.DRAIN && n._sim.fIn===FLUID.STEAM){
         const _vs=getSteamVentValveStatus(n,_edgesByNode,_steamSide);
-        if(n._sim.fIn===FLUID.STEAM){
-          if(_vs==='caution')Store.anomalies.push({type:'caution',nodeId:n.id,msg:'CAUTION: ドレン管（蒸気流入・微開バルブ）'});
-          else Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: ドレン管（蒸気流入）'});
-        } else {
-          if(_vs==='danger')Store.anomalies.push({type:'danger-vent',nodeId:n.id,msg:'DANGER: 蒸気通気バルブ全開（蒸気流入リスク）'});
-          else if(_vs==='caution')Store.anomalies.push({type:'caution',nodeId:n.id,msg:'CAUTION: 蒸気通気バルブ微開（蒸気流入注意）'});
-        }
+        if(_vs==='caution')Store.anomalies.push({type:'caution',nodeId:n.id,msg:'CAUTION: ドレン管（蒸気流入・微開バルブ）'});
+        else Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: ドレン管（蒸気流入）'});
       }
     });
   },
@@ -2508,13 +2503,13 @@ const Anomaly={
     // 最適化3: DOM参照はメモ化キャッシュ ($id) 経由。
     const list=$id('anomaly-list'),badge=$id('anomaly-badge');
     const vignette=$id('vignette-overlay');
-    if(vignette) vignette.classList.toggle('active', Store.anomalies.some(a=>a.type==='danger'||a.type==='danger-vent'));
+    if(vignette) vignette.classList.toggle('active', Store.anomalies.some(a=>a.type==='danger'));
 
     // 最適化1: 内容が前回と同じなら innerHTML を書き換えない（Dirty Checking）
     let html,badgeText;
     if(!Store.anomalies.length){html='<span style="color:var(--green);font-weight:500;">✓ 異常なし</span>';badgeText=null;}
     else{html=Store.anomalies.map(a=>{
-      const cls=(a.type==='danger'||a.type==='danger-vent')?'anomaly-item anomaly-danger':'anomaly-item';
+      const cls=(a.type==='danger')?'anomaly-item anomaly-danger':'anomaly-item';
       return`<div class="${cls}">⚠ ${a.msg}</div>`;
     }).join('');badgeText=String(Store.anomalies.length);}
     if(html!==Anomaly._lastHtml){Anomaly._lastHtml=html;list.innerHTML=html;}
@@ -3679,11 +3674,9 @@ const Renderer={
       if(n.type===NODE_TYPE.DRAIN){
         const drActive=n._sim.fOut>0;
         const drSteam=drActive&&n._sim.fOut===FLUID.STEAM;
-        // 蒸気通気バルブ全開: 実流入なしでも DANGER 表示（圧力不問）
-        const drDangerValve=!drSteam&&Store.anomalies.some(a=>a.type==='danger-vent'&&a.nodeId===n.id);
-        // caution アノマリがあれば蒸気流入中でも CAUTION（微開バルブ起因）。drDangerValve 優先
-        const drCaution=!drDangerValve&&Store.anomalies.some(a=>a.type==='caution'&&a.nodeId===n.id);
-        const drShowRipples=drActive||drDangerValve||drCaution;
+        // caution アノマリは蒸気流入中の微開バルブ起因のみ（実流入が前提）
+        const drCaution=drSteam&&Store.anomalies.some(a=>a.type==='caution'&&a.nodeId===n.id);
+        const drShowRipples=drActive;
         let dr1=g.querySelector('.drain-ripple-1'),dr2=g.querySelector('.drain-ripple-2'),dr3=g.querySelector('.drain-ripple-3');
         let drc=g.querySelector('.drain-steam-core'),ddl=g.querySelector('.drain-danger-label');
         let dcc=g.querySelector('.drain-caution-core'),dcl=g.querySelector('.drain-caution-label');
@@ -3691,7 +3684,7 @@ const Renderer={
           if(!dr1){dr1=createNS('circle',{r:'13',cx:'0',cy:'1'});dr1.classList.add('drain-ripple','drain-ripple-1');g.appendChild(dr1);}
           if(!dr2){dr2=createNS('circle',{r:'13',cx:'0',cy:'1'});dr2.classList.add('drain-ripple','drain-ripple-2');g.appendChild(dr2);}
           if(!dr3){dr3=createNS('circle',{r:'13',cx:'0',cy:'1'});dr3.classList.add('drain-ripple','drain-ripple-3');g.appendChild(dr3);}
-          if((drSteam&&!drCaution)||drDangerValve){
+          if(drSteam&&!drCaution){
             if(!drc){drc=createNS('circle',{r:'8',cx:'0',cy:'1'});drc.classList.add('drain-steam-core');drc.setAttribute('fill','#FF3B30');g.appendChild(drc);}
             if(!ddl){ddl=createNS('text');ddl.classList.add('drain-danger-label');ddl.setAttribute('x','0');ddl.setAttribute('y','22');ddl.textContent='⚠ DANGER!';g.appendChild(ddl);}
             if(dcc)dcc.remove();if(dcl)dcl.remove();
@@ -3708,7 +3701,7 @@ const Renderer={
           if(drc)drc.remove();if(ddl)ddl.remove();
           if(dcc)dcc.remove();if(dcl)dcl.remove();
         }
-        g.classList.toggle('drain-steam-active',(drSteam&&!drCaution)||drDangerValve);
+        g.classList.toggle('drain-steam-active',drSteam&&!drCaution);
         g.classList.toggle('drain-caution-active',drCaution);
       }
 
@@ -3857,7 +3850,7 @@ const ValveSelector={
   _el:null,_node:null,_ghosts:[],_outsideHandler:null,_warnEl:null,_dangers:null,
   // Phase 2: What-if — ある弁状態に変更した場合に発生する DANGER/CAUTION を副作用なしで算出
   _computeDangersFor:(node,targetState)=>{
-    if(targetState===node.state.valveState)return Store.anomalies.filter(a=>a.type==='danger'||a.type==='danger-vent'||a.type==='caution').map(a=>a.msg);
+    if(targetState===node.state.valveState)return Store.anomalies.filter(a=>a.type==='danger'||a.type==='caution').map(a=>a.msg);
     // Phase 3: 大規模グラフでは同期再計算（候補×1回）がセレクタ表示を遅らせるためスキップ
     if(Store.nodes.length+Store.edges.length>SimWorker.THRESHOLD)return[];
     const saved=node.state.valveState;
@@ -3867,7 +3860,7 @@ const ValveSelector={
     node.state.valveState=targetState;
     Simulator._baseRun();
     Anomaly.detect();
-    const ds=Store.anomalies.filter(a=>a.type==='danger'||a.type==='danger-vent'||a.type==='caution').map(a=>a.msg);
+    const ds=Store.anomalies.filter(a=>a.type==='danger'||a.type==='caution').map(a=>a.msg);
     node.state.valveState=saved;
     Store.nodes.forEach(n=>{const s=sn.get(n.id);if(s)Object.assign(n._sim,s);});
     Store.edges.forEach(e=>{const s=se.get(e.id);if(s)Object.assign(e._sim,s);});

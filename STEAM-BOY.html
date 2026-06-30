@@ -2490,15 +2490,16 @@ const Anomaly={
       if(n.type===NODE_TYPE.SAFETY&&n.ext.reliefMPa!=null&&(n._sim.presIn||0)>n.ext.reliefMPa){
         Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: 安全弁（リリーフ圧超過・自動動作）'});
       }
-      // ドレン管（ピット）に蒸気が流入したら圧力に関係なく警告
-      if(n.type===NODE_TYPE.DRAIN&&n._sim.fIn===FLUID.STEAM){
-        Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: ドレン管（蒸気流入）'});
-      }
-      // ドレン管: 逆方向 BFS で蒸気通気バルブの開度をチェック（圧力不問）
+      // ドレン管: 蒸気流入時は原因バルブの開度で DANGER/CAUTION を決定。非流入時は予防的通気バルブチェック
       if(n.type===NODE_TYPE.DRAIN){
         const _vs=getSteamVentValveStatus(n,_edgesByNode,_steamSide);
-        if(_vs==='danger')Store.anomalies.push({type:'danger-vent',nodeId:n.id,msg:'DANGER: 蒸気通気バルブ全開（蒸気流入リスク）'});
-        else if(_vs==='caution')Store.anomalies.push({type:'caution',nodeId:n.id,msg:'CAUTION: 蒸気通気バルブ微開（蒸気流入注意）'});
+        if(n._sim.fIn===FLUID.STEAM){
+          if(_vs==='caution')Store.anomalies.push({type:'caution',nodeId:n.id,msg:'CAUTION: ドレン管（蒸気流入・微開バルブ）'});
+          else Store.anomalies.push({type:'danger',nodeId:n.id,msg:'DANGER: ドレン管（蒸気流入）'});
+        } else {
+          if(_vs==='danger')Store.anomalies.push({type:'danger-vent',nodeId:n.id,msg:'DANGER: 蒸気通気バルブ全開（蒸気流入リスク）'});
+          else if(_vs==='caution')Store.anomalies.push({type:'caution',nodeId:n.id,msg:'CAUTION: 蒸気通気バルブ微開（蒸気流入注意）'});
+        }
       }
     });
   },

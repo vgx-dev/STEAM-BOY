@@ -3855,9 +3855,9 @@ const Renderer={
 /* ━━━━━━━━ VALVE SELECTOR ━━━━━━━━ */
 const ValveSelector={
   _el:null,_node:null,_ghosts:[],_outsideHandler:null,_warnEl:null,_dangers:null,
-  // Phase 2: What-if — ある弁状態に変更した場合に発生する DANGER を副作用なしで算出
+  // Phase 2: What-if — ある弁状態に変更した場合に発生する DANGER/CAUTION を副作用なしで算出
   _computeDangersFor:(node,targetState)=>{
-    if(targetState===node.state.valveState)return Store.anomalies.filter(a=>a.type==='danger'||a.type==='danger-vent').map(a=>a.msg);
+    if(targetState===node.state.valveState)return Store.anomalies.filter(a=>a.type==='danger'||a.type==='danger-vent'||a.type==='caution').map(a=>a.msg);
     // Phase 3: 大規模グラフでは同期再計算（候補×1回）がセレクタ表示を遅らせるためスキップ
     if(Store.nodes.length+Store.edges.length>SimWorker.THRESHOLD)return[];
     const saved=node.state.valveState;
@@ -3867,7 +3867,7 @@ const ValveSelector={
     node.state.valveState=targetState;
     Simulator._baseRun();
     Anomaly.detect();
-    const ds=Store.anomalies.filter(a=>a.type==='danger'||a.type==='danger-vent').map(a=>a.msg);
+    const ds=Store.anomalies.filter(a=>a.type==='danger'||a.type==='danger-vent'||a.type==='caution').map(a=>a.msg);
     node.state.valveState=saved;
     Store.nodes.forEach(n=>{const s=sn.get(n.id);if(s)Object.assign(n._sim,s);});
     Store.edges.forEach(e=>{const s=se.get(e.id);if(s)Object.assign(e._sim,s);});
@@ -3877,7 +3877,7 @@ const ValveSelector={
   _showWarn:(s)=>{
     const w=ValveSelector._warnEl;if(!w)return;
     const ds=ValveSelector._dangers&&ValveSelector._dangers.get(s);
-    if(ds&&ds.length){w.innerHTML='<strong>⚠ 操作前の警告</strong>'+ds.map(m=>m.replace(/^DANGER:\s*/,'')).join('<br>');w.classList.add('show');}
+    if(ds&&ds.length){w.innerHTML='<strong>⚠ 操作前の警告</strong>'+ds.map(m=>m.replace(/^(?:DANGER|CAUTION):\s*/,'')).join('<br>');w.classList.add('show');}
     else ValveSelector._hideWarn();
   },
   _hideWarn:()=>{if(ValveSelector._warnEl)ValveSelector._warnEl.classList.remove('show');},
@@ -3896,8 +3896,8 @@ const ValveSelector={
     el.id='valve-selector';el.className='glass vs-pop';el.setAttribute('role','menu');
     const labels = node.type===NODE_TYPE.SAFETY ? ['静止','','動作'] : ['閉止','微開','開放'];
     const options = node.type===NODE_TYPE.SAFETY ? [0,2] : [0,1,2];
-    // Phase 2: 各候補状態が新たに引き起こす危険を事前計算（現状の危険は除外）
-    const _curDanger=new Set(Store.anomalies.filter(a=>a.type==='danger').map(a=>a.msg));
+    // Phase 2: 各候補状態が新たに引き起こす危険を事前計算（現状の危険・警告は除外）
+    const _curDanger=new Set(Store.anomalies.filter(a=>a.type==='danger'||a.type==='caution').map(a=>a.msg));
     ValveSelector._dangers=new Map();
     options.forEach(s=>{
       const opt=document.createElement('div');

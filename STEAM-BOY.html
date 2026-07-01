@@ -2676,9 +2676,12 @@ const SealedDetector={
       const isWallNode=(nd)=>nd&&[NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(nd.type)&&nd.state.valveState===VALVE_STATE.CLOSED&&!nd._sim.autoOpen;
       const fromIsWall=isWallNode(fromNode),toIsWall=isWallNode(toNode);
       const liveNode=(fromIsWall&&!toIsWall)?toNode:((toIsWall&&!fromIsWall)?fromNode:null);
+      // ★修正: 生存ノード側から直接供給されると判明した蒸気は「確定済み」の残留として扱う
+      // （出所が明確なため、Step 5-4 の不確定判定に巻き込まれて黄点滅にしてはいけない）
+      e._sim.certainLiveSteam=false;
       if(liveNode){
-        if(liveNode._sim.fOut===FLUID.STEAM){evalFluid=FLUID.STEAM;evalPres=liveNode._sim.presOut||0;evalSrcPres=liveNode._sim.srcPresOut||0;}
-        else if(liveNode._sim.fIn===FLUID.STEAM){evalFluid=FLUID.STEAM;evalPres=liveNode._sim.presIn||0;evalSrcPres=liveNode._sim.srcPresIn||0;}
+        if(liveNode._sim.fOut===FLUID.STEAM){evalFluid=FLUID.STEAM;evalPres=liveNode._sim.presOut||0;evalSrcPres=liveNode._sim.srcPresOut||0;e._sim.certainLiveSteam=true;}
+        else if(liveNode._sim.fIn===FLUID.STEAM){evalFluid=FLUID.STEAM;evalPres=liveNode._sim.presIn||0;evalSrcPres=liveNode._sim.srcPresIn||0;e._sim.certainLiveSteam=true;}
       }
 
       if(evalFluid===0)return;
@@ -2843,6 +2846,7 @@ const SealedDetector={
         comp.edges.forEach(eid=>{
           const e=edgeMap.get(eid); if(!e) return;
           if(e.ext.hasResidual && e.ext.residualType===FLUID.STEAM) hasSteam=true;
+          if(e._sim.certainLiveSteam)return; // 出所確定エッジは不確定の伝播元にしない
           const p=priorRes.get(eid);
           if(p){
             if(p.unc) hasPrevUncertain=true;
@@ -2852,6 +2856,9 @@ const SealedDetector={
         const uncertain = hasSteam && (hasPrevEmpty || hasPrevUncertain);
         comp.edges.forEach(eid=>{
           const e=edgeMap.get(eid); if(!e) return;
+          // ★修正: 生存ノードから直接供給されると確定している蒸気は、区間内の他エッジが
+          // 不確定でも巻き込まず「確定済み」のまま（黄点滅にしない）
+          if(e._sim.certainLiveSteam){e.ext.residualUncertain=false;return;}
           e.ext.residualUncertain = !!(uncertain && e.ext.hasResidual && e.ext.residualType===FLUID.STEAM);
         });
       });

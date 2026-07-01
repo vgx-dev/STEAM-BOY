@@ -1922,7 +1922,7 @@ const buildNameMap=()=>{const c={source:1,valve:1,trap:1,drain:1,split:1,merge:1
 /* ━━━━━━━━ STORE ━━━━━━━━ */
 const Store={
   nodes:[],edges:[],history:[],selection:new Set(),anomalies:[],sequences:[],manuals:[],
-  config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', matrixSearch:'', matrixStateFilter:'all', matrixCompact:false, showReducerLabels: false, autosaveEnabled:true, pdfUrl:'', logoUrl:''},
+  config:{nodeRadius:8,isConnectMode:false,selectedNodeIdForConnection:null,showValveLabels:true,alwaysShowLabels:false,snapEnabled:true,autoElbow:false,currentZoom:1.0,baseWidth:2000,baseHeight:2000,currentTool:'pointer',showSealedAnim:true,gridSize:20,gridOffsetX:0,gridOffsetY:0, matrixTab: 'all', matrixSearch:'', matrixStateFilter:'all', matrixCompact:false, showReducerLabels: false, autosaveEnabled:false, pdfUrl:'', logoUrl:''},
   dragState:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,offsetX:0,offsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
   multiDrag:{active:false,nodes:[],gEl:null,startSvgX:0,startSvgY:0,startClientX:0,startClientY:0,hasDragged:false,pointerId:null,preSnapshot:null},
   labelDrag:{isDragging:false,hasDragged:false,targetNode:null,gEl:null,startX:0,startY:0,startOffsetX:0,startOffsetY:0,startClientX:0,startClientY:0,pointerId:null,preSnapshot:null},
@@ -5405,7 +5405,7 @@ const Persistence = {
   loadPref: () => {
     let v = null;
     try { v = localStorage.getItem(Persistence.PREF_KEY); } catch (_) {}
-    Store.config.autosaveEnabled = (v !== '0'); // 既定ON。明示的に'0'のときだけOFF
+    Store.config.autosaveEnabled = (v === '1'); // 既定OFF。明示的に'1'のときだけON
     return Store.config.autosaveEnabled;
   },
   savePref: () => {

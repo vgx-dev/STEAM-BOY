@@ -3605,6 +3605,14 @@ const Renderer={
     /* ── Nodes ── */
     // 最適化1: anomalies を Set 化して O(1) 参照
     const _anomalyNodeSet=new Set(Store.anomalies.map(a=>a.nodeId));
+    // 差分描画用: ノードごとの異常「重症度」ランク（3=danger, 2=caution, 1=その他, 0=なし）を集約。
+    // 真偽値だけだと micro↔open のように蒸気流入したまま CAUTION↔DANGER が入れ替わる遷移で
+    // シグネチャが変化せず、ドレンの警告ラベル(橙/赤)が古いまま固着してしまうため重症度で判定する。
+    const _anomalySev=new Map();
+    Store.anomalies.forEach(a=>{
+      const rank=(a.type==='danger'||a.type==='danger-vent')?3:(a.type==='caution'?2:1);
+      if(rank>(_anomalySev.get(a.nodeId)||0))_anomalySev.set(a.nodeId,rank);
+    });
     // Phase 3: 差分レンダリング用のグローバル設定プレフィクス
     const _nodeSigBase=scale+'|'+(Store.config.showValveLabels?1:0)+(Store.config.showReducerLabels?1:0)+'|';
     Store.nodes.forEach(n=>{
@@ -3616,9 +3624,10 @@ const Renderer={
       const isSM=n.type===NODE_TYPE.SPLIT||n.type===NODE_TYPE.MERGE;
       const nodeScale=scale*(isSM?0.7:1);
       const hasAnomaly=_anomalyNodeSet.has(n.id);
+      const anomSev=_anomalySev.get(n.id)||0;
 
       // Phase 3: シグネチャ（位置・回転・選択・流体・弁開度・ラベル・異常・名前）が一致したらスキップ
-      const sig=_nodeSigBase+n.x+','+n.y+','+(n.rotation||0)+'|'+(n.id===Store.config.selectedNodeIdForConnection?1:0)+(Store.selection.has(n.id)?1:0)+'|'+n._sim.fOut+','+((n._sim.fOut>0||n._sim.rateOut>0)?1:0)+'|'+n.state.valveState+'|'+n.labelOffset.x+','+n.labelOffset.y+'|'+(isPinned?1:0)+(hasAnomaly?1:0)+'|'+(n.ext.limitRate??'')+'|'+(n.ext.outletMPa??'')+'|'+(n._sim.gauge||'')+'|'+((n._sim.presVal!=null)?n._sim.presVal.toFixed(3):'')+','+(n._sim.pct??'')+'|'+((n._sim.presOut!=null)?n._sim.presOut.toFixed(3):'')+','+((n._sim.srcPresIn!=null)?n._sim.srcPresIn.toFixed(3):'')+'|'+dispName;
+      const sig=_nodeSigBase+n.x+','+n.y+','+(n.rotation||0)+'|'+(n.id===Store.config.selectedNodeIdForConnection?1:0)+(Store.selection.has(n.id)?1:0)+'|'+n._sim.fOut+','+((n._sim.fOut>0||n._sim.rateOut>0)?1:0)+'|'+n.state.valveState+'|'+n.labelOffset.x+','+n.labelOffset.y+'|'+(isPinned?1:0)+anomSev+'|'+(n.ext.limitRate??'')+'|'+(n.ext.outletMPa??'')+'|'+(n._sim.gauge||'')+'|'+((n._sim.presVal!=null)?n._sim.presVal.toFixed(3):'')+','+(n._sim.pct??'')+'|'+((n._sim.presOut!=null)?n._sim.presOut.toFixed(3):'')+','+((n._sim.srcPresIn!=null)?n._sim.srcPresIn.toFixed(3):'')+'|'+dispName;
 
       let g=document.getElementById(`node-grp-${n.id}`);
       if(g&&Renderer._nodeSig.get(n.id)===sig){

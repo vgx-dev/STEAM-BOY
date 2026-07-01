@@ -2668,6 +2668,19 @@ const SealedDetector={
       // ★修正: 動的流量が0でも、既に残圧がある場合はそれを評価対象にする
       if(evalFluid===0&&e.ext.hasResidual){evalFluid=e.ext.residualType;evalPres=e.ext.residualPres||0;evalSrcPres=e.ext.residualSrcPres||0;}
 
+      // ★修正: 片端が閉止弁（壁）、もう片端が現在アクティブに流れているノードの場合、
+      // 壁側の古い残圧値に固定されず、生きているノード側の「現在の」圧力を優先する
+      // （エッジの from/to の向きが壁→生存ノードだと、順方向計算が壁側で止まり
+      // 　生存ノード側の実圧力が反映されないまま過去の残圧を引き継いでしまうため）
+      const fromNode=nodeMap.get(e.from),toNode=nodeMap.get(e.to);
+      const isWallNode=(nd)=>nd&&[NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(nd.type)&&nd.state.valveState===VALVE_STATE.CLOSED&&!nd._sim.autoOpen;
+      const fromIsWall=isWallNode(fromNode),toIsWall=isWallNode(toNode);
+      const liveNode=(fromIsWall&&!toIsWall)?toNode:((toIsWall&&!fromIsWall)?fromNode:null);
+      if(liveNode){
+        if(liveNode._sim.fOut===FLUID.STEAM){evalFluid=FLUID.STEAM;evalPres=liveNode._sim.presOut||0;evalSrcPres=liveNode._sim.srcPresOut||0;}
+        else if(liveNode._sim.fIn===FLUID.STEAM){evalFluid=FLUID.STEAM;evalPres=liveNode._sim.presIn||0;evalSrcPres=liveNode._sim.srcPresIn||0;}
+      }
+
       if(evalFluid===0)return;
 
       if(evalFluid===FLUID.STEAM){

@@ -2539,19 +2539,13 @@ const SealedDetector={
     });
     const EMPTY_EDGES=[];
 
-    // 閉止バルブ/安全弁の「手前」で行き止まりになっているエッジは、流量(f/b)が乗っていても
-    // 実際にはどこにも抜けていかない＝残圧扱いにすべき（SimulatorCore側は presIn/リリーフ判定に
-    // 生の f/b が必要なため変更しない。ここは表示・残圧判定専用の派生ロジック）。
-    const isDeadGate=(n)=>!!n&&[NODE_TYPE.VALVE,NODE_TYPE.SAFETY].includes(n.type)&&SimulatorCore._effGateState(n)===VALVE_STATE.CLOSED;
-    const isLiveEdge=(e)=>(e._sim.f>0&&!isDeadGate(nodeMap.get(e.to)))||(e._sim.b>0&&!isDeadGate(nodeMap.get(e.from)));
-
     // ④ 前フレームの残留状態を退避（密閉空間の「広がり」検知用：旧Empty区間 / 旧不確定 の判定に使う）
     const priorRes=new Map();
     Store.edges.forEach(e=>priorRes.set(e.id,{had:!!e.ext.hasResidual,type:e.ext.hasResidual?e.ext.residualType:0,unc:!!e.ext.residualUncertain,prevF:e._sim._prevF||0,prevB:e._sim._prevB||0}));
 
-    // Step 1: 動的流量が発生したエッジの残留を即座にリセット（ただし閉止ゲート直前の行き止まりは除く）
+    // Step 1: 動的流量が発生したエッジの残留を即座にリセット
     Store.edges.forEach(e=>{
-      if(isLiveEdge(e)){
+      if(e._sim.f>0||(e._sim.b&&e._sim.b>0)){
         e.ext.hasResidual=false;
         e.ext.residualType=0;
         e.ext.residualUncertain=false;
@@ -2663,23 +2657,16 @@ const SealedDetector={
 
     // Step 4: 残留判定の再評価
     Store.edges.forEach(e=>{
-      if(isLiveEdge(e))return;
+      if(e._sim.f>0||(e._sim.b&&e._sim.b>0))return;
       if(!e._anim)e._anim={};
 
-      let evalFluid,evalPres,evalSrcPres;
-      if(e._sim.f>0){
-        // 閉止ゲート直前で行き止まりの順方向フロー：現在の流量をそのまま残圧として評価
-        evalFluid=e._sim.f;evalPres=e._sim.pres||0;evalSrcPres=e._sim.srcPres||0;
-      }else if(e._sim.b>0){
-        evalFluid=e._sim.b;evalPres=e._sim.bpres||0;evalSrcPres=e._sim.bsrcPres||0;
-      }else{
-        const prevF=e._sim._prevF||0,prevB=e._sim._prevB||0;
-        evalFluid=prevF>0?prevF:(prevB>0?prevB:0);
-        // 残留圧力（密閉トラップ圧）。直前フレームの実流圧、無ければ既存の残圧を引き継ぐ。
-        evalPres=e._sim._prevPres||0; evalSrcPres=e._sim._prevSrcPres||0;
-        // ★修正: 動的流量が0でも、既に残圧がある場合はそれを評価対象にする
-        if(evalFluid===0&&e.ext.hasResidual){evalFluid=e.ext.residualType;evalPres=e.ext.residualPres||0;evalSrcPres=e.ext.residualSrcPres||0;}
-      }
+      const prevF=e._sim._prevF||0,prevB=e._sim._prevB||0;
+      let evalFluid=prevF>0?prevF:(prevB>0?prevB:0);
+      // 残留圧力（密閉トラップ圧）。直前フレームの実流圧、無ければ既存の残圧を引き継ぐ。
+      let evalPres=e._sim._prevPres||0, evalSrcPres=e._sim._prevSrcPres||0;
+
+      // ★修正: 動的流量が0でも、既に残圧がある場合はそれを評価対象にする
+      if(evalFluid===0&&e.ext.hasResidual){evalFluid=e.ext.residualType;evalPres=e.ext.residualPres||0;evalSrcPres=e.ext.residualSrcPres||0;}
 
       if(evalFluid===0)return;
 
@@ -2722,7 +2709,7 @@ const SealedDetector={
       // 壁ルールは Step 2/3 と同一: TRAP、閉止の VALVE/SAFETY で探索停止
       // ただしエッジは壁ノードに「接する」までは成分に含む
       Store.edges.forEach(se=>{
-        if(isLiveEdge(se))return;
+        if(se._sim.f>0||(se._sim.b&&se._sim.b>0))return;
         if(edgeVisited.has(se.id))return;
         const comp={edges:new Set()};
         edgeVisited.add(se.id);
@@ -2743,7 +2730,7 @@ const SealedDetector={
           const nid=q.shift();
           (edgesByNode.get(nid)||EMPTY_EDGES).forEach(e=>{
             if(edgeVisited.has(e.id))return;
-            if(isLiveEdge(e))return;
+            if(e._sim.f>0||(e._sim.b&&e._sim.b>0))return;
             edgeVisited.add(e.id);
             comp.edges.add(e.id);
             const other=(e.from===nid)?e.to:e.from;
@@ -3394,9 +3381,7 @@ const Renderer={
       const isBk=edge._sim.b>edge._sim.f || (edge._sim.b===edge._sim.f && (edge._sim.brate||0)>edge._sim.rate);
       const dsRaw=Math.max(edge._sim.f,edge._sim.b);
       // Epic 10: 流量ゼロでも hasResidual なら residualType を流体として表示
-      // 閉止ゲート直前の行き止まり（dsRawはSTEAM等のまま）も、SealedDetectorがhasResidualへ
-      // 正しくマークするため、dsRawとresidualTypeが一致していれば残圧表示（静止）を優先する。
-      const isResidual=!!edge.ext.hasResidual&&(dsRaw===FLUID.EMPTY||dsRaw===edge.ext.residualType);
+      const isResidual=(dsRaw===FLUID.EMPTY)&&!!edge.ext.hasResidual;
       const ds=isResidual?edge.ext.residualType:dsRaw;
       const isUncertain=isResidual&&!!edge.ext.residualUncertain;   // ④ 不確定残留（黄）
       const dRate=isBk?(edge._sim.brate||.4):edge._sim.rate;

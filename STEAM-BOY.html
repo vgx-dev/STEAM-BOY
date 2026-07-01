@@ -2684,6 +2684,23 @@ const SealedDetector={
         else if(liveNode._sim.fIn===FLUID.STEAM){evalFluid=FLUID.STEAM;evalPres=liveNode._sim.presIn||0;evalSrcPres=liveNode._sim.srcPresIn||0;e._sim.certainLiveSteam=true;}
       }
 
+      // ★修正: 生存ノードに直結した閉止弁の行き止まりスタブは、隔離された密閉ポケットではなく
+      // 生きた本管と連続した「生きた蒸気」。一次側（供給源→弁）と同じ通常フロー表示にするため、
+      // 供給元（生存ノード）→壁ノード方向へ蒸気の流入を注入し、残留/密閉フラグはクリアする。
+      // （両端が壁の真に隔離された密閉ポケットは liveNode=null のままなので従来の赤紫点滅を維持）
+      if(e._sim.certainLiveSteam&&liveNode&&evalFluid===FLUID.STEAM){
+        const liveRate=Math.max(0.18,liveNode._sim.rateOut||liveNode._sim.rateIn||0.4);
+        if(toNode===liveNode){ // 流入方向: to(生存)→from(壁) = 逆流
+          e._sim.b=FLUID.STEAM;e._sim.brate=liveRate;e._sim.bpres=evalPres;e._sim.bsrcPres=evalSrcPres;
+        }else{ // 流入方向: from(生存)→to(壁) = 順流
+          e._sim.f=FLUID.STEAM;e._sim.rate=liveRate;e._sim.pres=evalPres;e._sim.srcPres=evalSrcPres;
+        }
+        e.ext.hasResidual=false;e.ext.residualType=0;e.ext.residualUncertain=false;
+        e.ext.residualPres=0;e.ext.residualSrcPres=0;
+        if(e._anim)e._anim.sealed=false;
+        return;
+      }
+
       if(evalFluid===0)return;
 
       if(evalFluid===FLUID.STEAM){
